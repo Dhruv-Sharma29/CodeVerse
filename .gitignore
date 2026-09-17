@@ -1,0 +1,39 @@
+# secrets / env
+.env
+.env.local
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# jupyter
+.ipynb_checkpoints/
+
+# codeverse analyzer artifacts
+.codeverse-cache/
+*.codeverse
+
+# spike (Phase 0) — regenerate via notebooks/01_phase0_history_spike.ipynb
+spike/repos/
+spike/out/
+spike/viewer/public/repo.json
+
+# node / vite
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# logs
+*.log
+npm-debug.log*
+
+# OS / editor cruft
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
