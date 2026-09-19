@@ -44,7 +44,10 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
     fallback={<p className="canvas-fallback">3D needs WebGL. You can still explore every repository and commit from the lists.</p>}>
     <color attach="background" args={["#07090f"]} />
     <Stars radius={90} depth={35} count={2300} factor={3} fade speed={motion ? .15 : 0} />
+    {/* autoRotate orbits the camera around the system; three.js pauses it while the user is dragging
+        and resumes afterwards. The "Pause rotation" button and reduced-motion both drive `motion`. */}
     <OrbitControls makeDefault enablePan={false} enableDamping dampingFactor={.07}
+      autoRotate={motion} autoRotateSpeed={selected ? .5 : .7}
       minDistance={selected ? 7 : 14} maxDistance={selected ? 24 : 45}
       maxPolarAngle={Math.PI * .48} minPolarAngle={.2} />
     {selected ? <>
