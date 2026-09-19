@@ -17,7 +17,7 @@ function usePlanetTimingInfo(bundle: Bundle) {
     const peak = maxLoc(bundle);
     const bornAt = new Int32Array(bundle.nodes.length).fill(-1);
     for (const [ci, nodeId, op] of bundle.events) {
-      if (op === 0 && bornAt[nodeId] === -1) bornAt[nodeId] = ci;
+      if (op !== 2 && bornAt[nodeId] === -1) bornAt[nodeId] = ci;
     }
     return { peak, bornAt };
   }, [bundle]);
@@ -25,7 +25,7 @@ function usePlanetTimingInfo(bundle: Bundle) {
 
 export function Planets({ layout }: { layout: Layout }) {
   const bundle = useStore((s) => s.bundle)!;
-  const commitIndex = useStore((s) => s.commitIndex);
+  const commitIndex = useStore((s) => Math.floor(s.commitIndex));
   const setSelected = useStore((s) => s.setSelected);
   const setHovered = useStore((s) => s.setHovered);
 

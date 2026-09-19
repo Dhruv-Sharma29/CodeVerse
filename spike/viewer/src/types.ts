@@ -3,6 +3,7 @@
 export type OpCode = 0 | 1 | 2 | 3; // A, M, D, R
 
 export interface Bundle {
+  schemaVersion?: 1; // absent in legacy notebook exports
   repo: string;
   nodes: string[]; // union of every path ever seen; index = node id
   authors: string[]; // author name; index = author id

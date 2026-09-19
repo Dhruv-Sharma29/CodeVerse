@@ -9,8 +9,13 @@ export function computeStateAt(bundle: Bundle, commitIndex: number): NodeState {
   const alive = new Uint8Array(n);
   const lastTouch = new Int32Array(n).fill(-1);
 
-  for (const [ci, nodeId, op, locAfter] of bundle.events) {
+  for (const [ci, nodeId, op, locAfter, oldNodeId] of bundle.events) {
     if (ci > commitIndex) break;
+    if (op === 3 && oldNodeId >= 0) {
+      alive[oldNodeId] = 0;
+      loc[oldNodeId] = 0;
+      lastTouch[oldNodeId] = ci;
+    }
     lastTouch[nodeId] = ci;
     if (op === 2) {
       alive[nodeId] = 0;

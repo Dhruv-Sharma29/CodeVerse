@@ -30,12 +30,15 @@ export const useStore = create<CodeverseState>((set, get) => ({
   setBundle: (b) =>
     set({
       bundle: b,
+      playing: false,
+      selected: null,
+      hovered: null,
       maxCommitIndex: Math.max(0, b.commits.length - 1),
       commitIndex: Math.max(0, b.commits.length - 1), // default: show the fully-formed HEAD
     }),
   setCommitIndex: (i) => {
     const max = get().maxCommitIndex;
-    set({ commitIndex: Math.min(Math.max(0, Math.round(i)), max) });
+    set({ commitIndex: Math.min(Math.max(0, i), max) });
   },
   togglePlay: () => set((s) => ({ playing: !s.playing })),
   setPlaying: (p) => set({ playing: p }),

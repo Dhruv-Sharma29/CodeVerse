@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Stars } from "@react-three/drei";
 import { useStore } from "./store";
@@ -11,37 +11,101 @@ import { Timeline } from "./hud/Timeline";
 import { InfoPanel } from "./hud/InfoPanel";
 import { Legend } from "./hud/Legend";
 import type { Bundle } from "./types";
+import { MAX_BUNDLE_BYTES, parseBundle } from "./bundle";
 import "./App.css";
+import Explorer from "./github/Explorer";
 
 const BUNDLE_URL = `${import.meta.env.BASE_URL}repo.json`;
 
 export default function App() {
   const bundle = useStore((s) => s.bundle);
   const setBundle = useStore((s) => s.setBundle);
+  const [view, setView] = useState<"github" | "local">("github");
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generation, setGeneration] = useState(0);
+  const request = useRef(0);
+  const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetch(BUNDLE_URL)
-      .then((r) => {
-        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-        return r.json();
+    const controller = new AbortController();
+    const id = ++request.current;
+    fetch(BUNDLE_URL, { signal: controller.signal })
+      .then(async (r) => {
+        if (!r.ok || !r.headers.get("content-type")?.includes("application/json")) throw new Error("Open a repository bundle to start exploring.");
+        const content = await r.text();
+        if (new Blob([content]).size > MAX_BUNDLE_BYTES) throw new Error("Bundle exceeds the 50 MB limit.");
+        return parseBundle(JSON.parse(content));
       })
-      .then((data: Bundle) => setBundle(data))
-      .catch((e) => setError(String(e)));
+      .then((data) => { if (id === request.current) { setBundle(data); setGeneration(g => g + 1); } })
+      .catch((e) => { if (id === request.current && !controller.signal.aborted) setError(String(e.message)); })
+      .finally(() => { if (id === request.current) setLoading(false); });
+    return () => controller.abort();
   }, [setBundle]);
 
-  if (error) {
-    return (
-      <div className="loading-screen">
-        Failed to load {BUNDLE_URL}: {error}
-        <br />
-        Run notebooks/01_phase0_history_spike.ipynb and copy the output into public/repo.json.
-      </div>
-    );
+  async function openBundle(file: File) {
+    const id = ++request.current;
+    setLoading(true);
+    setError(null);
+    try {
+      if (file.size > MAX_BUNDLE_BYTES) throw new Error("Bundle exceeds the 50 MB limit.");
+      const data = parseBundle(JSON.parse(await file.text()));
+      if (id !== request.current) return;
+      setBundle(data);
+      setView("local");
+      setGeneration(g => g + 1);
+    } catch (e) {
+      if (id === request.current) setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (id === request.current) setLoading(false);
+    }
   }
-  if (!bundle) return <div className="loading-screen">🌌 loading universe…</div>;
 
-  return <Loaded bundle={bundle} />;
+  const picker = <>
+    <input ref={input} type="file" accept=".json,application/json" hidden
+      onChange={e => {
+        const file = e.currentTarget.files?.[0];
+        e.currentTarget.value = "";
+        if (file) void openBundle(file);
+      }} />
+    <button className="bundle-button" onClick={() => input.current?.click()} disabled={loading}>
+      {loading ? "Loading universe…" : "Open repository bundle"}
+    </button>
+  </>;
+
+  if (view === "github") return <>
+    <Explorer onImport={() => input.current?.click()} onDemo={() => setView("local")} />
+    <input ref={input} type="file" accept=".json,application/json" hidden onChange={e => {
+      const file = e.currentTarget.files?.[0]; e.currentTarget.value = "";
+      if (file) void openBundle(file);
+    }} />
+    {error && error !== "Open a repository bundle to start exploring." && <div className="import-error-toast" role="alert">{error}<button onClick={() => setError(null)}>Dismiss</button></div>}
+  </>;
+
+  if (!bundle) return (
+    <main className="loading-screen">
+      <div className="welcome-card">
+        <button className="local-back" onClick={() => setView("github")}>← GitHub universe</button>
+        <p className="welcome-eyebrow">CODEVERSE</p>
+        <h1>Your code has a universe.</h1>
+        <p>Explore its files, contributors, and evolution through Git history.</p>
+        {picker}
+        {error && <p className="bundle-error" role="alert">{error}</p>}
+        <p className="bundle-help">Create a bundle from any local repository:</p>
+        <code>codeverse analyze /path/to/repo -o repo.json</code>
+        <p className="bundle-help">JSON bundles · up to 50 MB · opened locally in your browser</p>
+      </div>
+    </main>
+  );
+
+  return <>
+    <Loaded key={generation} bundle={bundle} />
+    <div className="bundle-toolbar">
+      <button className="local-back" onClick={() => { useStore.getState().setPlaying(false); setView("github"); }}>← GitHub universe</button>
+      {picker}
+      {error && <p className="bundle-error" role="alert">{error}</p>}
+    </div>
+  </>;
 }
 
 function Loaded({ bundle }: { bundle: Bundle }) {

@@ -6,6 +6,55 @@ This is the plan for the build. It covers what gets built, in what order, and wh
 
 ---
 
+## Current product direction — 2026-09-19
+
+This update supersedes earlier statements that defer the profile universe to a
+later release. The main entry is now **monthly trending → GitHub handle → repository
+planet → commit satellites → actual changed files**. The original per-file universe
+remains the local-history mode; the two scales must be labeled clearly.
+
+### Shipped in the current prototype
+
+- Open on GitHub’s actual monthly trending ranking, including monthly star gains.
+- Enter a public user/organization handle or GitHub profile URL; load repositories
+  in pages, filter by name/language, and navigate eight-planet sectors.
+- Render individual repository worlds with deterministic language palettes,
+  terrain or gas bands, atmospheric rims, optional rings, and rotation controls.
+- Open a repository into an orbit of up to 60 recent default-branch commits.
+  Selecting or pausing on a commit reveals its message, author, changed files,
+  additions/deletions, and a direct evidence link to GitHub.
+- Preserve full first-parent history playback for local exported bundles.
+
+### Next priorities and acceptance criteria
+
+1. **Make the spatial view easier to read.** Keep planet labels separated as the
+   camera moves; add a smooth, interruptible fly-to transition. A repository must
+   remain reachable through the keyboard/list when 3D labels overlap. Measure
+   frame time with eight worlds and 60 satellites on an integrated GPU.
+2. **Connect overview to deep analysis.** Add an explicit analyze-repository action
+   that uses the local analyzer, then enters its file universe. Do not infer file
+   history from recent commit samples. Preserve the repository identity and a
+   clear return path to the profile system.
+3. **Give commits spatial meaning.** Extend the selected-commit view with file
+   satellites sized by actual changed lines, distinguish additions/deletions/
+   renames, and make every visible metric explainable. Keep decorative rings
+   separate from analytical encodings.
+4. **Build the cited Oracle.** Ground explanations in the selected commit and
+   file history; include commit evidence and an explicit insufficient-context
+   response. Do not send local source contents to an LLM without an intentional
+   user action.
+5. **Harden the discovery adapter.** Retain the real monthly trending source,
+   expose freshness, and test parser changes. Profile and commit data use the
+   official API. Add an optional authenticated backend only when larger quotas
+   are needed; never put provider secrets in browser code.
+
+Current limits must remain visible: public repositories only; up to 60 recent
+commits in API mode; the first 100 changed files fetched per commit; additional
+repository pages loaded on demand. Monthly trending is GitHub’s rolling monthly
+view, not a historical calendar-month archive. Its server-side adapter is required
+for a hosted initial feed. Rings are decorative; profile size is repository KB,
+while trending size uses stars because the feed omits KB.
+
 ## 0. The one-sentence strategy
 
 **Launch with the GIF, but don't rely on visuals alone — ship a sliver of the Oracle from day one.** People star the project because of a 10-second clip of a codebase growing like a galaxy. That used to be the whole differentiator; **it no longer is** (see §1.4 — two "repo as a 3D galaxy" tools already exist and one of them, CodeCohesion, is a genuinely mature, feature-rich project). What neither competitor has, and what actually makes CODEVERSE worth building now: an LLM that can look at a file or a moment in history and explain *why* it's the way it is, with citations. So the plan changes in one concrete way from the original draft: a minimal, no-retrieval version of "ask a planet why it exists" ships **in v0.1**, not deferred to v0.2 — it's cheap (`git log --follow` + one LLM call, no vector index needed yet) and it's the one feature that isn't a re-skin of something already shipped elsewhere. The full Oracle (retrieval, epoch narration, guided tours, eval set) still comes in v0.2.

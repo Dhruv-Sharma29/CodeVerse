@@ -147,3 +147,27 @@
 .timeline-controls select:hover {
   background: rgba(255, 255, 255, 0.14);
 }
+
+.welcome-card { width: min(620px, 100%); font-family: ui-sans-serif, system-ui, sans-serif; }
+.welcome-eyebrow { color: #7cf0c2; font-size: 13px; letter-spacing: .2em; }
+.welcome-card h1 { font-size: clamp(30px, 5vw, 52px); line-height: 1.1; letter-spacing: -.04em; }
+.welcome-card > p { line-height: 1.6; }
+.welcome-card code { display: block; overflow-wrap: anywhere; padding: 16px; background: #111725; border-radius: 10px; font-size: 12px; }
+.bundle-help { color: #9aa5b1; font-size: 12px; }
+.bundle-button { background: #7cf0c2; color: #071a14; border: 0; border-radius: 8px; padding: 10px 15px; font: 600 13px ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+.bundle-button:hover { background: #a3ffdb; }
+.bundle-button:disabled { opacity: .65; cursor: wait; }
+.bundle-button:focus-visible { outline: 2px solid white; outline-offset: 4px; }
+.bundle-toolbar { position: absolute; top: 150px; left: 20px; max-width: 320px; z-index: 2; }
+.bundle-error { color: #ffc7ba; font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; background: #291b21; border-radius: 8px; padding: 10px 12px; }
+@media (max-width: 700px) {
+  .legend { top: 12px; left: 12px; max-width: calc(100vw - 56px); }
+  .bundle-toolbar { top: 142px; left: 12px; max-width: calc(100vw - 24px); }
+  .info-panel { top: 198px; right: 12px; width: min(280px, calc(100vw - 56px)); }
+  .info-panel-empty { display: none; }
+  .timeline { box-sizing: border-box; bottom: 12px; width: calc(100vw - 24px); padding: 12px; }
+  .timeline-controls { flex-wrap: wrap; }
+}
+
+.local-back { display:block; margin:0 0 12px; background:#151824; color:#d9c5a3; border:1px solid #494152; border-radius:6px; padding:8px 12px; cursor:pointer; }
+.import-error-toast { position:fixed;left:50%;bottom:50px;transform:translateX(-50%);z-index:100;background:#301e29;color:#ffd7c4;padding:16px;border:1px solid #674454;border-radius:8px;max-width:90vw;font:12px/1.6 system-ui; }.import-error-toast button { margin-left:15px;background:none;color:inherit;border:0;text-decoration:underline;cursor:pointer; }

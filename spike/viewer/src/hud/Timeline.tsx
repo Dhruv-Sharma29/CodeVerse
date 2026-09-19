@@ -15,14 +15,14 @@ export function Timeline() {
   const setSpeed = useStore((s) => s.setSpeed);
   const restartEvolution = useStore((s) => s.restartEvolution);
 
-  const idx = Math.round(commitIndex);
+  const idx = Math.floor(commitIndex);
   const commit = bundle.commits[Math.min(idx, bundle.commits.length - 1)];
   const [sha, t, authorIdx] = commit;
 
   return (
     <div className="timeline">
       <div className="timeline-info">
-        <span className="sha">{sha}</span>
+        <span className="sha" title={sha}>{sha.slice(0, 10)}</span>
         <span className="date">{formatDate(t)}</span>
         <span className="author">{bundle.authors[authorIdx]}</span>
         <span className="counter">
@@ -31,6 +31,7 @@ export function Timeline() {
       </div>
       <input
         className="timeline-slider"
+        aria-label="Commit in repository history"
         type="range"
         min={0}
         max={maxCommitIndex}
@@ -43,7 +44,7 @@ export function Timeline() {
           ⏮ Play Evolution
         </button>
         <button onClick={togglePlay}>{playing ? "⏸ Pause" : "▶ Play"}</button>
-        <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
+        <select aria-label="Playback speed" value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
           <option value={6}>1×</option>
           <option value={24}>4×</option>
           <option value={80}>15×</option>

@@ -4,7 +4,7 @@ import { computeStateAt } from "../timeline";
 
 function useNodeStats(nodeId: number | null) {
   const bundle = useStore((s) => s.bundle)!;
-  const commitIndex = useStore((s) => s.commitIndex);
+  const commitIndex = useStore((s) => Math.floor(s.commitIndex));
 
   return useMemo(() => {
     if (nodeId === null) return null;
