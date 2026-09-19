@@ -37,3 +37,6 @@ npm-debug.log*
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# vercel CLI link metadata
+.vercel/

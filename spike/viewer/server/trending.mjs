@@ -50,7 +50,7 @@ export async function trendingMiddleware(req, res, next) {
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405;res.setHeader('Allow','GET, HEAD');res.end();return; }
   try {
     const data = await getTrending();
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=1800, stale-while-revalidate=3600');
     res.end(req.method === 'HEAD' ? undefined : JSON.stringify(data));
   } catch {
     res.statusCode = 502;
