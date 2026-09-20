@@ -2,7 +2,9 @@
 
 > Your codebase is bigger than a folder. Explore it. Understand it. Watch it evolve.
 
-Explore GitHub as a living planetary system: monthly trending repositories, any public handle, and real commit history. **Status:** GitHub explorer + local history prototype. See [docs/PLAN.md](docs/PLAN.md).
+Explore GitHub as a living planetary system: monthly trending repositories, any public handle, and real commit history.
+
+**Live:** <https://codeverse-orbit.vercel.app> · **Status:** GitHub explorer + local history prototype · **Docs:** [docs/](docs/README.md) ([build plan](docs/PLAN.md), [identity & discovery proposal](docs/social-layer.md), [bundle schema](docs/bundle-schema.md))
 
 ## GitHub explorer
 
@@ -21,7 +23,7 @@ and load additional repository pages when available.
 Select a planet to inspect up to **60 recent default-branch commits** as satellites.
 Click a satellite, choose a commit in the list, or play the timeline. Pausing loads
 its additions, deletions, and changed files. The first eight files are displayed
-from up to 100 fetched; GitHub links open the complete commit. This view is recent
+from up to 100 fetched; **Read message, code & AI explanation** opens the full message, all returned files, and their line-numbered text diffs. GitHub links open the complete commit. This view is recent
 history, not a complete repository analysis. Import a local JSON bundle for the
 existing full first-parent history viewer.
 
@@ -45,6 +47,18 @@ trending endpoint on `http://127.0.0.1:4173`. `PORT` and `HOST` are configurable
 A static-only deployment needs an equivalent `/api/trending` backend; the included
 Node server and Vite dev/preview server already provide it.
 
+## Optional AI: the Oracle
+
+The **AI explanation** tab in the commit inspector can explain the selected public
+commit using its message and actual patch excerpts, with source citations and
+qualified intent. Model calls happen only after **Explain this commit** is clicked.
+The key stays on the server; normal GitHub exploration needs no AI configuration.
+
+Local setup reuses `NVIDIA_API_KEY` (or `LLM_API_KEY`), `LLM_BASE_URL`, and `LLM_MODEL`
+from the root `.env`. Vercel additionally requires `CODEVERSE_ORACLE_ENABLED=true`
+in its server environment. No deployment or hosting-secret changes are automatic.
+See [docs/oracle.md](docs/oracle.md) for setup, evidence limits, and request budgets.
+
 ## Analyzer dev setup
 
 ```bash
@@ -66,8 +80,10 @@ In Jupyter, pick the **Python (codeverse)** kernel. The `codeverse` package is i
 
 ```
 codeverse/
-├── docs/
-│   └── PLAN.md              full build plan (read this first)
+├── docs/                    see docs/README.md for an index
+│   ├── PLAN.md              full build plan (read this first)
+│   ├── social-layer.md      identity/discovery proposal (share links, evolution, social)
+│   └── bundle-schema.md     analyzer → viewer JSON contract
 ├── .env / .env.example      LLM config (.env is gitignored)
 ├── analyzer/                Python package `codeverse`
 │   └── codeverse/

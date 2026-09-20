@@ -8,6 +8,11 @@ This is the plan for the build. It covers what gets built, in what order, and wh
 
 ## Current product direction — 2026-09-19
 
+> The identity/discovery layer (share links, universe evolution, trending universes,
+> social features) is specified separately in **[social-layer.md](social-layer.md)**,
+> including its GitHub rate-limit and consent constraints. It is a proposal, not
+> committed work.
+
 This update supersedes earlier statements that defer the profile universe to a
 later release. The main entry is now **monthly trending → GitHub handle → repository
 planet → commit satellites → actual changed files**. The original per-file universe
@@ -24,6 +29,18 @@ remains the local-history mode; the two scales must be labeled clearly.
   Selecting or pausing on a commit reveals its message, author, changed files,
   additions/deletions, and a direct evidence link to GitHub.
 - Preserve full first-parent history playback for local exported bundles.
+
+### Oracle increment — 2026-09-20
+
+The selected-commit inspector now includes full messages and line-numbered text
+patches. An optional **Explain this commit** action fetches authoritative public
+GitHub evidence, calls the configured server-side model, and validates every
+returned claim’s source IDs. It reports context limits and qualifies inferred
+intent. See [oracle.md](oracle.md) for the implementation and verification details.
+
+This is the first cited explanation capability, not completion of §6.2’s file
+origin-story workflow. File-history retrieval, symbol-aware answers, epoch
+narration, and guided tours remain unbuilt. Local bundles never enter this API.
 
 ### Next priorities and acceptance criteria
 
@@ -503,7 +520,7 @@ Builds on the Oracle MVP shipped in v0.1 (above).
 - [ ] Public "Universe of the week" page
 
 ### Later (v0.4+, driven by demand)
-- **"User Galaxy"** — `github.com/<username>` → a profile-level universe (repos as planets, Stack-Universe-style overview) where each planet is a real portal into that repo's full CODEVERSE (see §1.4 point 7). Highest-priority item in this list — a strong differentiator, and a more scoped, concrete replacement for what used to be a vague "multi-repo/org multiverse" idea here
+- **"User Galaxy"** — `github.com/<username>` → a profile-level universe (repos as planets, Stack-Universe-style overview) where each planet is a real portal into that repo's full CODEVERSE (see §1.4 point 7). **Now specified in [social-layer.md](social-layer.md)**, which supersedes this bullet. Highest-priority item in this list — a strong differentiator, and a more scoped, concrete replacement for what used to be a vague "multi-repo/org multiverse" idea here
 - Security anomalies (osv-scanner for dependencies; Semgrep after the license review)
 - Issue and PR overlay via the GitHub API (issues as anomalies near the files they reference)
 - Branches as alternate universes (split-screen diverging timelines)
