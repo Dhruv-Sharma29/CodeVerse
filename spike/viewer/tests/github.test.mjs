@@ -95,3 +95,82 @@ test('GitHub requests handle organizations, empty history, limits, and the unkno
     assert.equal(result.hasMore,true);
   } finally { globalThis.fetch=original; }
 });
+
+test('universe evolution computes timeline and filters repositories chronologically', async () => {
+  const { evolutionTimeline, repositoriesAtTimestamp, formatEvolutionDate } = await import('../src/github/evolution.ts');
+  const repos = [
+    { id: 1, name: 'early', created_at: '2019-01-15T00:00:00Z', pushed_at: '2019-06-01T00:00:00Z' },
+    { id: 2, name: 'mid', created_at: '2021-06-20T00:00:00Z', pushed_at: '2022-01-01T00:00:00Z' },
+    { id: 3, name: 'recent', created_at: '2024-03-10T00:00:00Z', pushed_at: '2024-05-01T00:00:00Z' },
+  ];
+
+  const timeline = evolutionTimeline(repos);
+  assert.ok(timeline);
+  assert.equal(timeline.startMs, Date.parse('2019-01-15T00:00:00Z'));
+  assert.equal(timeline.endMs, Date.parse('2024-03-10T00:00:00Z'));
+  assert.ok(timeline.spanYears >= 5);
+
+  const at2020 = repositoriesAtTimestamp(repos, Date.parse('2020-01-01T00:00:00Z'));
+  assert.equal(at2020.length, 1);
+  assert.equal(at2020[0].name, 'early');
+
+  const at2022 = repositoriesAtTimestamp(repos, Date.parse('2022-01-01T00:00:00Z'));
+  assert.equal(at2022.length, 2);
+
+  const at2025 = repositoriesAtTimestamp(repos, Date.parse('2025-01-01T00:00:00Z'));
+  assert.equal(at2025.length, 3);
+
+  assert.equal(formatEvolutionDate(Date.parse('2021-06-20T00:00:00Z')), 'Jun 2021');
+  assert.equal(evolutionTimeline([]), null);
+  assert.equal(evolutionTimeline([{ id: 1, name: 'lone' }]), null);
+});
+
+test('fetchContributors fetches repository contributors with caching and limits', async () => {
+  const { fetchContributors } = await import('../src/github/api.ts');
+  const original = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return new Response(JSON.stringify([
+      { login: 'octocat', id: 1, avatar_url: 'https://example.com/avatar.png', contributions: 42 },
+    ]), { status: 200 });
+  };
+  try {
+    const contributors = await fetchContributors({ full_name: 'octocat/Hello-World' });
+    assert.equal(contributors.length, 1);
+    assert.equal(contributors[0].login, 'octocat');
+    assert.equal(contributors[0].contributions, 42);
+    assert.ok(calls[0].includes('/repos/octocat/Hello-World/contributors?per_page=12'));
+  } finally { globalThis.fetch = original; }
+});
+
+test('generateUniverseSvg creates valid 1200x630 SVG with developer stats and orbits', async () => {
+  const { generateUniverseSvg } = await import('../server/og.mjs');
+  const user = { login: 'dhruv', name: 'Dhruv Sharma', bio: 'Building AI universes', public_repos: 27, followers: 342 };
+  const repos = [
+    { name: 'codeverse', language: 'TypeScript', stargazers_count: 500 },
+    { name: 'neural-sim', language: 'Python', stargazers_count: 120 },
+  ];
+  const svg = generateUniverseSvg(user, repos);
+  assert.ok(svg.includes('width="1200"'));
+  assert.ok(svg.includes('height="630"'));
+  assert.ok(svg.includes('Dhruv Sharma'));
+  assert.ok(svg.includes('@dhruv'));
+  assert.ok(svg.includes('codeverse'));
+  assert.ok(svg.includes('neural-sim'));
+});
+
+test('ogMiddleware validates handle and falls back to default preview on error', async () => {
+  const { ogMiddleware } = await import('../server/og.mjs');
+  let statusCode = 200;
+  const headers = {};
+  const res = {
+    writeHead(code, h) { statusCode = code; Object.assign(headers, h); },
+    setHeader(k, v) { headers[k] = v; },
+    end() {},
+  };
+  await ogMiddleware({ url: '/api/og?user=invalid--handle' }, res, () => {});
+  assert.equal(statusCode, 302);
+  assert.equal(headers.Location, '/og-default.png');
+});
+

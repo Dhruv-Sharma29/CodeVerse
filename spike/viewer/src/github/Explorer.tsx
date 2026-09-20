@@ -2,9 +2,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RepositorySystem } from "../scene/RepositorySystem";
 import { planetStyle } from "./planetStyle";
-import { fetchProfile, fetchRepositories, fetchCommits, fetchCommit, normalizeHandle, errorMessage, repoUrl, commitUrl } from "./api";
-import type { Repository, GitHubProfile, GitCommit, CommitDetail } from "./api";
+import { fetchProfile, fetchRepositories, fetchCommits, fetchCommit, fetchContributors, normalizeHandle, errorMessage, repoUrl, commitUrl } from "./api";
+import type { Repository, GitHubProfile, GitCommit, CommitDetail, Contributor } from "./api";
 import { profileHandleFromUrl, profilePath } from "./profileRoute";
+import { evolutionTimeline, repositoriesAtTimestamp, formatEvolutionDate } from "./evolution";
 import "./explorer.css";
 import { CommitInspector } from "./CommitInspector";
 import { UniverseCard } from "./UniverseCard";
@@ -13,6 +14,14 @@ type TrendingRepo = Repository & { monthlyStars?: number };
 const compact = (value: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 const date = (value?: string) => value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Unknown date";
 const SECTOR_SIZE = 8;
+
+const SPOTLIGHT_CATEGORIES = [
+  { id: "trending", label: "🔥 Trending", handles: [] },
+  { id: "ai", label: "🧠 AI & ML", handles: ["karpathy", "huggingface", "meta-llama"] },
+  { id: "web", label: "🌐 Web", handles: ["shadcn", "gaearon", "antfu"] },
+  { id: "systems", label: "⚡ Systems", handles: ["torvalds", "mit-pdos", "ziglang"] },
+  { id: "games", label: "🎮 Games", handles: ["mrdoob", "bevyengine"] },
+] as const;
 
 export default function Explorer({ onImport, onDemo }: { onImport: () => void; onDemo: () => void }) {
   const [handle, setHandle] = useState(() => profileHandleFromUrl(location.pathname, location.search) ?? "");
@@ -34,14 +43,27 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
   const [commitError, setCommitError] = useState("");
   const [detail, setDetail] = useState<CommitDetail | null>(null);
   const [detailError, setDetailError] = useState("");
+  const [contributors, setContributors] = useState<Contributor[]>([]);
   const [playing, setPlaying] = useState(false);
   const [motion, setMotion] = useState(() => !matchMedia("(prefers-reduced-motion: reduce)").matches);
   const [updated, setUpdated] = useState("");
+  const [evolutionActive, setEvolutionActive] = useState(false);
+  const [evolutionTime, setEvolutionTime] = useState(0);
+  const [evolutionPlaying, setEvolutionPlaying] = useState(false);
+  const [category, setCategory] = useState<string>("trending");
   const attemptedHandle = useRef<string | undefined>(undefined);
+  const handleInput = useRef<HTMLInputElement>(null);
   const [retry, setRetry] = useState(0);
   const [detailRetry, setDetailRetry] = useState(0);
   const controller = useRef<AbortController | null>(null);
-  const filtered = useMemo(() => repos.filter(r => `${r.full_name} ${r.language ?? ""}`.toLowerCase().includes(query.toLowerCase())), [repos, query]);
+
+  const timeline = useMemo(() => evolutionTimeline(repos), [repos]);
+  const activeRepos = useMemo(() => {
+    if (!evolutionActive || !timeline) return repos;
+    return repositoriesAtTimestamp(repos, evolutionTime);
+  }, [repos, evolutionActive, timeline, evolutionTime]);
+
+  const filtered = useMemo(() => activeRepos.filter(r => `${r.full_name} ${r.language ?? ""}`.toLowerCase().includes(query.toLowerCase())), [activeRepos, query]);
   const sectorCount = Math.max(1, Math.ceil(filtered.length / SECTOR_SIZE));
   const visible = filtered.slice(sector * SECTOR_SIZE, (sector + 1) * SECTOR_SIZE);
   const commit = commits[commitIndex];
@@ -50,7 +72,8 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
     attemptedHandle.current = input;
     controller.current?.abort();
     const task = new AbortController(); controller.current = task;
-    setBusy(true); setError(""); setSelected(null); setPlaying(false);setLoadingMore(false);
+    setBusy(true); setError(""); setSelected(null); setPlaying(false); setLoadingMore(false);
+    setEvolutionActive(false); setEvolutionPlaying(false); setContributors([]);
     try {
       if (input) {
         const user = await fetchProfile(normalizeHandle(input), task.signal);
@@ -65,10 +88,10 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         const data = await response.json() as { repositories: TrendingRepo[]; fetchedAt: string };
         if (!Array.isArray(data.repositories) || !data.repositories.length) throw new Error("The trending feed returned no repositories. Try a GitHub handle instead.");
         if (task.signal.aborted) return;
-        setRepos(data.repositories);setUpdated(data.fetchedAt);setProfile(null);setMode("trending");setHasMore(false);
+        setRepos(data.repositories); setUpdated(data.fetchedAt); setProfile(null); setMode("trending"); setHasMore(false);
         history.replaceState(null, "", "/");
       }
-      setQuery("");setSector(0);setPage(1);
+      setQuery(""); setSector(0); setPage(1);
     } catch (e) { if (!task.signal.aborted) setError(errorMessage(e)); }
     finally { if (!task.signal.aborted) setBusy(false); }
   }
@@ -80,33 +103,42 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
   async function moreRepositories() {
     if (!profile || loadingMore) return;
     const task = controller.current;
-    setLoadingMore(true);setError("");
+    setLoadingMore(true); setError("");
     try {
       const result = await fetchRepositories(profile, page + 1, task?.signal);
       if (task?.signal.aborted) return;
       setRepos(old => [...new Map([...old, ...result.repositories].map(r => [r.id, r])).values()]);
-      setPage(p => p + 1);setHasMore(result.hasMore);
+      setPage(p => p + 1); setHasMore(result.hasMore);
     } catch(e) { if (!task?.signal.aborted) setError(errorMessage(e)); }
     finally { if (!task?.signal.aborted) setLoadingMore(false); }
   }
 
   useEffect(() => {
-    setCommits([]);setDetail(null);setCommitError("");setDetailError("");setPlaying(false);
+    setCommits([]); setDetail(null); setCommitError(""); setDetailError(""); setPlaying(false);
     if (!selected) return;
-    const task = new AbortController();setCommitBusy(true);
+    const task = new AbortController(); setCommitBusy(true);
     fetchCommits(selected, task.signal).then(result => {
       if (task.signal.aborted) return;
-      setCommits([...result].reverse());setCommitIndex(Math.max(0, result.length - 1));
+      setCommits([...result].reverse()); setCommitIndex(Math.max(0, result.length - 1));
     }).catch(e => { if(!task.signal.aborted) setCommitError(errorMessage(e)); })
       .finally(() => { if(!task.signal.aborted) setCommitBusy(false); });
     return () => task.abort();
   }, [selected, retry]);
 
   useEffect(() => {
-    setDetail(null);setDetailError("");
+    setContributors([]);
+    if (!selected) return;
+    const task = new AbortController();
+    fetchContributors(selected, task.signal).then(result => {
+      if (!task.signal.aborted) setContributors(result || []);
+    }).catch(() => { /* contributors error is non-fatal */ });
+    return () => task.abort();
+  }, [selected]);
+
+  useEffect(() => {
+    setDetail(null); setDetailError("");
     if (!selected || !commit || playing) return;
     const task = new AbortController();
-    // Debounce scrubbing so dragging across the orbit doesn't burn API requests.
     const timeout = setTimeout(() => {
       fetchCommit(selected, commit.sha, task.signal).then(value => { if(!task.signal.aborted) setDetail(value); })
         .catch(e => { if(!task.signal.aborted) setDetailError(errorMessage(e)); });
@@ -123,15 +155,40 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
     return () => clearInterval(timer);
   }, [playing, commits.length]);
 
-  const selectCommit = (index: number) => { setPlaying(false);setCommitIndex(index); };
-  const showRepo = (repo: Repository) => { setSelected(repo);setPlaying(false);setRetry(0);setDetailRetry(0); };
+  useEffect(() => {
+    if (!evolutionPlaying || !timeline) return;
+    const step = Math.max(1, (timeline.endMs - timeline.startMs) / 60);
+    const timer = setInterval(() => {
+      setEvolutionTime(current => {
+        const next = current + step;
+        if (next >= timeline.endMs) {
+          setEvolutionPlaying(false);
+          return timeline.endMs;
+        }
+        return next;
+      });
+    }, 200);
+    return () => clearInterval(timer);
+  }, [evolutionPlaying, timeline]);
+
+  const startEvolution = () => {
+    if (!timeline) return;
+    setSelected(null);
+    setEvolutionActive(true);
+    setEvolutionTime(timeline.startMs);
+    setEvolutionPlaying(true);
+  };
+
+  const selectCommit = (index: number) => { setPlaying(false); setCommitIndex(index); };
+  const showRepo = (repo: Repository) => { setSelected(repo); setPlaying(false); setRetry(0); setDetailRetry(0); };
   return <div className={`explorer ${selected ? "is-focused" : ""}`}>
     <header className="explorer-header">
       <button className="brand" onClick={() => void openUniverse()} aria-label="Codeverse monthly trending"><span className="brand-orbit">✳</span> CODEVERSE <span className="brand-tag">EXPLORER</span></button>
       <form className="handle-search" onSubmit={e => {e.preventDefault();if(handle.trim()) void openUniverse(handle);}}>
-        <span aria-hidden="true">@</span><input aria-label="GitHub username" placeholder="Enter a GitHub handle" value={handle} onChange={e => setHandle(e.target.value)} maxLength={100} />
+        <span aria-hidden="true">@</span><input ref={handleInput} aria-label="GitHub username" placeholder="Enter a GitHub handle" value={handle} onChange={e => setHandle(e.target.value)} maxLength={100} />
         <button type="submit" disabled={busy || !handle.trim()}>Explore <span aria-hidden="true">↗</span></button>
       </form>
+      <button type="button" className="your-universe-cta" onClick={() => handleInput.current?.focus()}>Your Universe ↗</button>
       <button className="quiet-button import-button" onClick={onImport}>Import bundle <span aria-hidden="true">↥</span></button>
     </header>
     <div className="explorer-body">
@@ -143,6 +200,24 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
           <span>{mode === "trending" ? "↗ Trending this month" : `${compact(profile?.public_repos ?? 0)} public repositories`}</span>
           {mode === "trending" ? <a href="https://github.com/trending?since=monthly" target="_blank" rel="noreferrer" aria-label="Source: GitHub monthly trending">GitHub ↗</a> : <button className="text-button" onClick={() => void openUniverse()}>Trending ↗</button>}
         </div>
+        {mode === "trending" && <div className="category-chips" role="tablist" aria-label="Discovery categories">
+          {SPOTLIGHT_CATEGORIES.map(cat => (
+            <button key={cat.id} type="button" className={`category-chip ${category === cat.id ? "active" : ""}`}
+              onClick={() => setCategory(cat.id)}>
+              {cat.label}
+            </button>
+          ))}
+        </div>}
+        {mode === "trending" && category !== "trending" && <div className="spotlight-handles">
+          <span className="spotlight-title">Spotlight Universes:</span>
+          <div className="spotlight-chips">
+            {SPOTLIGHT_CATEGORIES.find(c => c.id === category)?.handles.map(h => (
+              <button key={h} type="button" className="spotlight-chip" onClick={() => void openUniverse(h)}>
+                @{h} ↗
+              </button>
+            ))}
+          </div>
+        </div>}
         <label className="repo-filter"><span aria-hidden="true">⌕</span><input aria-label="Filter repositories" placeholder="Find a repository or language" value={query} onChange={e => {setQuery(e.target.value);setSector(0);}} /></label>
         <div className="repository-list" aria-label="Repositories" aria-busy={busy}>
           {busy ? <div className="list-state"><span className="loader" /> Mapping the universe…</div> : visible.map((repo, i) => <button key={repo.id}
@@ -164,12 +239,32 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
           <h2>{selected ? selected.name : profile ? `${profile.name ?? profile.login}’s system` : "Open source. Outer space."}</h2>
           <p>{selected ? `${selected.language ?? "Mixed languages"} world · select a satellite to inspect a commit` : "Select a planet to discover what’s happening beneath the surface."}</p>
         </div>
-        {profile && !selected && <UniverseCard profile={profile} repositories={repos} />}
+        {profile && !selected && <UniverseCard profile={profile} repositories={repos} onEvolve={timeline ? startEvolution : undefined} />}
         {selected && <button className="back-to-system" onClick={() => {setSelected(null);setPlaying(false);}}>← All planets</button>}
         <div className="system-canvas">
           <RepositorySystem repositories={busy ? [] : visible} selected={selected} commits={commits} commitIndex={commitIndex}
             onRepo={showRepo} onCommit={selectCommit} centerLabel={profile?.login ?? "OPEN SOURCE"} motion={motion} />
         </div>
+        {evolutionActive && timeline && <div className="evolution-player">
+          <button className="play-toggle" aria-label={evolutionPlaying ? "Pause universe evolution" : "Play universe evolution"}
+            onClick={() => {
+              if (!evolutionPlaying && evolutionTime >= timeline.endMs) setEvolutionTime(timeline.startMs);
+              setEvolutionPlaying(p => !p);
+            }}>
+            {evolutionPlaying ? "Ⅱ" : "▶"}
+          </button>
+          <div className="evolution-track">
+            <div className="evolution-track-header">
+              <span>UNIVERSE EVOLUTION</span>
+              <strong>{formatEvolutionDate(evolutionTime)}</strong>
+              <span>{activeRepos.length} of {repos.length} worlds born</span>
+            </div>
+            <input className="evolution-slider" aria-label="Universe evolution timeline" type="range"
+              min={timeline.startMs} max={timeline.endMs} value={evolutionTime}
+              onChange={e => { setEvolutionPlaying(false); setEvolutionTime(Number(e.target.value)); }} />
+          </div>
+          <button className="evolution-close" onClick={() => { setEvolutionActive(false); setEvolutionPlaying(false); }}>Exit timeline ✕</button>
+        </div>}
         {selected && commits.length > 0 && <div className="commit-player">
           <button aria-label={playing ? "Pause commit playback" : "Play recent commits"} onClick={() => {
             if (!playing && commitIndex === commits.length - 1) setCommitIndex(0);
@@ -188,6 +283,17 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         <p className="detail-description">{selected.description || "This repository hasn’t added a description yet."}</p>
         <div className="repo-metrics"><div><strong>{compact(selected.stargazers_count)}</strong><span>STARS</span></div><div><strong>{compact(selected.forks_count)}</strong><span>FORKS</span></div>{selected.monthlyStars !== undefined && <div><strong>+{compact(selected.monthlyStars)}</strong><span>THIS MONTH</span></div>}</div>
         <a className="github-link" href={repoUrl(selected)} target="_blank" rel="noreferrer">View repository on GitHub ↗</a>
+        {contributors.length > 0 && <div className="contributor-section">
+          <div className="contributor-heading"><h3>Orbiting Contributors</h3><span>{contributors.length} EXPLORERS</span></div>
+          <div className="contributor-grid">
+            {contributors.map(c => <button key={c.id} type="button" className="contributor-chip"
+              title={`Visit @${c.login}'s universe (${c.contributions} contributions)`}
+              onClick={() => void openUniverse(c.login)}>
+              <img src={c.avatar_url} alt="" className="contributor-avatar" loading="lazy" />
+              <div className="contributor-info"><strong>@{c.login}</strong><span>{c.contributions} commit{c.contributions === 1 ? "" : "s"} ↗</span></div>
+            </button>)}
+          </div>
+        </div>}
         <div className="detail-divider" />
         <div className="commit-heading"><h3>Signals from orbit</h3><span>{commits.length ? `${commits.length} RECENT` : "COMMITS"}</span></div>
         <p className="commit-explanation">{selected.default_branch ? `${selected.default_branch} branch` : "Default branch"} · up to 60 latest commits</p>

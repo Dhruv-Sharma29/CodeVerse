@@ -5,7 +5,7 @@ import { loadedCoverage, summarizeProfile } from "./profileSummary";
 
 const compact = (value: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 
-export function UniverseCard({ profile, repositories }: { profile: GitHubProfile; repositories: Repository[] }) {
+export function UniverseCard({ profile, repositories, onEvolve }: { profile: GitHubProfile; repositories: Repository[]; onEvolve?: () => void }) {
   const summary = useMemo(() => summarizeProfile(profile, repositories), [profile, repositories]);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "fallback">("idle");
   const fallback = useRef<HTMLInputElement>(null);
@@ -36,6 +36,7 @@ export function UniverseCard({ profile, repositories }: { profile: GitHubProfile
     <div className="universe-card-heading">
       <div><span>DEVELOPER UNIVERSE</span><h3 id="universe-card-title">{profile.name ?? profile.login}</h3><p>@{profile.login}</p></div>
       <div className="universe-card-actions">
+        {onEvolve && <button type="button" className="evolve-button" onClick={onEvolve}>✨ Evolve Universe</button>}
         <button type="button" onClick={() => void copyLink()}>Copy link</button>
         {typeof navigator.share === "function" && <button type="button" onClick={() => void share()}>Share</button>}
       </div>

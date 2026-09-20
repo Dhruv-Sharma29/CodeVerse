@@ -5,7 +5,10 @@ export interface GitHubProfile {
 export interface Repository {
   id: number; name: string; full_name: string; description: string | null;
   language: string | null; stargazers_count: number; forks_count: number;
-  size?: number; pushed_at: string; default_branch: string; fork: boolean; archived: boolean;
+  size?: number; created_at?: string; pushed_at: string; default_branch: string; fork: boolean; archived: boolean;
+}
+export interface Contributor {
+  login: string; id: number; avatar_url: string; contributions: number;
 }
 export interface GitCommit {
   sha: string;
@@ -42,6 +45,7 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<{ data: T
     if (response.status === 409) return { data: [] as T, hasMore: false }; // empty repository
     throw new Error(`GitHub is unavailable (${response.status}). Please try again.`);
   }
+  if (response.status === 204) return { data: [] as unknown as T, hasMore: false };
   const data = await response.json() as T;
   const hasMore = (response.headers.get("link") ?? "").includes('rel="next"');
   if (cache.size >= 100) cache.delete(cache.keys().next().value!);
@@ -63,6 +67,9 @@ export async function fetchCommits(repo: Repository, signal?: AbortSignal) {
 }
 export async function fetchCommit(repo: Repository, sha: string, signal?: AbortSignal) {
   return (await request<CommitDetail>(`/repos/${repoPath(repo)}/commits/${encodeURIComponent(sha)}?per_page=100`, signal)).data;
+}
+export async function fetchContributors(repo: Repository, signal?: AbortSignal): Promise<Contributor[]> {
+  return (await request<Contributor[]>(`/repos/${repoPath(repo)}/contributors?per_page=12`, signal)).data;
 }
 export const repoUrl = (repo: Repository) => `https://github.com/${repoPath(repo)}`;
 export const commitUrl = (repo: Repository, sha: string) => `${repoUrl(repo)}/commit/${encodeURIComponent(sha)}`;
