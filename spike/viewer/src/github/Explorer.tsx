@@ -7,6 +7,7 @@ import type { Repository, GitHubProfile, GitCommit, CommitDetail } from "./api";
 import { profileHandleFromUrl, profilePath } from "./profileRoute";
 import "./explorer.css";
 import { CommitInspector } from "./CommitInspector";
+import { UniverseCard } from "./UniverseCard";
 
 type TrendingRepo = Repository & { monthlyStars?: number };
 const compact = (value: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
@@ -157,12 +158,13 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         {hasMore && <button className="load-more" disabled={loadingMore || busy} onClick={() => void moreRepositories()}>{loadingMore ? "Loading…" : `Load more repositories (${repos.length} loaded)`}</button>}
         <div className="sidebar-bottom"><span className="tiny-orbit">◌</span><p>Every repository, a world.<br /><span>Every commit, a little history.</span></p></div>
       </aside>
-      <main className="universe-stage">
+      <main className={`universe-stage ${profile && !selected ? "has-universe-card" : ""}`}>
         <div className="stage-caption">
           <div className="section-eyebrow">{selected ? "REPOSITORY ORBIT" : (profile ? "EXPLORE THE CONSTELLATION" : "TRENDING THIS MONTH · GITHUB")}</div>
           <h2>{selected ? selected.name : profile ? `${profile.name ?? profile.login}’s system` : "Open source. Outer space."}</h2>
           <p>{selected ? `${selected.language ?? "Mixed languages"} world · select a satellite to inspect a commit` : "Select a planet to discover what’s happening beneath the surface."}</p>
         </div>
+        {profile && !selected && <UniverseCard profile={profile} repositories={repos} />}
         {selected && <button className="back-to-system" onClick={() => {setSelected(null);setPlaying(false);}}>← All planets</button>}
         <div className="system-canvas">
           <RepositorySystem repositories={busy ? [] : visible} selected={selected} commits={commits} commitIndex={commitIndex}

@@ -4,6 +4,7 @@ import { normalizeHandle, fetchProfile, fetchCommits, fetchRepositories } from '
 import { planetStyle } from '../src/github/planetStyle.ts';
 import { parseTrending } from '../server/trending.mjs';
 import { profileHandleFromUrl, profilePath } from '../src/github/profileRoute.ts';
+import { loadedCoverage, summarizeProfile } from '../src/github/profileSummary.ts';
 
 test('handles accept usernames and profile URLs, rejecting paths and injected URLs', () => {
   for (const input of ['octocat','@octocat','https://github.com/octocat/']) assert.equal(normalizeHandle(input), 'octocat');
@@ -18,6 +19,20 @@ test('profile routes support pretty and legacy links without accepting path trav
   assert.equal(profileHandleFromUrl('/@../secret', ''), undefined);
   assert.equal(profileHandleFromUrl('/@x/', ''), 'x');
   assert.equal(profilePath('octocat'), '/@octocat');
+});
+
+test('profile summary uses only loaded repositories and labels partial coverage', () => {
+  const now = Date.parse('2026-09-20T00:00:00Z');
+  const repositories = [
+    { language:'TypeScript', stargazers_count:12, pushed_at:'2026-09-01T00:00:00Z' },
+    { language:'TypeScript', stargazers_count:5, pushed_at:'2025-01-01T00:00:00Z' },
+    { language:'Rust', stargazers_count:3, pushed_at:'2026-07-01T00:00:00Z' },
+  ];
+  const summary = summarizeProfile({ public_repos:74 }, repositories, now);
+  assert.equal(summary.stars, 20);
+  assert.equal(summary.recentlyPushed, 2);
+  assert.deepEqual(summary.languages, [{ name:'TypeScript', repositories:2 }, { name:'Rust', repositories:1 }]);
+  assert.equal(loadedCoverage(summary), 'across 3 of 74 repositories loaded');
 });
 
 test('monthly feed extracts real star gains, preserves ranking, and ignores unrelated links', () => {
