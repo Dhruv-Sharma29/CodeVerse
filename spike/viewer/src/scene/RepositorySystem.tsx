@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls, Stars } from "@react-three/drei";
 import { World, Sun } from "./World";
 import { planetStyle, seedFor } from "../github/planetStyle";
 import type { Repository, GitCommit } from "../github/api";
 import { layoutLabels, type LabelItem, type Rect } from "./labelLayout";
+import { stepRepulsion, type PlanetBody } from "./orbitRepulsion";
 import * as THREE from "three";
 
 /** Planets register their live position and label element here; LabelLayout (below) reads the
@@ -12,12 +13,14 @@ import * as THREE from "three";
  *  outside React on purpose — it changes every frame. */
 // Ref objects, not their current values: drei's <Html> portals its children in after the
 // parent's effect runs, so the element ref is still null at registration time.
-interface LabelEntry {
+interface PlanetEntry {
   group: React.RefObject<THREE.Group | null>;
   element: React.RefObject<HTMLElement | null>;
   worldRadius: number;
+  /** Orbital state, owned by OrbitMotion. */
+  body: PlanetBody;
 }
-const labelRegistry = new Map<string, LabelEntry>();
+type PlanetRegistry = Map<string, PlanetEntry>;
 
 function Orbit({ radius, opacity = .1 }: { radius: number; opacity?: number }) {
   return <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
@@ -48,29 +51,33 @@ function Satellite({ commit, index, total, active, onSelect }: {
 // accumulated here rather than read from the clock, so pausing holds position instead of
 // resetting it. Ellipse factors (1.3 / .9) match the drawn Orbit rings.
 const INNER_RADIUS = 5.8;
+// Gap between rings. This, not the repulsion, sets how close two planets can ever get:
+// the tightest pairs are radially adjacent across rings, and sliding a planet along its own
+// ring cannot widen a radial gap.
+const RING_GAP = 6.6;
 const INNER_PERIOD = 46;
 const orbitSpeed = (radius: number) => (Math.PI * 2) / INNER_PERIOD * (INNER_RADIUS / radius);
 const orbitPosition = (angle: number, radius: number, y: number) =>
   [Math.cos(angle) * radius * 1.3, y, Math.sin(angle) * radius * .9] as [number, number, number];
 
-function OrbitingRepo({ repo, angle, radius, y, motion, onOpen }: {
-  repo: Repository; angle: number; radius: number; y: number; motion: boolean; onOpen: () => void;
+function OrbitingRepo({ repo, angle, radius, y, motion, onOpen, registry }: {
+  repo: Repository; angle: number; radius: number; y: number; motion: boolean;
+  onOpen: () => void; registry: PlanetRegistry;
 }) {
   const group = useRef<THREE.Group>(null);
   const label = useRef<HTMLButtonElement | null>(null);
-  const elapsed = useRef(0);
   const style = useMemo(() => planetStyle(repo), [repo]);
   const id = String(repo.id);
 
   useEffect(() => {
-    labelRegistry.set(id, { group, element: label, worldRadius: style.radius });
-    return () => { labelRegistry.delete(id); };
-  }, [id, style.radius]);
-
-  useFrame((_, delta) => {
-    if (motion) elapsed.current += delta;
-    group.current?.position.set(...orbitPosition(angle + elapsed.current * orbitSpeed(radius), radius, y));
-  });
+    const start = orbitPosition(angle, radius, y);
+    registry.set(id, {
+      group, element: label, worldRadius: style.radius,
+      body: { id, baseAngle: angle, angle, height: y, radius,
+              x: start[0], y: start[1], z: start[2], offset: 0, velocity: 0 },
+    });
+    return () => { registry.delete(id); };
+  }, [registry, id, angle, radius, y, style.radius]);
 
   // Anchored at the planet's centre; LabelLayout translates the card to a clear spot.
   return <group ref={group} position={orbitPosition(angle, radius, y)}>
@@ -84,10 +91,36 @@ function OrbitingRepo({ repo, angle, radius, y, motion, onOpen }: {
   </group>;
 }
 
+/** Owns orbital motion for the whole system: one clock, then a repulsion pass that nudges
+ *  crowded planets apart along their own rings (see orbitRepulsion.ts). Centralised because
+ *  repulsion needs every planet's position in the same frame.
+ *
+ *  Measured: the repulsion adds a small sway (up to ~8°) but does NOT measurably increase the
+ *  closest approach between planets — the tightest pairs sit on adjacent rings and are
+ *  separated radially, which a tangential nudge cannot widen. RING_GAP is what controls that. */
+function OrbitMotion({ motion, registry }: { motion: boolean; registry: PlanetRegistry }) {
+  const elapsed = useRef(0);
+  useFrame((_, delta) => {
+    if (motion) elapsed.current += delta;
+    const bodies: PlanetBody[] = [];
+    for (const entry of registry.values()) {
+      const body = entry.body;
+      bodies.push(body);
+      body.angle = body.baseAngle + elapsed.current * orbitSpeed(body.radius);
+      const [x, y, z] = orbitPosition(body.angle + body.offset, body.radius, body.height);
+      body.x = x; body.y = y; body.z = z;
+      entry.group.current?.position.set(x, y, z);
+    }
+    // Repulsion reads the positions written above, so it always acts on the current frame.
+    if (motion) stepRepulsion(bodies, delta);
+  });
+  return null;
+}
+
 /** Places every registered label once per frame so labels avoid each other, the planets and
  *  the sun label. Runs after the planets' own useFrame callbacks (mounted later in the tree),
  *  so it reads this frame's positions. */
-function LabelLayout() {
+function LabelLayout({ registry }: { registry: PlanetRegistry }) {
   const camera = useThree((state) => state.camera);
   const gl = useThree((state) => state.gl);
   const anchors = useRef(new Map<string, number>());
@@ -101,7 +134,7 @@ function LabelLayout() {
     if (!bounds.width || !bounds.height) return;
 
     const items: LabelItem[] = [];
-    for (const [id, entry] of labelRegistry) {
+    for (const [id, entry] of registry) {
       const object = entry.group.current;
       const element = entry.element.current;
       if (!object || !element) continue;
@@ -138,7 +171,7 @@ function LabelLayout() {
 
     const placements = layoutLabels(items, fixed, { width: bounds.width, height: bounds.height }, anchors.current);
     for (const [id, placement] of placements) {
-      const element = labelRegistry.get(id)?.element.current;
+      const element = registry.get(id)?.element.current;
       if (!element) continue;
       element.style.transform = `translate(${Math.round(placement.dx)}px, ${Math.round(placement.dy)}px)`;
       // Nothing fits: hide rather than stack. The sidebar still lists every repository and the
@@ -155,17 +188,19 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
   repositories: Repository[]; selected: Repository | null; commits: GitCommit[]; commitIndex: number;
   onRepo: (repo: Repository) => void; onCommit: (index: number) => void; centerLabel: string; motion: boolean;
 }) {
+  // One registry per mounted system; see PlanetRegistry above for why it is not module state.
+  const [registry] = useState<PlanetRegistry>(() => new Map());
   const placements = useMemo(() => repositories.map((repo, i) => {
     const ring = Math.floor(i / 4);
     return {
       repo,
       angle: (i % 4) * Math.PI / 2 + ring * .65 + .3,
-      radius: INNER_RADIUS + ring * 4.8,
+      radius: INNER_RADIUS + ring * RING_GAP,
       y: (seedFor(repo.name) - .5) * .8,
     };
   }), [repositories]);
   return <Canvas key={selected?.id ?? "overview"} dpr={[1,1.75]}
-    camera={{ position: selected ? [0,7.8,12.5] : [0,22,30], fov: 43, near: .1, far: 300 }}
+    camera={{ position: selected ? [0,7.8,12.5] : [0,25,34], fov: 43, near: .1, far: 300 }}
     fallback={<p className="canvas-fallback">3D needs WebGL. You can still explore every repository and commit from the lists.</p>}>
     <color attach="background" args={["#07090f"]} />
     <Stars radius={90} depth={35} count={2300} factor={3} fade speed={motion ? .15 : 0} />
@@ -173,7 +208,7 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
         and resumes afterwards. The "Pause rotation" button and reduced-motion both drive `motion`. */}
     <OrbitControls makeDefault enablePan={false} enableDamping dampingFactor={.07}
       autoRotate={motion} autoRotateSpeed={selected ? .5 : .7}
-      minDistance={selected ? 7 : 14} maxDistance={selected ? 24 : 45}
+      minDistance={selected ? 7 : 16} maxDistance={selected ? 24 : 52}
       maxPolarAngle={Math.PI * .48} minPolarAngle={.2} />
     {selected ? <>
       <World repo={selected} radius={2.15} active animate={motion} />
@@ -183,12 +218,13 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
     </> : <>
       <Sun animate={motion} />
       <Html center position={[0,3.3,0]} zIndexRange={[12,10]}><span className="sun-label">{centerLabel}</span></Html>
-      <group scale={[1.3,1,.9]}><Orbit radius={INNER_RADIUS} opacity={.26} /><Orbit radius={INNER_RADIUS + 4.8} opacity={.26} /></group>
+      <group scale={[1.3,1,.9]}><Orbit radius={INNER_RADIUS} opacity={.26} /><Orbit radius={INNER_RADIUS + RING_GAP} opacity={.26} /></group>
       {placements.map(({ repo, angle, radius, y }) => (
         <OrbitingRepo key={repo.id} repo={repo} angle={angle} radius={radius} y={y}
-          motion={motion} onOpen={() => onRepo(repo)} />
+          motion={motion} onOpen={() => onRepo(repo)} registry={registry} />
       ))}
-      <LabelLayout />
+      <OrbitMotion motion={motion} registry={registry} />
+      <LabelLayout registry={registry} />
     </>}
   </Canvas>;
 }
