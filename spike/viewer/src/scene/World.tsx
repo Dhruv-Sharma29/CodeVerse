@@ -144,7 +144,7 @@ export function Sun({ small = false, animate = true }: { small?: boolean; animat
   }, []);
   useFrame((_, delta) => { if(animate && material.current) material.current.uniforms.uTime.value += delta; });
   useEffect(() => () => glow.dispose(), [glow]);
-  return <group scale={small ? .85 : 1.25}>
+  return <group scale={small ? .85 : 1.95}>
     <sprite scale={[9,9,1]} raycast={() => null}><spriteMaterial map={glow} transparent depthWrite={false} blending={THREE.AdditiveBlending} /></sprite>
     <mesh><sphereGeometry args={[1,48,32]} /><shaderMaterial ref={material} vertexShader={vertex} fragmentShader={sunFragment} uniforms={uniforms} /></mesh>
   </group>;
