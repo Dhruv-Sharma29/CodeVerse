@@ -4,6 +4,7 @@ import { RepositorySystem } from "../scene/RepositorySystem";
 import { planetStyle } from "./planetStyle";
 import { fetchProfile, fetchRepositories, fetchCommits, fetchCommit, normalizeHandle, errorMessage, repoUrl, commitUrl } from "./api";
 import type { Repository, GitHubProfile, GitCommit, CommitDetail } from "./api";
+import { profileHandleFromUrl, profilePath } from "./profileRoute";
 import "./explorer.css";
 import { CommitInspector } from "./CommitInspector";
 
@@ -13,7 +14,7 @@ const date = (value?: string) => value ? new Date(value).toLocaleDateString(unde
 const SECTOR_SIZE = 8;
 
 export default function Explorer({ onImport, onDemo }: { onImport: () => void; onDemo: () => void }) {
-  const [handle, setHandle] = useState(() => new URLSearchParams(location.search).get("user") ?? "");
+  const [handle, setHandle] = useState(() => profileHandleFromUrl(location.pathname, location.search) ?? "");
   const [profile, setProfile] = useState<GitHubProfile | null>(null);
   const [repos, setRepos] = useState<TrendingRepo[]>([]);
   const [mode, setMode] = useState<"trending" | "profile">("trending");
@@ -56,7 +57,7 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         if (task.signal.aborted) return;
         setProfile(user); setRepos(result.repositories); setHasMore(result.hasMore); setMode("profile");
         setHandle(user.login); setUpdated("");
-        history.replaceState(null, "", `${location.pathname}?user=${encodeURIComponent(user.login)}`);
+        history.replaceState(null, "", profilePath(user.login));
       } else {
         const response = await fetch("/api/trending", { signal: task.signal });
         if (!response.ok) throw new Error("Monthly trending is temporarily unavailable. Retry, or enter a GitHub handle to explore a profile.");
@@ -64,14 +65,14 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         if (!Array.isArray(data.repositories) || !data.repositories.length) throw new Error("The trending feed returned no repositories. Try a GitHub handle instead.");
         if (task.signal.aborted) return;
         setRepos(data.repositories);setUpdated(data.fetchedAt);setProfile(null);setMode("trending");setHasMore(false);
-        history.replaceState(null, "", location.pathname);
+        history.replaceState(null, "", "/");
       }
       setQuery("");setSector(0);setPage(1);
     } catch (e) { if (!task.signal.aborted) setError(errorMessage(e)); }
     finally { if (!task.signal.aborted) setBusy(false); }
   }
   useEffect(() => {
-    void openUniverse(new URLSearchParams(location.search).get("user") ?? undefined);
+    void openUniverse(profileHandleFromUrl(location.pathname, location.search));
     return () => controller.current?.abort();
   }, []);
 

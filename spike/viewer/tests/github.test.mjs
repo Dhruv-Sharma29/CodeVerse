@@ -3,10 +3,21 @@ import assert from 'node:assert/strict';
 import { normalizeHandle, fetchProfile, fetchCommits, fetchRepositories } from '../src/github/api.ts';
 import { planetStyle } from '../src/github/planetStyle.ts';
 import { parseTrending } from '../server/trending.mjs';
+import { profileHandleFromUrl, profilePath } from '../src/github/profileRoute.ts';
 
 test('handles accept usernames and profile URLs, rejecting paths and injected URLs', () => {
   for (const input of ['octocat','@octocat','https://github.com/octocat/']) assert.equal(normalizeHandle(input), 'octocat');
   for (const input of ['', '-bad', 'two--hyphens', 'owner/repo', 'https://evil.com/name', 'x?token=secret']) assert.throws(() => normalizeHandle(input));
+});
+
+test('profile routes support pretty and legacy links without accepting path traversal', () => {
+  assert.equal(profileHandleFromUrl('/@x', ''), 'x');
+  assert.equal(profileHandleFromUrl('/', '?user=x'), 'x');
+  assert.equal(profileHandleFromUrl('/@pretty', '?user=legacy'), 'pretty');
+  assert.equal(profileHandleFromUrl('/not-a-profile', ''), undefined);
+  assert.equal(profileHandleFromUrl('/@../secret', ''), undefined);
+  assert.equal(profileHandleFromUrl('/@x/', ''), 'x');
+  assert.equal(profilePath('octocat'), '/@octocat');
 });
 
 test('monthly feed extracts real star gains, preserves ranking, and ignores unrelated links', () => {
