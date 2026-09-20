@@ -1,5 +1,6 @@
 {
   "rewrites": [
-    { "source": "/@:handle", "destination": "/" }
+    { "source": "/@:handle", "destination": "/index.html" },
+    { "source": "/@:handle/", "destination": "/index.html" }
   ]
 }
