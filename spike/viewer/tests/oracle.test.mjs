@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createOracle, prepareEvidence, validateExplanation, validateTarget, oracleMiddleware } from '../server/oracle.mjs';
+import { createOracle, prepareEvidence, validateExplanation, validateTarget, oracleMiddleware, visitorIdentity } from '../server/oracle.mjs';
 import { parsePatch } from '../src/github/diff.ts';
 
 const sha='a'.repeat(40);
@@ -68,4 +68,29 @@ test('cross-origin and malformed-origin requests are rejected before processing'
     await oracleMiddleware({url:'/api/oracle',method:'POST',headers:{host:'localhost:5173',origin,'content-type':'application/json'}},response,()=>assert.fail('unexpected next'));
     assert.equal(response.statusCode,403);
   }
+});
+
+test('Vercel uses x-real-ip, then the first forwarded entry, then the socket', () => {
+  const req = { headers: { 'x-real-ip': ' 203.0.113.8 ', 'x-forwarded-for': '198.51.100.7, 10.0.0.1' }, socket: { remoteAddress: '127.0.0.1' } };
+  assert.equal(visitorIdentity(req, true), '203.0.113.8');
+  delete req.headers['x-real-ip'];
+  assert.equal(visitorIdentity(req, true), '198.51.100.7');
+  req.headers['x-forwarded-for'] = ' 2001:db8::1 , 10.0.0.1';
+  assert.equal(visitorIdentity(req, true), '2001:db8::1');
+  req.headers['x-forwarded-for'] = '  ';
+  assert.equal(visitorIdentity(req, true), '127.0.0.1');
+  assert.equal(visitorIdentity({ headers: {} }, true), 'unknown');
+});
+
+test('outside Vercel, spoofed forwarding headers never affect visitor identity', () => {
+  assert.equal(visitorIdentity({ headers: { 'x-real-ip': 'attacker', 'x-forwarded-for': 'other' }, socket: { remoteAddress: '192.0.2.9' } }, false), '192.0.2.9');
+  assert.equal(visitorIdentity({ headers: { 'x-real-ip': 'attacker' } }, false), 'unknown');
+});
+
+test('Vercel visitors sharing one proxy have independent per-client budgets', async () => {
+  const oracle = createOracle({ getConfig: config, fetchImpl: async url => String(url).startsWith('https://api.github.com') ? Response.json(commit()) : Response.json({ choices: [{ message: { content: JSON.stringify(result()) } }] }) });
+  const client = ip => visitorIdentity({ headers: { 'x-real-ip': ip }, socket: { remoteAddress: '127.0.0.1' } }, true);
+  for (let i = 0; i < 10; i++) await oracle.explain({ repo: `owner/one${i}`, sha }, client('203.0.113.1'));
+  await assert.rejects(() => oracle.explain({ repo: 'owner/extra', sha }, client('203.0.113.1')), error => error.status === 429);
+  assert.equal((await oracle.explain({ repo: 'owner/two', sha }, client('203.0.113.2'))).cached, false);
 });

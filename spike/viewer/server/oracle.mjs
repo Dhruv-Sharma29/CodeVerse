@@ -118,6 +118,15 @@ export function createOracle({ fetchImpl = fetch, getConfig = config, now = Date
   }
   return {explain, status:()=>({available:getConfig().available})};
 }
+// Vercel sets these headers at its trusted edge. Other hosts must use the socket.
+export function visitorIdentity(req, isVercel = Boolean(process.env.VERCEL)) {
+  const first = value => typeof value === 'string' ? value.split(',')[0].trim() : '';
+  if (isVercel) {
+    const forwarded = first(req.headers?.['x-real-ip']) || first(req.headers?.['x-forwarded-for']);
+    if (forwarded) return forwarded;
+  }
+  return req.socket?.remoteAddress ?? 'unknown';
+}
 const oracle=createOracle();
 export async function oracleMiddleware(req,res,next) {
   const path=new URL(req.url,'http://localhost').pathname;
@@ -144,7 +153,7 @@ export async function oracleMiddleware(req,res,next) {
       }
       try {body=JSON.parse(raw);} catch {throw new OracleError(400,'Invalid JSON.');}
     } else if (Buffer.byteLength(JSON.stringify(body))>REQUEST_LIMIT) throw new OracleError(413,'Request too large.');
-    const client = req.socket?.remoteAddress ?? 'unknown';
+    const client = visitorIdentity(req);
     return send(200,await oracle.explain(body,client));
   } catch(error) {
     return send(error.status ?? 502,{error:error.status ? error.message : 'The explanation could not finish. Please retry.'});

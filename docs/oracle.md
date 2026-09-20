@@ -66,13 +66,21 @@ the viewer’s Node adapter uses the same configuration independently.
   replacement explanation.
 - Cache: up to 100 explanations for 24 hours, keyed by provider, model, repo, SHA.
 - Per server instance: two concurrent generations, ten uncached requests per
-  client socket address/hour, thirty total/hour. Failed attempts count too.
-  These are prototype safeguards, not durable global quotas. Serverless instances
-  do not share them, and proxy socket addresses may combine visitors. A shared
-  store and trusted client-IP extraction are required before a broadly enabled
-  paid deployment. Hosted AI remains opt-in for that reason.
+  visitor/hour, thirty total/hour. Failed attempts count too. On Vercel, visitor
+  identity uses `x-real-ip`, falling back to the first `x-forwarded-for` entry.
+  Outside Vercel, forwarding headers are ignored and only the socket address is
+  trusted. If Vercel supplies neither header, the socket is the fallback.
 - No local bundle content is sent to a model. No code is executed. Repository
   messages and patches are treated as untrusted data in the model instructions.
+
+## Known limits
+
+Budgets and cache are in-memory and therefore **per serverless instance**. The
+30-request global hourly cap is not enforced across instances; cold starts also
+reset counters and cached results. Forwarded visitor identity fixes the shared
+proxy bucket on Vercel, but does not create a durable or deployment-wide quota.
+Other reverse-proxy hosts still share socket-based buckets. Hosted AI remains
+opt-in; no shared storage or additional service is introduced here.
 
 ## Verification
 
