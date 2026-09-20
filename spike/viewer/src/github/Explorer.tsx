@@ -209,6 +209,6 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
       </aside>}
     </div>
     {inspecting && <CommitInspector key={inspecting.commit.sha} repo={inspecting.repo} commit={inspecting.commit} onClose={() => setInspecting(null)} />}
-    <footer className="explorer-footer"><span><span className="status-dot" /> {mode === "trending" ? "LIVE MONTHLY TRENDING" : "PUBLIC GITHUB DATA"}{updated && ` · retrieved ${date(updated)}`}</span><span>Surface = language <i>·</i> {mode === "trending" ? "Size = total stars" : "Size = repository KB"} <i>·</i> Rings are decorative</span><button onClick={onDemo}>Local history viewer ↗</button></footer>
+    <footer className="explorer-footer"><span><span className="status-dot" /> {mode === "trending" ? "LIVE MONTHLY TRENDING" : "PUBLIC GITHUB DATA"}{updated && ` · retrieved ${date(updated)}`}</span><span>Surface = primary language; archived = collapsed dark <i>·</i> {mode === "trending" ? "Size = total stars" : "Size = repository KB"} <i>·</i> Atmosphere by last push: ≤30d bright / 31–90d medium / 91–365d faint / &gt;365d minimal / unknown neutral <i>·</i> Orbit rings = decorative</span><button onClick={onDemo}>Local history viewer ↗</button></footer>
   </div>;
 }

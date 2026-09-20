@@ -36,7 +36,10 @@ const surface = `${noise}
     vec3 p=normalize(vPoint); vec3 q=p*4.0+uSeed*73.0;
     float terrain=fbm(q); float detail=fbm(q*7.0);
     vec3 color;
-    if(uKind < 0.5) {
+    if(uKind > 2.5) {
+      float horizon=smoothstep(.32,.78,terrain)*.012;
+      color=vec3(.001,.002,.005)+uGlow*horizon;
+    } else if(uKind < 0.5) {
       float land=smoothstep(0.44,0.51,terrain);
       color=mix(uDark*(0.7+detail*0.6),uLand*(0.5+detail),land);
       float coast=smoothstep(0.425,0.445,terrain)*(1.0-smoothstep(0.445,0.47,terrain));
@@ -68,10 +71,10 @@ const surface = `${noise}
   }
 `;
 const atmosphere = `
-  varying vec3 vNormal; varying vec3 vWorld; uniform vec3 uGlow;
+  varying vec3 vNormal; varying vec3 vWorld; uniform vec3 uGlow; uniform float uAtmosphere;
   void main(){
     float rim=pow(1.0-abs(dot(normalize(vNormal),normalize(cameraPosition-vWorld))),3.0);
-    gl_FragColor=vec4(uGlow,rim*.34);
+    gl_FragColor=vec4(uGlow,rim*.42*uAtmosphere);
     #include <colorspace_fragment>
   }
 `;
@@ -88,7 +91,7 @@ const ringFragment = `
 `;
 
 export function World({ repo, radius = 1, active = false, onClick, animate = true }: {
-  repo: Pick<Repository, "name" | "id" | "language" | "size">;
+  repo: Pick<Repository, "name" | "id" | "language" | "size" | "pushed_at" | "archived">;
   radius?: number; active?: boolean; onClick?: () => void; animate?: boolean;
 }) {
   const mesh = useRef<THREE.Mesh>(null);
@@ -96,9 +99,10 @@ export function World({ repo, radius = 1, active = false, onClick, animate = tru
   const uniforms = useMemo(() => ({
     uDark: { value: new THREE.Color(style.dark) }, uLand: { value: new THREE.Color(style.land) },
     uGlow: { value: new THREE.Color(style.glow) }, uSeed: { value: style.seed }, uKind: { value: style.kind },
+    uAtmosphere: { value: style.activity.intensity },
   }), [style]);
   useFrame((_, delta) => { if (mesh.current && animate) mesh.current.rotation.y += delta * .025; });
-  return <group scale={radius} rotation={[.12, style.seed * 6, .15]}>
+  return <group scale={radius * (active && style.archived ? .58 : 1)} rotation={[.12, style.seed * 6, .15]}>
     <mesh ref={mesh} onClick={onClick ? e => { e.stopPropagation(); onClick(); } : undefined}>
       <sphereGeometry args={[1, 64, 48]} />
       <shaderMaterial vertexShader={vertex} fragmentShader={surface} uniforms={uniforms} />

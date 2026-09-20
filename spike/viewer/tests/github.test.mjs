@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeHandle, fetchProfile, fetchCommits, fetchRepositories } from '../src/github/api.ts';
-import { planetStyle } from '../src/github/planetStyle.ts';
+import { activityEncoding, archiveEncoding, planetStyle } from '../src/github/planetStyle.ts';
 import { parseTrending } from '../server/trending.mjs';
 import { profileHandleFromUrl, profilePath } from '../src/github/profileRoute.ts';
 import { loadedCoverage, summarizeProfile } from '../src/github/profileSummary.ts';
@@ -51,6 +51,28 @@ test('planet identities are deterministic with bounded sizes', () => {
   assert.deepEqual(planetStyle(repo),planetStyle(repo));
   assert.ok(planetStyle({...repo,size:1e15}).radius <= 1.7);
   assert.notEqual(planetStyle(repo).dark,planetStyle({...repo,language:'Rust'}).dark);
+});
+
+test('repository activity maps to documented stepped atmosphere bands', () => {
+  const now = Date.parse('2026-09-20T00:00:00Z');
+  const pushed = days => new Date(now - days * 86_400_000).toISOString();
+  assert.deepEqual([0, 30, 31, 90, 91, 365, 366].map(days => activityEncoding(pushed(days), now).band),
+    ['recent', 'recent', 'active', 'active', 'quiet', 'quiet', 'stale']);
+  assert.equal(activityEncoding('', now).band, 'unknown');
+  assert.ok(activityEncoding(pushed(30), now).intensity > activityEncoding(pushed(90), now).intensity);
+  assert.ok(activityEncoding(pushed(90), now).intensity > activityEncoding(pushed(365), now).intensity);
+  assert.ok(activityEncoding(pushed(365), now).intensity > activityEncoding(pushed(366), now).intensity);
+});
+
+test('archived repositories use a collapsed black-hole treatment without decorative rings', () => {
+  const archive = archiveEncoding(true);
+  assert.ok(archive.scale < 0.7);
+  assert.equal(archive.surfaceKind, 3);
+  assert.equal(archive.rings, false);
+  const normal = planetStyle({ id:1, name:'active', language:'TypeScript', size:1000, archived:false, pushed_at:'2026-09-20T00:00:00Z' });
+  const retired = planetStyle({ id:1, name:'active', language:'TypeScript', size:1000, archived:true, pushed_at:'2026-09-20T00:00:00Z' });
+  assert.ok(retired.radius < normal.radius);
+  assert.equal(retired.kind, 3);
 });
 
 test('GitHub requests handle organizations, empty history, limits, and the unknown default branch', async () => {

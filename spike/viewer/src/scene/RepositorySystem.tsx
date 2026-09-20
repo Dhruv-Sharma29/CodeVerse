@@ -82,11 +82,11 @@ function OrbitingRepo({ repo, angle, radius, y, motion, onOpen, onFocus, keyboar
   return <group ref={group} position={orbitPosition(angle, radius, y)}>
     <World repo={repo} radius={style.radius} onClick={onOpen} animate={motion} />
     <Html center position={[0, 0, 0]} zIndexRange={[8, 0]}>
-      <button ref={label} title={repo.full_name} aria-label={`Open ${repo.full_name}`}
-        className={`planet-label ${keyboardActive ? "is-keyboard-active" : ""}`}
+      <button ref={label} title={`${repo.full_name} · ${style.activity.label}`} aria-label={`Open ${repo.full_name}. ${repo.archived ? "Archived repository. " : ""}${style.activity.label}.`}
+        className={`planet-label ${keyboardActive ? "is-keyboard-active" : ""} ${repo.archived ? "is-archived" : ""}`}
         onClick={onOpen} onFocus={onFocus}>
         <span className="planet-label-dot" style={{ background: style.glow }} />{repo.name}
-        <small>{repo.language ?? "Mixed languages"}</small>
+        <small>{repo.archived ? "ARCHIVED · BLACK HOLE" : repo.language ?? "Mixed languages"}</small>
       </button>
     </Html>
   </group>;
@@ -222,10 +222,10 @@ function LabelLayout({ registry }: { registry: PlanetRegistry }) {
       const element = registry.get(id)?.element.current;
       if (!element) continue;
       element.style.transform = `translate(${Math.round(placement.dx)}px, ${Math.round(placement.dy)}px)`;
-      // Nothing fits: hide rather than stack. The sidebar still lists every repository and the
-      // planet stays clickable, so this hides a duplicate label, not information.
-      element.style.opacity = placement.overlap > 0 ? "0" : "1";
-      element.style.pointerEvents = placement.overlap > 0 ? "none" : "";
+      // Keep every repository label present. Farther anchors handle narrow-screen crowding;
+      // the sidebar and full accessible name remain available when the visible text truncates.
+      element.style.opacity = "1";
+      element.style.pointerEvents = "";
       anchors.current.set(id, placement.anchor);
     }
   });

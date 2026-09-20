@@ -45,7 +45,7 @@ export function candidates(item: LabelItem): { dx: number; dy: number }[] {
       { dx: -diagX, dy: -diagY },
     ];
   };
-  return [...ring(0), ...ring(halfH * 2.2), ...ring(halfH * 4.4)];
+  return [...ring(0), ...ring(halfH * 2.2), ...ring(halfH * 4.4), ...ring(halfH * 7), ...ring(halfH * 10)];
 }
 
 export function rectFor(item: LabelItem, dx: number, dy: number): Rect {
@@ -66,8 +66,8 @@ function planetRect(item: LabelItem): Rect {
 }
 
 function outsideViewport(rect: Rect, viewport: { width: number; height: number }): number {
-  const dx = Math.max(0, -rect.x) + Math.max(0, rect.x + rect.width - viewport.width);
-  const dy = Math.max(0, -rect.y) + Math.max(0, rect.y + rect.height - viewport.height);
+  const dx = Math.max(0, MARGIN - rect.x) + Math.max(0, rect.x + rect.width - (viewport.width - MARGIN));
+  const dy = Math.max(0, MARGIN - rect.y) + Math.max(0, rect.y + rect.height - (viewport.height - MARGIN));
   return (dx + dy) * 1000; // heavy penalty: a clipped label is worse than a tight one
 }
 

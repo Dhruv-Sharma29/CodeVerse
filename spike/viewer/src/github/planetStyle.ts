@@ -5,6 +5,24 @@ export function seedFor(text: string) {
   for (const ch of text) hash = Math.imul(hash ^ ch.charCodeAt(0), 16777619);
   return (hash >>> 0) / 4294967296;
 }
+const DAY_MS = 24 * 60 * 60 * 1000;
+export type ActivityBand = "recent" | "active" | "quiet" | "stale" | "unknown";
+
+export function activityEncoding(pushedAt: string | null | undefined, now = Date.now()) {
+  const pushed = pushedAt ? Date.parse(pushedAt) : Number.NaN;
+  if (!Number.isFinite(pushed)) return { band: "unknown" as ActivityBand, intensity: .18, label: "Push date unavailable" };
+  const ageDays = Math.max(0, (now - pushed) / DAY_MS);
+  if (ageDays <= 30) return { band: "recent" as ActivityBand, intensity: 1, label: "Pushed within 30 days" };
+  if (ageDays <= 90) return { band: "active" as ActivityBand, intensity: .68, label: "Pushed 31–90 days ago" };
+  if (ageDays <= 365) return { band: "quiet" as ActivityBand, intensity: .38, label: "Pushed 91–365 days ago" };
+  return { band: "stale" as ActivityBand, intensity: .14, label: "Pushed over 365 days ago" };
+}
+
+export function archiveEncoding(archived: boolean | undefined) {
+  return archived
+    ? { scale: .58, surfaceKind: 3, dark: "#000106", land: "#080914", glow: "#77708e", rings: false }
+    : { scale: 1, surfaceKind: null, dark: null, land: null, glow: null, rings: null };
+}
 const palettes: Record<string, [string, string, string, number]> = {
   TypeScript: ["#102c58", "#438bae", "#87e4f3", 0],
   JavaScript: ["#402222", "#c99857", "#ffe0a0", 1],
@@ -20,8 +38,17 @@ const palettes: Record<string, [string, string, string, number]> = {
   Swift: ["#46261d", "#cd9160", "#ffe0b0", 1],
   "Jupyter Notebook": ["#402c17", "#c08d40", "#ffe9bd", 0],
 };
-export function planetStyle(repo: Pick<Repository, "name" | "language" | "size" | "id"> & { stargazers_count?: number }) {
+export function planetStyle(repo: Pick<Repository, "name" | "language" | "size" | "id"> & Partial<Pick<Repository, "stargazers_count" | "pushed_at" | "archived">>, now = Date.now()) {
   const seed = seedFor(`${repo.id}/${repo.name}`);
   const [dark, land, glow, kind] = palettes[repo.language ?? ""] ?? palettes[Object.keys(palettes)[Math.floor(seedFor(repo.language ?? "Mixed") * Object.keys(palettes).length)]];
-  return { dark, land, glow, kind, seed, radius: Math.min(1.7, 0.65 + Math.log10(Math.max(repo.size ?? repo.stargazers_count ?? 1, 1)) * .22), rings: kind === 1 || seed > .77 };
+  const archive = archiveEncoding(repo.archived);
+  const activity = activityEncoding(repo.pushed_at, now);
+  return {
+    dark: archive.dark ?? dark, land: archive.land ?? land, glow: archive.glow ?? glow,
+    kind: archive.surfaceKind ?? kind, seed,
+    radius: Math.min(1.7, (0.65 + Math.log10(Math.max(repo.size ?? repo.stargazers_count ?? 1, 1)) * .22) * archive.scale),
+    rings: archive.rings ?? (kind === 1 || seed > .77),
+    activity,
+    archived: Boolean(repo.archived),
+  };
 }
