@@ -158,6 +158,12 @@
 .bundle-button:hover { background: #a3ffdb; }
 .bundle-button:disabled { opacity: .65; cursor: wait; }
 .bundle-button:focus-visible { outline: 2px solid white; outline-offset: 4px; }
+.bundle-actions { display:flex;justify-content:center;gap:10px;flex-wrap:wrap; }
+.demo-button { background:#171d2a;color:#dce4f1;border:1px solid #3a465c;border-radius:8px;padding:10px 15px;font:600 13px ui-sans-serif,system-ui,sans-serif;cursor:pointer; }
+.demo-button:hover { background:#202a3c;border-color:#61728e; }
+.demo-button:disabled { opacity:.65;cursor:wait; }
+.demo-button:focus-visible { outline:2px solid white;outline-offset:4px; }
+.bundle-empty { color:#aeb8c7;font:13px/1.5 ui-sans-serif,system-ui,sans-serif;background:#111725;border:1px solid #263247;border-radius:8px;padding:10px 12px; }
 .bundle-toolbar { position: absolute; top: 150px; left: 20px; max-width: 320px; z-index: 2; }
 .bundle-error { color: #ffc7ba; font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; background: #291b21; border-radius: 8px; padding: 10px 12px; }
 @media (max-width: 700px) {

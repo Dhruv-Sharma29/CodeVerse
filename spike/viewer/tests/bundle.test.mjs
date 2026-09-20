@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { parseBundle } from '../src/bundle.ts';
 import { computeStateAt } from '../src/timeline.ts';
 import { useStore } from '../src/store.ts';
+import { readFile } from 'node:fs/promises';
 
 const fixture = () => ({
   repo: 'example', nodes: ['old.py', 'new.py'], authors: ['Ada'],
@@ -13,6 +14,15 @@ const fixture = () => ({
 test('accepts legacy notebook exports and versioned CLI bundles', () => {
   assert.equal(parseBundle(fixture()).repo, 'example');
   assert.equal(parseBundle({ ...fixture(), schemaVersion: 1 }).schemaVersion, 1);
+});
+
+test('the committed demo is a valid, nontrivial small bundle', async () => {
+  const raw = await readFile(new URL('../public/demo-repo.json', import.meta.url), 'utf8');
+  const demo = parseBundle(JSON.parse(raw));
+  assert.equal(demo.schemaVersion, 1);
+  assert.ok(demo.nodes.length >= 5);
+  assert.ok(demo.commits.length >= 4);
+  assert.ok(Buffer.byteLength(raw) < 10_000);
 });
 
 test('rejects malformed data before rendering', () => {
