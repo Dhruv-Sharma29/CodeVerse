@@ -5,7 +5,6 @@ import { World, Sun } from "./World";
 import { planetStyle, seedFor } from "../github/planetStyle";
 import type { Repository, GitCommit } from "../github/api";
 import { layoutLabels, type LabelItem, type Rect } from "./labelLayout";
-import { stepRepulsion, type PlanetBody } from "./orbitRepulsion";
 import * as THREE from "three";
 
 /** Planets register their live position and label element here; LabelLayout (below) reads the
@@ -17,8 +16,9 @@ interface PlanetEntry {
   group: React.RefObject<THREE.Group | null>;
   element: React.RefObject<HTMLElement | null>;
   worldRadius: number;
-  /** Orbital state, owned by OrbitMotion. */
-  body: PlanetBody;
+  baseAngle: number;
+  height: number;
+  radius: number;
 }
 type PlanetRegistry = Map<string, PlanetEntry>;
 
@@ -70,11 +70,9 @@ function OrbitingRepo({ repo, angle, radius, y, motion, onOpen, registry }: {
   const id = String(repo.id);
 
   useEffect(() => {
-    const start = orbitPosition(angle, radius, y);
     registry.set(id, {
       group, element: label, worldRadius: style.radius,
-      body: { id, baseAngle: angle, angle, height: y, radius,
-              x: start[0], y: start[1], z: start[2], offset: 0, velocity: 0 },
+      baseAngle: angle, height: y, radius,
     });
     return () => { registry.delete(id); };
   }, [registry, id, angle, radius, y, style.radius]);
@@ -91,28 +89,16 @@ function OrbitingRepo({ repo, angle, radius, y, motion, onOpen, registry }: {
   </group>;
 }
 
-/** Owns orbital motion for the whole system: one clock, then a repulsion pass that nudges
- *  crowded planets apart along their own rings (see orbitRepulsion.ts). Centralised because
- *  repulsion needs every planet's position in the same frame.
- *
- *  Measured: the repulsion adds a small sway (up to ~8°) but does NOT measurably increase the
- *  closest approach between planets — the tightest pairs sit on adjacent rings and are
- *  separated radially, which a tangential nudge cannot widen. RING_GAP is what controls that. */
+/** Owns orbital motion for the whole system. Repulsion was removed after a full-orbit
+ *  comparison showed that its visible sway did not improve the closest approach. */
 function OrbitMotion({ motion, registry }: { motion: boolean; registry: PlanetRegistry }) {
   const elapsed = useRef(0);
   useFrame((_, delta) => {
     if (motion) elapsed.current += delta;
-    const bodies: PlanetBody[] = [];
     for (const entry of registry.values()) {
-      const body = entry.body;
-      bodies.push(body);
-      body.angle = body.baseAngle + elapsed.current * orbitSpeed(body.radius);
-      const [x, y, z] = orbitPosition(body.angle + body.offset, body.radius, body.height);
-      body.x = x; body.y = y; body.z = z;
-      entry.group.current?.position.set(x, y, z);
+      const angle = entry.baseAngle + elapsed.current * orbitSpeed(entry.radius);
+      entry.group.current?.position.set(...orbitPosition(angle, entry.radius, entry.height));
     }
-    // Repulsion reads the positions written above, so it always acts on the current frame.
-    if (motion) stepRepulsion(bodies, delta);
   });
   return null;
 }
