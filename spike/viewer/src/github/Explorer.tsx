@@ -5,6 +5,7 @@ import { planetStyle } from "./planetStyle";
 import { fetchProfile, fetchRepositories, fetchCommits, fetchCommit, normalizeHandle, errorMessage, repoUrl, commitUrl } from "./api";
 import type { Repository, GitHubProfile, GitCommit, CommitDetail } from "./api";
 import "./explorer.css";
+import { CommitInspector } from "./CommitInspector";
 
 type TrendingRepo = Repository & { monthlyStars?: number };
 const compact = (value: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
@@ -23,6 +24,7 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [inspecting, setInspecting] = useState<{repo: Repository; commit: CommitDetail} | null>(null);
   const [selected, setSelected] = useState<TrendingRepo | null>(null);
   const [commits, setCommits] = useState<GitCommit[]>([]);
   const [commitIndex, setCommitIndex] = useState(0);
@@ -194,6 +196,7 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
           <h4>{commit.commit.message.split("\n")[0]}</h4><p>{commit.commit.author?.name ?? "Unknown author"}</p>
           {playing ? <p className="detail-muted">Pause to inspect this commit’s files.</p> : detailError ? <div className="explorer-error" role="alert">{detailError}<button onClick={() => setDetailRetry(n => n + 1)}>Retry</button></div> : detail ? <>
             <div className="change-count"><span>+{detail.stats.additions.toLocaleString()}</span><span>−{detail.stats.deletions.toLocaleString()}</span><span>{detail.files.length} files{detail.files.length === 100 ? " shown" : ""}</span></div>
+            <button className="inspect-code-button" onClick={() => { setPlaying(false); setInspecting({repo:selected,commit:detail}); }}>Read message, code & AI explanation ↗</button>
             <div className="changed-files">{detail.files.slice(0,8).map(file => <div key={file.filename} title={`${file.filename} · ${file.status}`}><span>{file.filename}</span><small>+{file.additions} −{file.deletions}</small></div>)}</div>
             {detail.files.length > 8 && <p className="detail-muted">Showing 8 files. See the complete change on GitHub.</p>}
           </> : <p className="detail-muted">Loading changed files…</p>}
@@ -202,6 +205,7 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         <div className="commit-list">{commits.map((c,i) => ({ c,i })).reverse().map(({c,i}) => <button key={c.sha} className={i===commitIndex ? "active" : ""} onClick={() => selectCommit(i)}><span className="commit-node" /><span><strong>{c.commit.message.split("\n")[0]}</strong><small>{c.sha.slice(0,7)} · {c.commit.author?.name ?? "Unknown author"}</small></span></button>)}</div>
       </aside>}
     </div>
+    {inspecting && <CommitInspector key={inspecting.commit.sha} repo={inspecting.repo} commit={inspecting.commit} onClose={() => setInspecting(null)} />}
     <footer className="explorer-footer"><span><span className="status-dot" /> {mode === "trending" ? "LIVE MONTHLY TRENDING" : "PUBLIC GITHUB DATA"}{updated && ` · retrieved ${date(updated)}`}</span><span>Surface = language <i>·</i> {mode === "trending" ? "Size = total stars" : "Size = repository KB"} <i>·</i> Rings are decorative</span><button onClick={onDemo}>Local history viewer ↗</button></footer>
   </div>;
 }

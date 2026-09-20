@@ -13,7 +13,7 @@ export interface GitCommit {
 }
 export interface CommitDetail extends GitCommit {
   stats: { additions: number; deletions: number; total: number };
-  files: { filename: string; status: string; additions: number; deletions: number }[];
+  files: { filename: string; previous_filename?: string; status: string; additions: number; deletions: number; patch?: string }[];
 }
 export interface RepoPage { repositories: Repository[]; hasMore: boolean }
 
