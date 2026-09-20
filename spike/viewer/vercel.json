@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/@:handle", "destination": "/index.html" },
-    { "source": "/@:handle/", "destination": "/index.html" }
+    { "source": "/@:handle", "destination": "/api/handle?handle=:handle" },
+    { "source": "/@:handle/", "destination": "/api/handle?handle=:handle" }
   ]
 }

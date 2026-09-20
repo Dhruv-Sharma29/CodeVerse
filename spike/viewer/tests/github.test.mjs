@@ -173,4 +173,192 @@ test('ogMiddleware validates handle and falls back to default preview on error',
   assert.equal(statusCode, 302);
   assert.equal(headers.Location, '/og-default.png');
 });
+test('isValidHandle matches normalizeHandle semantics and rejects junk paths', async () => {
+  const { isValidHandle } = await import('../server/profileHtml.mjs');
+  for (const valid of ['octocat', '@octocat', 'a', 'a-b', 'a-1', '12345', 'octocat/']) {
+    assert.equal(isValidHandle(valid), true, `should accept ${valid}`);
+  }
+  for (const invalid of ['', '   ', '-bad', 'bad-', 'two--hyphens', 'owner/repo', 'foo?bar=1', '<script>', 'a'.repeat(40)]) {
+    assert.equal(isValidHandle(invalid), false, `should reject ${invalid}`);
+  }
+});
 
+test('escapeHtmlAttr escapes all HTML attribute & tag breakout characters while preserving emoji', async () => {
+  const { escapeHtmlAttr } = await import('../server/profileHtml.mjs');
+  assert.equal(escapeHtmlAttr(null), '');
+  assert.equal(escapeHtmlAttr(undefined), '');
+  assert.equal(escapeHtmlAttr('"><script>alert(1)</script>'), '&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;');
+  assert.equal(escapeHtmlAttr('\' " & < >'), '&#39; &quot; &amp; &lt; &gt;');
+  assert.equal(escapeHtmlAttr('🪐 ⭐ 🚀 Universe'), '🪐 ⭐ 🚀 Universe');
+  const longStr = 'a'.repeat(2000) + '<>';
+  assert.equal(escapeHtmlAttr(longStr), 'a'.repeat(2000) + '&lt;&gt;');
+});
+
+test('buildProfileMeta and injectProfileMeta escape attacker-controlled name/bio and preserve default og:image', async () => {
+  const { buildProfileMeta, injectProfileMeta } = await import('../server/profileHtml.mjs');
+  const template = `<!doctype html><html><head>
+    <meta property="og:title" content="Codeverse" />
+    <meta property="og:description" content="Default desc" />
+    <meta property="og:url" content="__SITE_ORIGIN__/" />
+    <meta property="og:image" content="__SITE_ORIGIN__/og-default.png" />
+    <meta name="twitter:title" content="Codeverse" />
+    <meta name="twitter:description" content="Default desc" />
+    <meta name="twitter:image" content="__SITE_ORIGIN__/og-default.png" />
+    <title>Codeverse</title>
+  </head><body></body></html>`;
+
+  // Test malicious name, null bio
+  const maliciousUser = {
+    login: 'attacker',
+    name: '"><script>alert(1)</script>',
+    bio: null,
+    public_repos: 5,
+  };
+  const meta1 = buildProfileMeta(maliciousUser, []);
+  assert.equal(meta1.title, '"><script>alert(1)</script> (@attacker) — Codeverse');
+  assert.ok(meta1.description.includes('5 repositories'));
+  
+  const html1 = injectProfileMeta(template, meta1, 'attacker');
+  assert.ok(html1.includes('&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt; (@attacker) — Codeverse'));
+  assert.ok(!html1.includes('"><script>alert(1)</script>'));
+  assert.ok(html1.includes('content="https://codeverse-orbit.vercel.app/og-default.png"'));
+  assert.ok(html1.includes('content="https://codeverse-orbit.vercel.app/@attacker"'));
+  assert.ok(html1.includes('<link rel="canonical" href="https://codeverse-orbit.vercel.app/@attacker" />'));
+
+  // Test bio with quotes, ampersands, emoji, and dollar signs ($100, $&, $')
+  const complexUser = {
+    login: 'artist',
+    name: 'Jane & "The" Co',
+    bio: 'Artist & dev · $100 bounty · $& replacement test · 🪐 ⭐ 🚀',
+    public_repos: 12,
+  };
+  const meta2 = buildProfileMeta(complexUser, [{ stargazers_count: 50 }, { stargazers_count: 150 }]);
+  assert.equal(meta2.totalStars, 200);
+  const html2 = injectProfileMeta(template, meta2, 'artist');
+  assert.ok(html2.includes('Jane &amp; &quot;The&quot; Co (@artist) — Codeverse'));
+  assert.ok(html2.includes('Artist &amp; dev · $100 bounty · $&amp; replacement test · 🪐 ⭐ 🚀'));
+  assert.ok(html2.includes('⭐ 200'));
+
+  // Fallback for null meta (lookup failure) preserves default tags but sets canonical for valid handle
+  const fallbackHtml = injectProfileMeta(template, null, 'someuser');
+  assert.ok(fallbackHtml.includes('<title>Codeverse</title>'));
+  assert.ok(fallbackHtml.includes('content="Default desc"'));
+  assert.ok(fallbackHtml.includes('content="https://codeverse-orbit.vercel.app/@someuser"'));
+  assert.ok(fallbackHtml.includes('<link rel="canonical" href="https://codeverse-orbit.vercel.app/@someuser" />'));
+});
+
+test('fetchProfileData handles rate limits, bounds cache to 200, and caches failures with shorter TTL', async () => {
+  const { fetchProfileData, profileCache, _clearProfileCache, MAX_CACHE_ENTRIES } = await import('../server/profileHtml.mjs');
+  _clearProfileCache();
+
+  const originalFetch = globalThis.fetch;
+  let fetchCount = 0;
+
+  try {
+    // 1. Success case
+    globalThis.fetch = async () => {
+      fetchCount++;
+      return new Response(JSON.stringify({ login: 'octocat', public_repos: 8, name: 'The Octocat' }), { status: 200 });
+    };
+
+    const res1 = await fetchProfileData('octocat');
+    assert.equal(res1.login, 'octocat');
+    assert.equal(fetchCount, 2); // 1 for user, 1 for repos
+
+    // Cache hit should not call fetch again
+    const res2 = await fetchProfileData('octocat');
+    assert.equal(res2.login, 'octocat');
+    assert.equal(fetchCount, 2);
+
+    // 2. Failure case (404/403)
+    globalThis.fetch = async () => new Response('Not Found', { status: 404 });
+    const failRes1 = await fetchProfileData('ghost-user');
+    assert.equal(failRes1, null);
+
+    const cachedGhost = profileCache.get('ghost-user');
+    assert.ok(cachedGhost);
+    assert.equal(cachedGhost.isError, true);
+
+    // 3. Cache bounding: fill 205 entries
+    for (let i = 0; i < 205; i++) {
+      profileCache.set(`user-${i}`, { time: Date.now(), isError: false, data: { login: `user-${i}` } });
+      if (profileCache.size > MAX_CACHE_ENTRIES) {
+        const oldestKey = profileCache.keys().next().value;
+        profileCache.delete(oldestKey);
+      }
+    }
+    assert.equal(profileCache.size, MAX_CACHE_ENTRIES);
+    assert.equal(profileCache.has('user-0'), false); // oldest evicted
+    assert.equal(profileCache.has('user-204'), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    _clearProfileCache();
+  }
+});
+
+test('profileHtmlMiddleware handles /@:handle, sets Cache-Control, and rejects junk paths', async () => {
+  const { profileHtmlMiddleware, _clearProfileCache } = await import('../server/profileHtml.mjs');
+  _clearProfileCache();
+
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url) => {
+      if (String(url).includes('/users/realuser')) {
+        return new Response(JSON.stringify({ login: 'realuser', name: 'Real User', public_repos: 3 }), { status: 200 });
+      }
+      return new Response('Not Found', { status: 404 });
+    };
+
+    // Test real handle
+    const headers = {};
+    let body = '';
+    const res = {
+      statusCode: 200,
+      setHeader(k, v) { headers[k.toLowerCase()] = v; },
+      end(chunk) { if (chunk) body = chunk; },
+    };
+
+    await profileHtmlMiddleware({ url: '/@realuser', method: 'GET' }, res, () => {});
+    assert.equal(headers['content-type'], 'text/html; charset=utf-8');
+    assert.equal(headers['cache-control'], 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400');
+    assert.ok(body.includes('Real User (@realuser) — Codeverse'));
+
+    // Test invalid handle (junk path)
+    const junkHeaders = {};
+    let junkBody = '';
+    const junkRes = {
+      statusCode: 200,
+      setHeader(k, v) { junkHeaders[k.toLowerCase()] = v; },
+      end(chunk) { if (chunk) junkBody = chunk; },
+    };
+    await profileHtmlMiddleware({ url: '/@invalid--handle', method: 'GET' }, junkRes, () => {});
+    assert.equal(junkHeaders['cache-control'], 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
+    assert.ok(junkBody.includes('Codeverse — Your code, in orbit'));
+
+    // Test nonexistent handle
+    const nonHeaders = {};
+    let nonBody = '';
+    const nonRes = {
+      statusCode: 200,
+      setHeader(k, v) { nonHeaders[k.toLowerCase()] = v; },
+      end(chunk) { if (chunk) nonBody = chunk; },
+    };
+    await profileHtmlMiddleware({ url: '/@ghost404user', method: 'GET' }, nonRes, () => {});
+    assert.equal(nonHeaders['cache-control'], 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
+    assert.ok(nonBody.includes('Codeverse — Your code, in orbit'));
+    assert.ok(nonBody.includes('content="https://codeverse-orbit.vercel.app/@ghost404user"'));
+
+    // Test non-GET method returns 405
+    let postStatusCode = 200;
+    const postRes = {
+      set statusCode(code) { postStatusCode = code; },
+      setHeader() {},
+      end() {},
+    };
+    await profileHtmlMiddleware({ url: '/@realuser', method: 'POST' }, postRes, () => {});
+    assert.equal(postStatusCode, 405);
+  } finally {
+    globalThis.fetch = originalFetch;
+    _clearProfileCache();
+  }
+});
