@@ -165,6 +165,8 @@ function OrbitMotion({ motion, registry }: { motion: boolean; registry: PlanetRe
   return null;
 }
 
+const isDebugLayout = () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "layout";
+
 /** Places every registered label once per frame so labels avoid each other, the planets and
  *  the sun label. Runs after the planets' own useFrame callbacks (mounted later in the tree),
  *  so it reads this frame's positions. */
@@ -175,8 +177,12 @@ function LabelLayout({ registry }: { registry: PlanetRegistry }) {
   const point = useRef(new THREE.Vector3());
   const edge = useRef(new THREE.Vector3());
   const right = useRef(new THREE.Vector3());
+  const metrics = useRef<{
+    start: number; frames: number[]; lastSample: number; samples: number;
+    labelOverlap: number; sunCovered: number; offscreen: number; hidden: number; done: boolean;
+  } | null>(null);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     const canvas = gl.domElement;
     const bounds = canvas.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
@@ -228,6 +234,45 @@ function LabelLayout({ registry }: { registry: PlanetRegistry }) {
       element.style.pointerEvents = "";
       anchors.current.set(id, placement.anchor);
     }
+
+    if (!isDebugLayout()) return;
+
+    if (!metrics.current) {
+      metrics.current = { start: performance.now(), frames: [], lastSample: 0, samples: 0, labelOverlap: 0, sunCovered: 0, offscreen: 0, hidden: 0, done: false };
+    }
+    const measurement = metrics.current;
+    if (measurement.done) return;
+    measurement.frames.push(delta * 1000);
+    const elapsed = performance.now() - measurement.start;
+    if (elapsed - measurement.lastSample >= 500) {
+      measurement.lastSample = elapsed;
+      measurement.samples += 1;
+      const canvasRect = canvas.getBoundingClientRect();
+      const elements = [...registry.values()].map(entry => entry.element.current).filter((element): element is HTMLElement => Boolean(element));
+      const visible = elements.filter(element => element.style.opacity !== "0" && element.style.visibility !== "hidden");
+      const rects = visible.map(element => element.getBoundingClientRect());
+      if (visible.length !== elements.length) measurement.hidden += 1;
+      if (rects.some(rect => rect.left < canvasRect.left || rect.top < canvasRect.top || rect.right > canvasRect.right || rect.bottom > canvasRect.bottom)) measurement.offscreen += 1;
+      const intersects = (a: DOMRect, b: DOMRect) => Math.min(a.right, b.right) > Math.max(a.left, b.left) && Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top);
+      if (rects.some((rect, index) => rects.slice(index + 1).some(other => intersects(rect, other)))) measurement.labelOverlap += 1;
+      const sunRect = sun?.getBoundingClientRect();
+      if (sunRect && rects.some(rect => intersects(rect, sunRect))) measurement.sunCovered += 1;
+
+      const diagnosticOutput = document.querySelector<HTMLOutputElement>("output[data-scene-measurement]");
+      if (diagnosticOutput) {
+        const sorted = [...measurement.frames].sort((a, b) => a - b);
+        diagnosticOutput.textContent = JSON.stringify({
+          durationSeconds: elapsed / 1000, frames: measurement.frames.length, samples: measurement.samples,
+          labelOverlapSamples: measurement.labelOverlap, sunCoveredSamples: measurement.sunCovered,
+          offscreenSamples: measurement.offscreen, hiddenLabelSamples: measurement.hidden,
+          meanFrameMs: measurement.frames.reduce((sum, value) => sum + value, 0) / measurement.frames.length,
+          p95FrameMs: sorted[Math.floor(sorted.length * .95)], maxFrameMs: sorted.at(-1),
+        });
+      }
+    }
+    if (elapsed >= 110_000) {
+      measurement.done = true;
+    }
   });
   return null;
 }
@@ -238,6 +283,7 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
 }) {
   // One registry per mounted system; see PlanetRegistry above for why it is not module state.
   const [registry] = useState<PlanetRegistry>(() => new Map());
+  const [debugLayout] = useState(() => isDebugLayout());
   const [keyboardIndex, setKeyboardIndex] = useState(0);
   const placements = useMemo(() => repositories.map((repo, i) => {
     const ring = Math.floor(i / 4);
@@ -260,7 +306,7 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
     else if (event.key === "End") setKeyboardIndex(last);
     else if ((event.key === "Enter" || event.key === " ") && keyboardRepo) onRepo(keyboardRepo);
   };
-  return <Canvas className="repository-system" dpr={[1,1.75]}
+  return <><Canvas className="repository-system" dpr={[1,1.75]}
     camera={{ position: [0,25,34], fov: 43, near: .1, far: 300 }} tabIndex={0}
     aria-label={selected ? `${selected.full_name} repository orbit` : `Repository planetary system. ${keyboardRepo ? `${keyboardRepo.full_name} selected. ` : ""}Use arrow keys to choose a repository and Enter to open it.`}
     onKeyDown={handleSystemKey}
@@ -287,5 +333,5 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
       <OrbitMotion motion={motion} registry={registry} />
       <LabelLayout registry={registry} />
     </>}
-  </Canvas>;
+  </Canvas>{debugLayout && <output data-scene-measurement hidden />}</>;
 }
