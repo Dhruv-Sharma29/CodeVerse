@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Canvas } from "@react-three/fiber";
+import { useMemo, useRef } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, OrbitControls, Stars } from "@react-three/drei";
 import { World, Sun } from "./World";
 import { planetStyle, seedFor } from "../github/planetStyle";
@@ -29,15 +29,50 @@ function Satellite({ commit, index, total, active, onSelect }: {
   </group>;
 }
 
+// Orbital motion. The innermost ring completes a revolution in INNER_PERIOD seconds and
+// outer rings take proportionally longer (angular speed ∝ 1/radius), so the system spreads
+// out over time the way a real one does instead of turning as a rigid disc. Elapsed time is
+// accumulated here rather than read from the clock, so pausing holds position instead of
+// resetting it. Ellipse factors (1.3 / .9) match the drawn Orbit rings.
+const INNER_RADIUS = 5.8;
+const INNER_PERIOD = 46;
+const orbitSpeed = (radius: number) => (Math.PI * 2) / INNER_PERIOD * (INNER_RADIUS / radius);
+const orbitPosition = (angle: number, radius: number, y: number) =>
+  [Math.cos(angle) * radius * 1.3, y, Math.sin(angle) * radius * .9] as [number, number, number];
+
+function OrbitingRepo({ repo, angle, radius, y, motion, onOpen }: {
+  repo: Repository; angle: number; radius: number; y: number; motion: boolean; onOpen: () => void;
+}) {
+  const group = useRef<THREE.Group>(null);
+  const elapsed = useRef(0);
+  const style = useMemo(() => planetStyle(repo), [repo]);
+  useFrame((_, delta) => {
+    if (motion) elapsed.current += delta;
+    group.current?.position.set(...orbitPosition(angle + elapsed.current * orbitSpeed(radius), radius, y));
+  });
+  return <group ref={group} position={orbitPosition(angle, radius, y)}>
+    <World repo={repo} radius={style.radius} onClick={onOpen} animate={motion} />
+    <Html center position={[0, -style.radius - .6, 0]} zIndexRange={[8, 0]}>
+      <button title={repo.full_name} className="planet-label" onClick={onOpen}>
+        <span className="planet-label-dot" style={{ background: style.glow }} />{repo.name}
+        <small>{repo.language ?? "Mixed languages"}</small>
+      </button>
+    </Html>
+  </group>;
+}
+
 export function RepositorySystem({ repositories, selected, commits, commitIndex, onRepo, onCommit, centerLabel, motion }: {
   repositories: Repository[]; selected: Repository | null; commits: GitCommit[]; commitIndex: number;
   onRepo: (repo: Repository) => void; onCommit: (index: number) => void; centerLabel: string; motion: boolean;
 }) {
   const placements = useMemo(() => repositories.map((repo, i) => {
     const ring = Math.floor(i / 4);
-    const angle = (i % 4) * Math.PI / 2 + ring * .65 + .3;
-    const radius = 5.8 + ring * 4.8;
-    return { repo, position: [Math.cos(angle) * radius * 1.3, (seedFor(repo.name) - .5) * .8, Math.sin(angle) * radius * .9] as [number,number,number] };
+    return {
+      repo,
+      angle: (i % 4) * Math.PI / 2 + ring * .65 + .3,
+      radius: INNER_RADIUS + ring * 4.8,
+      y: (seedFor(repo.name) - .5) * .8,
+    };
   }), [repositories]);
   return <Canvas key={selected?.id ?? "overview"} dpr={[1,1.75]}
     camera={{ position: selected ? [0,7.8,12.5] : [0,19,25], fov: 43, near: .1, far: 300 }}
@@ -58,19 +93,11 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
     </> : <>
       <Sun animate={motion} />
       <Html center position={[0,2,0]} zIndexRange={[5,0]}><span className="sun-label">{centerLabel}</span></Html>
-      <group scale={[1.3,1,.9]}><Orbit radius={5.8} /><Orbit radius={10.6} /></group>
-      {placements.map(({ repo, position }) => {
-        const style = planetStyle(repo);
-        return <group key={repo.id} position={position}>
-          <World repo={repo} radius={style.radius} onClick={() => onRepo(repo)} animate={motion} />
-          <Html center position={[0,-style.radius - .6,0]} zIndexRange={[8,0]}>
-            <button title={repo.full_name} className="planet-label" onClick={() => onRepo(repo)}>
-              <span className="planet-label-dot" style={{ background: style.glow }} />{repo.name}
-              <small>{repo.language ?? "Mixed languages"}</small>
-            </button>
-          </Html>
-        </group>;
-      })}
+      <group scale={[1.3,1,.9]}><Orbit radius={INNER_RADIUS} /><Orbit radius={INNER_RADIUS + 4.8} /></group>
+      {placements.map(({ repo, angle, radius, y }) => (
+        <OrbitingRepo key={repo.id} repo={repo} angle={angle} radius={radius} y={y}
+          motion={motion} onOpen={() => onRepo(repo)} />
+      ))}
     </>}
   </Canvas>;
 }
