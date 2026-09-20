@@ -54,6 +54,8 @@
 .planet-label { background:#080b129c;border:1px solid #b9bcde16;border-radius:5px;padding:4px 8px;color:#d0cedc;font:10px ui-monospace,monospace!important;white-space:nowrap;max-width:124px;overflow:hidden;text-overflow:ellipsis;backdrop-filter:blur(4px); }
 .planet-label { transition:opacity .18s ease-out; will-change:transform; }
 .planet-label:hover,.planet-label:focus-visible { border-color:#d9bd80aa;color:#fff3dc;z-index:3;position:relative; }
+.planet-label.is-keyboard-active { border-color:#d9bd8077;color:#f4dfbc;box-shadow:0 0 14px #d9bd8024; }
+.repository-system:focus-visible { outline:2px solid var(--gold);outline-offset:-4px; }
 @media(prefers-reduced-motion:reduce) { .planet-label { transition:none; } }
 .planet-label small { display:none;font:8px ui-sans-serif,system-ui,sans-serif;color:#858b9b;margin-top:3px; }
 .planet-label:hover small,.planet-label:focus-visible small { display:block; }

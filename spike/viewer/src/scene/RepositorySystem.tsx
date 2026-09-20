@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls, Stars } from "@react-three/drei";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { World, Sun } from "./World";
 import { planetStyle, seedFor } from "../github/planetStyle";
 import type { Repository, GitCommit } from "../github/api";
@@ -60,9 +61,9 @@ const orbitSpeed = (radius: number) => (Math.PI * 2) / INNER_PERIOD * (INNER_RAD
 const orbitPosition = (angle: number, radius: number, y: number) =>
   [Math.cos(angle) * radius * 1.3, y, Math.sin(angle) * radius * .9] as [number, number, number];
 
-function OrbitingRepo({ repo, angle, radius, y, motion, onOpen, registry }: {
+function OrbitingRepo({ repo, angle, radius, y, motion, onOpen, onFocus, keyboardActive, registry }: {
   repo: Repository; angle: number; radius: number; y: number; motion: boolean;
-  onOpen: () => void; registry: PlanetRegistry;
+  onOpen: () => void; onFocus: () => void; keyboardActive: boolean; registry: PlanetRegistry;
 }) {
   const group = useRef<THREE.Group>(null);
   const label = useRef<HTMLButtonElement | null>(null);
@@ -81,12 +82,73 @@ function OrbitingRepo({ repo, angle, radius, y, motion, onOpen, registry }: {
   return <group ref={group} position={orbitPosition(angle, radius, y)}>
     <World repo={repo} radius={style.radius} onClick={onOpen} animate={motion} />
     <Html center position={[0, 0, 0]} zIndexRange={[8, 0]}>
-      <button ref={label} title={repo.full_name} className="planet-label" onClick={onOpen}>
+      <button ref={label} title={repo.full_name} aria-label={`Open ${repo.full_name}`}
+        className={`planet-label ${keyboardActive ? "is-keyboard-active" : ""}`}
+        onClick={onOpen} onFocus={onFocus}>
         <span className="planet-label-dot" style={{ background: style.glow }} />{repo.name}
         <small>{repo.language ?? "Mixed languages"}</small>
       </button>
     </Html>
   </group>;
+}
+
+const OVERVIEW_CAMERA = [0, 25, 34] as const;
+const REPOSITORY_CAMERA = [0, 7.8, 12.5] as const;
+const FLY_SECONDS = 1.05;
+
+/** Keeps one camera alive across overview/detail mode and eases to the new framing. Any
+ *  pointer interaction cancels the in-progress flight immediately. */
+function CameraRig({ selected, motion }: { selected: boolean; motion: boolean }) {
+  const camera = useThree((state) => state.camera);
+  const controls = useRef<OrbitControlsImpl>(null);
+  const previous = useRef(selected);
+  const flight = useRef<null | {
+    from: THREE.Vector3; to: THREE.Vector3;
+    fromTarget: THREE.Vector3; toTarget: THREE.Vector3; elapsed: number;
+  }>(null);
+
+  useEffect(() => {
+    if (previous.current === selected) return;
+    previous.current = selected;
+    const control = controls.current;
+    flight.current = {
+      from: camera.position.clone(),
+      to: new THREE.Vector3(...(selected ? REPOSITORY_CAMERA : OVERVIEW_CAMERA)),
+      fromTarget: control?.target.clone() ?? new THREE.Vector3(),
+      toTarget: new THREE.Vector3(),
+      elapsed: 0,
+    };
+    if (control) control.autoRotate = false;
+  }, [camera, selected]);
+
+  useEffect(() => {
+    if (controls.current && !flight.current) controls.current.autoRotate = motion;
+  }, [motion]);
+
+  useFrame((_, delta) => {
+    const active = flight.current;
+    const control = controls.current;
+    if (!active || !control) return;
+    active.elapsed += Math.min(delta, .1);
+    const linear = Math.min(1, active.elapsed / FLY_SECONDS);
+    const eased = 1 - Math.pow(1 - linear, 3);
+    camera.position.lerpVectors(active.from, active.to, eased);
+    control.target.lerpVectors(active.fromTarget, active.toTarget, eased);
+    control.update();
+    if (linear === 1) {
+      flight.current = null;
+      control.autoRotate = motion;
+    }
+  });
+
+  const interrupt = () => {
+    flight.current = null;
+    if (controls.current) controls.current.autoRotate = motion;
+  };
+  return <OrbitControls ref={controls} makeDefault enablePan={false} enableDamping dampingFactor={.07}
+    autoRotate={motion} autoRotateSpeed={selected ? .5 : .7}
+    minDistance={selected ? 7 : 16} maxDistance={selected ? 24 : 52}
+    maxPolarAngle={Math.PI * .48} minPolarAngle={.2} onStart={interrupt} />;
 }
 
 /** Owns orbital motion for the whole system. Repulsion was removed after a full-orbit
@@ -176,6 +238,7 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
 }) {
   // One registry per mounted system; see PlanetRegistry above for why it is not module state.
   const [registry] = useState<PlanetRegistry>(() => new Map());
+  const [keyboardIndex, setKeyboardIndex] = useState(0);
   const placements = useMemo(() => repositories.map((repo, i) => {
     const ring = Math.floor(i / 4);
     return {
@@ -185,17 +248,28 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
       y: (seedFor(repo.name) - .5) * .8,
     };
   }), [repositories]);
-  return <Canvas key={selected?.id ?? "overview"} dpr={[1,1.75]}
-    camera={{ position: selected ? [0,7.8,12.5] : [0,25,34], fov: 43, near: .1, far: 300 }}
+  const safeKeyboardIndex = Math.min(keyboardIndex, Math.max(0, repositories.length - 1));
+  const keyboardRepo = repositories[safeKeyboardIndex];
+  const handleSystemKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (selected || !repositories.length) return;
+    const last = repositories.length - 1;
+    if (["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "Home", "End", "Enter", " "].includes(event.key)) event.preventDefault();
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") setKeyboardIndex(safeKeyboardIndex >= last ? 0 : safeKeyboardIndex + 1);
+    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") setKeyboardIndex(safeKeyboardIndex <= 0 ? last : safeKeyboardIndex - 1);
+    else if (event.key === "Home") setKeyboardIndex(0);
+    else if (event.key === "End") setKeyboardIndex(last);
+    else if ((event.key === "Enter" || event.key === " ") && keyboardRepo) onRepo(keyboardRepo);
+  };
+  return <Canvas className="repository-system" dpr={[1,1.75]}
+    camera={{ position: [0,25,34], fov: 43, near: .1, far: 300 }} tabIndex={0}
+    aria-label={selected ? `${selected.full_name} repository orbit` : `Repository planetary system. ${keyboardRepo ? `${keyboardRepo.full_name} selected. ` : ""}Use arrow keys to choose a repository and Enter to open it.`}
+    onKeyDown={handleSystemKey}
     fallback={<p className="canvas-fallback">3D needs WebGL. You can still explore every repository and commit from the lists.</p>}>
     <color attach="background" args={["#07090f"]} />
     <Stars radius={90} depth={35} count={2300} factor={3} fade speed={motion ? .15 : 0} />
     {/* autoRotate orbits the camera around the system; three.js pauses it while the user is dragging
         and resumes afterwards. The "Pause rotation" button and reduced-motion both drive `motion`. */}
-    <OrbitControls makeDefault enablePan={false} enableDamping dampingFactor={.07}
-      autoRotate={motion} autoRotateSpeed={selected ? .5 : .7}
-      minDistance={selected ? 7 : 16} maxDistance={selected ? 24 : 52}
-      maxPolarAngle={Math.PI * .48} minPolarAngle={.2} />
+    <CameraRig selected={Boolean(selected)} motion={motion} />
     {selected ? <>
       <World repo={selected} radius={2.15} active animate={motion} />
       <Orbit radius={5.4} opacity={.2} />
@@ -205,9 +279,10 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
       <Sun animate={motion} />
       <Html center position={[0,3.3,0]} zIndexRange={[12,10]}><span className="sun-label">{centerLabel}</span></Html>
       <group scale={[1.3,1,.9]}><Orbit radius={INNER_RADIUS} opacity={.26} /><Orbit radius={INNER_RADIUS + RING_GAP} opacity={.26} /></group>
-      {placements.map(({ repo, angle, radius, y }) => (
+      {placements.map(({ repo, angle, radius, y }, index) => (
         <OrbitingRepo key={repo.id} repo={repo} angle={angle} radius={radius} y={y}
-          motion={motion} onOpen={() => onRepo(repo)} registry={registry} />
+          motion={motion} onOpen={() => onRepo(repo)} onFocus={() => setKeyboardIndex(index)}
+          keyboardActive={index === safeKeyboardIndex} registry={registry} />
       ))}
       <OrbitMotion motion={motion} registry={registry} />
       <LabelLayout registry={registry} />
