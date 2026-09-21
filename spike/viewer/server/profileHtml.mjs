@@ -144,22 +144,29 @@ export async function fetchProfileData(handle) {
   }
 }
 
-let cachedTemplate;
-export async function getTemplateHtml() {
-  if (cachedTemplate) return cachedTemplate;
-  const candidates = [
+const cachedTemplates = new Map();
+/** @param preferSource true in dev, where the built dist/index.html must not be used: it
+ *  references hashed /assets/*.js that the dev server does not serve, so the page 404s and
+ *  renders blank. Dev serves the source index.html and lets Vite transform it. */
+export async function getTemplateHtml(preferSource = false) {
+  const cached = cachedTemplates.get(preferSource);
+  if (cached) return cached;
+  const built = [
     resolve(process.cwd(), 'dist/index.html'),
     resolve(process.cwd(), 'spike/viewer/dist/index.html'),
     fileURLToPath(new URL('../dist/index.html', import.meta.url)),
+  ];
+  const source = [
     resolve(process.cwd(), 'index.html'),
     resolve(process.cwd(), 'spike/viewer/index.html'),
     fileURLToPath(new URL('../index.html', import.meta.url)),
   ];
+  const candidates = preferSource ? [...source, ...built] : [...built, ...source];
   for (const candidate of candidates) {
     try {
       const content = await readFile(candidate, 'utf-8');
       if (content) {
-        cachedTemplate = content;
+        cachedTemplates.set(preferSource, content);
         return content;
       }
     } catch {
@@ -175,6 +182,11 @@ export function createProfileHtmlMiddleware(options = {}) {
     let rawHandle;
     const match = url.pathname.match(/^\/@([^/]+)\/?$/);
     if (match) {
+      // Only answer document navigations. Vite serves its own modules under /@ (/@react-refresh,
+      // /@id/…, /@fs/…), and "react-refresh" is shaped exactly like a GitHub handle — returning
+      // HTML for it breaks the dev server with a MIME-type error and a blank page. A navigation
+      // sends Accept: text/html; a module or fetch request does not.
+      if (!String(req.headers?.accept ?? '').includes('text/html')) return next();
       rawHandle = match[1];
     } else if (url.pathname === '/api/handle' || url.pathname.startsWith('/api/handle/')) {
       rawHandle = url.searchParams.get('handle') || (req.query && req.query.handle);
@@ -196,7 +208,7 @@ export function createProfileHtmlMiddleware(options = {}) {
 
     let template;
     try {
-      template = await getTemplateHtml();
+      template = await getTemplateHtml(Boolean(options.transformHtml));
     } catch {
       return next();
     }

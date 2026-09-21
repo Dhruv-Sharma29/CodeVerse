@@ -318,7 +318,7 @@ test('profileHtmlMiddleware handles /@:handle, sets Cache-Control, and rejects j
       end(chunk) { if (chunk) body = chunk; },
     };
 
-    await profileHtmlMiddleware({ url: '/@realuser', method: 'GET' }, res, () => {});
+    await profileHtmlMiddleware({ url: '/@realuser', method: 'GET', headers: { accept: 'text/html,application/xhtml+xml' } }, res, () => {});
     assert.equal(headers['content-type'], 'text/html; charset=utf-8');
     assert.equal(headers['cache-control'], 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400');
     assert.ok(body.includes('Real User (@realuser) — Codeverse'));
@@ -331,7 +331,7 @@ test('profileHtmlMiddleware handles /@:handle, sets Cache-Control, and rejects j
       setHeader(k, v) { junkHeaders[k.toLowerCase()] = v; },
       end(chunk) { if (chunk) junkBody = chunk; },
     };
-    await profileHtmlMiddleware({ url: '/@invalid--handle', method: 'GET' }, junkRes, () => {});
+    await profileHtmlMiddleware({ url: '/@invalid--handle', method: 'GET', headers: { accept: 'text/html,application/xhtml+xml' } }, junkRes, () => {});
     assert.equal(junkHeaders['cache-control'], 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
     assert.ok(junkBody.includes('Codeverse — Your code, in orbit'));
 
@@ -343,7 +343,7 @@ test('profileHtmlMiddleware handles /@:handle, sets Cache-Control, and rejects j
       setHeader(k, v) { nonHeaders[k.toLowerCase()] = v; },
       end(chunk) { if (chunk) nonBody = chunk; },
     };
-    await profileHtmlMiddleware({ url: '/@ghost404user', method: 'GET' }, nonRes, () => {});
+    await profileHtmlMiddleware({ url: '/@ghost404user', method: 'GET', headers: { accept: 'text/html,application/xhtml+xml' } }, nonRes, () => {});
     assert.equal(nonHeaders['cache-control'], 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
     assert.ok(nonBody.includes('Codeverse — Your code, in orbit'));
     assert.ok(nonBody.includes('content="https://codeverse-orbit.vercel.app/@ghost404user"'));
@@ -355,10 +355,24 @@ test('profileHtmlMiddleware handles /@:handle, sets Cache-Control, and rejects j
       setHeader() {},
       end() {},
     };
-    await profileHtmlMiddleware({ url: '/@realuser', method: 'POST' }, postRes, () => {});
+    await profileHtmlMiddleware({ url: '/@realuser', method: 'POST', headers: { accept: 'text/html,application/xhtml+xml' } }, postRes, () => {});
     assert.equal(postStatusCode, 405);
   } finally {
     globalThis.fetch = originalFetch;
     _clearProfileCache();
+  }
+});
+
+test('non-navigation requests under /@ fall through, so Vite dev modules still load', async () => {
+  const { profileHtmlMiddleware } = await import('../server/profileHtml.mjs');
+
+  // /@react-refresh is a real Vite dev module URL that is shaped exactly like a GitHub
+  // handle. Serving HTML for it breaks the dev server with a MIME-type error and a blank
+  // page, so anything that does not accept HTML must be passed on untouched.
+  for (const accept of ['*/*', 'application/javascript', undefined]) {
+    let passedOn = false;
+    const res = { statusCode: 200, setHeader() { assert.fail('must not write a response'); }, end() { assert.fail('must not end the response'); } };
+    await profileHtmlMiddleware({ url: '/@react-refresh', method: 'GET', headers: accept ? { accept } : {} }, res, () => { passedOn = true; });
+    assert.ok(passedOn, `accept=${accept} should fall through to the next handler`);
   }
 });
