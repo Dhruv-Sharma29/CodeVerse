@@ -114,7 +114,7 @@ test('GitHub requests handle organizations, empty history, limits, and the unkno
 });
 
 test('universe evolution computes timeline and filters repositories chronologically', async () => {
-  const { evolutionTimeline, repositoriesAtTimestamp, formatEvolutionDate } = await import('../src/github/evolution.ts');
+  const { evolutionTimeline, repositoriesAtTimestamp, formatEvolutionDate, initialEvolutionState } = await import('../src/github/evolution.ts');
   const repos = [
     { id: 1, name: 'early', created_at: '2019-01-15T00:00:00Z', pushed_at: '2019-06-01T00:00:00Z' },
     { id: 2, name: 'mid', created_at: '2021-06-20T00:00:00Z', pushed_at: '2022-01-01T00:00:00Z' },
@@ -125,6 +125,7 @@ test('universe evolution computes timeline and filters repositories chronologica
   assert.ok(timeline);
   assert.equal(timeline.startMs, Date.parse('2019-01-15T00:00:00Z'));
   assert.equal(timeline.endMs, Date.parse('2024-03-10T00:00:00Z'));
+  assert.deepEqual(initialEvolutionState(repos), { active:true, time:timeline.startMs, playing:true });
   assert.ok(timeline.spanYears >= 5);
 
   const at2020 = repositoriesAtTimestamp(repos, Date.parse('2020-01-01T00:00:00Z'));
@@ -140,6 +141,7 @@ test('universe evolution computes timeline and filters repositories chronologica
   assert.equal(formatEvolutionDate(Date.parse('2021-06-20T00:00:00Z')), 'Jun 2021');
   assert.equal(evolutionTimeline([]), null);
   assert.equal(evolutionTimeline([{ id: 1, name: 'lone' }]), null);
+  assert.deepEqual(initialEvolutionState([]), { active:false, time:0, playing:false });
 });
 
 test('fetchContributors fetches repository contributors with caching and limits', async () => {

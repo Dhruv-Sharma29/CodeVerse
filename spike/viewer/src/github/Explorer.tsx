@@ -5,7 +5,7 @@ import { planetStyle } from "./planetStyle";
 import { fetchProfile, fetchRepositories, fetchCommits, fetchCommit, fetchContributors, normalizeHandle, errorMessage, repoUrl, commitUrl } from "./api";
 import type { Repository, GitHubProfile, GitCommit, CommitDetail, Contributor } from "./api";
 import { profileHandleFromUrl, profilePath } from "./profileRoute";
-import { evolutionTimeline, repositoriesAtTimestamp, formatEvolutionDate } from "./evolution";
+import { evolutionTimeline, repositoriesAtTimestamp, formatEvolutionDate, initialEvolutionState } from "./evolution";
 import "./explorer.css";
 import { CommitInspector } from "./CommitInspector";
 import { UniverseCard } from "./UniverseCard";
@@ -79,7 +79,9 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         const user = await fetchProfile(normalizeHandle(input), task.signal);
         const result = await fetchRepositories(user, 1, task.signal);
         if (task.signal.aborted) return;
+        const opening = initialEvolutionState(result.repositories);
         setProfile(user); setRepos(result.repositories); setHasMore(result.hasMore); setMode("profile");
+        setEvolutionActive(opening.active); setEvolutionTime(opening.time); setEvolutionPlaying(opening.playing);
         setHandle(user.login); setUpdated("");
         history.replaceState(null, "", profilePath(user.login));
       } else {

@@ -5,6 +5,12 @@ export interface EvolutionTimeline {
   spanYears: number;
 }
 
+export interface EvolutionPlaybackState {
+  active: boolean;
+  time: number;
+  playing: boolean;
+}
+
 export function repoTimestamp(repo: { created_at?: string; pushed_at?: string }): number {
   if (repo.created_at) {
     const time = Date.parse(repo.created_at);
@@ -31,6 +37,13 @@ export function evolutionTimeline<T extends { created_at?: string; pushed_at?: s
 
   const spanYears = Math.max(1, Math.round((endMs - startMs) / (365.25 * 86_400_000)));
   return { startMs, endMs, spanYears };
+}
+
+export function initialEvolutionState<T extends { created_at?: string; pushed_at?: string }>(repositories: T[]): EvolutionPlaybackState {
+  const timeline = evolutionTimeline(repositories);
+  return timeline
+    ? { active: true, time: timeline.startMs, playing: true }
+    : { active: false, time: 0, playing: false };
 }
 
 export function repositoriesAtTimestamp<T extends { created_at?: string; pushed_at?: string }>(repositories: T[], timestamp: number): T[] {
