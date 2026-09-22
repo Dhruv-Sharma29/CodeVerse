@@ -6,6 +6,7 @@ import { World, Sun } from "./World";
 import { planetStyle, seedFor } from "../github/planetStyle";
 import type { Repository, GitCommit } from "../github/api";
 import { layoutLabels, type LabelItem, type Rect } from "./labelLayout";
+import { ORBIT_X_SCALE, ORBIT_Z_SCALE, orbitalAngularSpeed, repositoryOrbit, stepOrbitPhysics } from "./orbitalPhysics";
 import * as THREE from "three";
 
 /** Planets register their live position and label element here; LabelLayout (below) reads the
@@ -29,21 +30,59 @@ function Orbit({ radius, opacity = .1 }: { radius: number; opacity?: number }) {
     <meshBasicMaterial color="#9a9eb8" transparent opacity={opacity} side={THREE.DoubleSide} depthWrite={false} />
   </mesh>;
 }
-function Satellite({ commit, index, total, active, onSelect }: {
-  commit: GitCommit; index: number; total: number; active: boolean; onSelect: () => void;
+function Satellite({ commit, angle, radius, active, onSelect, probe }: {
+  commit: GitCommit; angle: number; radius: number; active: boolean; onSelect: () => void;
+  probe?: React.RefObject<THREE.Group | null>;
 }) {
-  const angle = index / Math.max(total, 1) * Math.PI * 2;
-  const r = 5.4;
-  return <group position={[Math.cos(angle) * r, 0, Math.sin(angle) * r]}>
+  return <group ref={probe} position={[Math.cos(angle) * radius, 0, Math.sin(angle) * radius]}>
     <mesh onClick={e => { e.stopPropagation(); onSelect(); }}>
-      <sphereGeometry args={[active ? .19 : .085, 12, 12]} />
-      <meshBasicMaterial color={active ? "#f4d5a0" : "#728daa"} />
+      <sphereGeometry args={[active ? .24 : .125, 14, 14]} />
+      <meshBasicMaterial color={active ? "#ffd99e" : "#8eb9df"} />
+    </mesh>
+    <mesh scale={active ? 1.9 : 1.55} raycast={() => null}>
+      <sphereGeometry args={[active ? .24 : .125, 12, 12]} />
+      <meshBasicMaterial color={active ? "#edbd75" : "#729dc9"} transparent opacity={active ? .18 : .1} depthWrite={false} />
     </mesh>
     {active && <>
-      <mesh scale={1.8} raycast={() => null}><sphereGeometry args={[.19,16,16]} /><meshBasicMaterial color="#dfb773" transparent opacity={.16} depthWrite={false} /></mesh>
       <Html center position={[0,.65,0]} zIndexRange={[8,0]}><span className="commit-beacon">{commit.sha.slice(0,7)}</span></Html>
     </>}
   </group>;
+}
+
+function SatelliteOrbit({ commits, band, activeIndex, motion, onCommit, probe }: {
+  commits: { commit: GitCommit; index: number }[]; band: number; activeIndex: number; motion: boolean;
+  onCommit: (index: number) => void; probe: React.RefObject<THREE.Group | null>;
+}) {
+  const group = useRef<THREE.Group>(null);
+  const radius = 4.15 + band * .9;
+  const direction = band % 2 ? -1 : 1;
+  useFrame((_, delta) => {
+    if (motion && group.current) group.current.rotation.y += delta * direction * (.34 - band * .045);
+  });
+  return <group ref={group} rotation={[.12 + band * .12, band * .7, band % 2 ? -.18 : .12]}>
+    <Orbit radius={radius} opacity={.12 + band * .025} />
+    {commits.map(({ commit, index }, position) => <Satellite key={commit.sha} commit={commit}
+      angle={position / Math.max(commits.length, 1) * Math.PI * 2 + band * .45} radius={radius}
+      active={index === activeIndex} onSelect={() => onCommit(index)} probe={band === 0 && position === 0 ? probe : undefined} />)}
+  </group>;
+}
+
+function SatelliteSystem({ commits, activeIndex, motion, onCommit, debug }: {
+  commits: GitCommit[]; activeIndex: number; motion: boolean; onCommit: (index: number) => void; debug: boolean;
+}) {
+  const probe = useRef<THREE.Group>(null);
+  const bands = [0, 1, 2].map(band => commits.map((commit, index) => ({ commit, index })).filter(({ index }) => index % 3 === band));
+  const lastWrite = useRef(0);
+  const point = useRef(new THREE.Vector3());
+  useFrame((state) => {
+    if (!debug || !probe.current || state.clock.elapsedTime - lastWrite.current < .25) return;
+    lastWrite.current = state.clock.elapsedTime;
+    probe.current.getWorldPosition(point.current);
+    const output = document.querySelector<HTMLOutputElement>("output[data-scene-measurement]");
+    if (output) output.textContent = JSON.stringify({ satelliteCount: commits.length, firstSatellite: point.current.toArray().map(value => Number(value.toFixed(4))) });
+  });
+  return <>{bands.map((bandCommits, band) => bandCommits.length > 0 && <SatelliteOrbit key={band} commits={bandCommits}
+    band={band} activeIndex={activeIndex} motion={motion} onCommit={onCommit} probe={probe} />)}</>;
 }
 
 // Orbital motion. The innermost ring completes a revolution in INNER_PERIOD seconds and
@@ -51,15 +90,8 @@ function Satellite({ commit, index, total, active, onSelect }: {
 // out over time the way a real one does instead of turning as a rigid disc. Elapsed time is
 // accumulated here rather than read from the clock, so pausing holds position instead of
 // resetting it. Ellipse factors (1.3 / .9) match the drawn Orbit rings.
-const INNER_RADIUS = 5.8;
-// Gap between rings. This, not the repulsion, sets how close two planets can ever get:
-// the tightest pairs are radially adjacent across rings, and sliding a planet along its own
-// ring cannot widen a radial gap.
-const RING_GAP = 6.6;
-const INNER_PERIOD = 46;
-const orbitSpeed = (radius: number) => (Math.PI * 2) / INNER_PERIOD * (INNER_RADIUS / radius);
 const orbitPosition = (angle: number, radius: number, y: number) =>
-  [Math.cos(angle) * radius * 1.3, y, Math.sin(angle) * radius * .9] as [number, number, number];
+  [Math.cos(angle) * radius * ORBIT_X_SCALE, y, Math.sin(angle) * radius * ORBIT_Z_SCALE] as [number, number, number];
 
 function OrbitingRepo({ repo, angle, radius, y, motion, onOpen, onFocus, keyboardActive, registry }: {
   repo: Repository; angle: number; radius: number; y: number; motion: boolean;
@@ -151,15 +183,27 @@ function CameraRig({ selected, motion }: { selected: boolean; motion: boolean })
     maxPolarAngle={Math.PI * .48} minPolarAngle={.2} onStart={interrupt} />;
 }
 
-/** Owns orbital motion for the whole system. Repulsion was removed after a full-orbit
- *  comparison showed that its visible sway did not improve the closest approach. */
+/** Owns orbital motion and collision response for the whole system. State stays with this
+ * mounted scene, so hot reload cannot strand registrations in module-level maps. */
 function OrbitMotion({ motion, registry }: { motion: boolean; registry: PlanetRegistry }) {
   const elapsed = useRef(0);
+  const physics = useRef(new Map<string, { x: number; z: number; vx: number; vz: number }>());
   useFrame((_, delta) => {
-    if (motion) elapsed.current += delta;
-    for (const entry of registry.values()) {
-      const angle = entry.baseAngle + elapsed.current * orbitSpeed(entry.radius);
-      entry.group.current?.position.set(...orbitPosition(angle, entry.radius, entry.height));
+    if (!motion) return;
+    elapsed.current += Math.min(delta, .05);
+    const entries = [...registry.entries()];
+    const activeIds = new Set(entries.map(([id]) => id));
+    for (const id of physics.current.keys()) if (!activeIds.has(id)) physics.current.delete(id);
+    const bodies = entries.map(([id, entry]) => {
+      const angle = entry.baseAngle + elapsed.current * orbitalAngularSpeed(entry.radius);
+      const [targetX,,targetZ] = orbitPosition(angle, entry.radius, entry.height);
+      const previous = physics.current.get(id) ?? { x: targetX, z: targetZ, vx: 0, vz: 0 };
+      return { id, ...previous, targetX, targetZ, radius: entry.worldRadius };
+    });
+    for (const body of stepOrbitPhysics(bodies, delta)) {
+      physics.current.set(body.id, { x: body.x, z: body.z, vx: body.vx, vz: body.vz });
+      const entry = registry.get(body.id);
+      entry?.group.current?.position.set(body.x, entry.height, body.z);
     }
   });
   return null;
@@ -170,7 +214,7 @@ const isDebugLayout = () => typeof window !== "undefined" && new URLSearchParams
 /** Places every registered label once per frame so labels avoid each other, the planets and
  *  the sun label. Runs after the planets' own useFrame callbacks (mounted later in the tree),
  *  so it reads this frame's positions. */
-function LabelLayout({ registry }: { registry: PlanetRegistry }) {
+function LabelLayout({ registry, debug }: { registry: PlanetRegistry; debug: boolean }) {
   const camera = useThree((state) => state.camera);
   const gl = useThree((state) => state.gl);
   const anchors = useRef(new Map<string, number>());
@@ -179,7 +223,8 @@ function LabelLayout({ registry }: { registry: PlanetRegistry }) {
   const right = useRef(new THREE.Vector3());
   const metrics = useRef<{
     start: number; frames: number[]; lastSample: number; samples: number;
-    labelOverlap: number; sunCovered: number; offscreen: number; hidden: number; done: boolean;
+    labelOverlap: number; sunCovered: number; offscreen: number; hidden: number;
+    minimumPlanetClearance: number; done: boolean;
   } | null>(null);
 
   useFrame((_, delta) => {
@@ -220,7 +265,7 @@ function LabelLayout({ registry }: { registry: PlanetRegistry }) {
       ?? canvas.parentElement?.parentElement?.querySelector<HTMLElement>(".sun-label");
     if (sun) {
       const rect = sun.getBoundingClientRect();
-      if (rect.width) fixed.push({ x: rect.x - bounds.x - 6, y: rect.y - bounds.y - 6, width: rect.width + 12, height: rect.height + 12 });
+      if (rect.width) fixed.push({ x: rect.x - bounds.x - 12, y: rect.y - bounds.y - 12, width: rect.width + 24, height: rect.height + 24 });
     }
 
     const placements = layoutLabels(items, fixed, { width: bounds.width, height: bounds.height }, anchors.current);
@@ -235,10 +280,10 @@ function LabelLayout({ registry }: { registry: PlanetRegistry }) {
       anchors.current.set(id, placement.anchor);
     }
 
-    if (!isDebugLayout()) return;
+    if (!debug) return;
 
     if (!metrics.current) {
-      metrics.current = { start: performance.now(), frames: [], lastSample: 0, samples: 0, labelOverlap: 0, sunCovered: 0, offscreen: 0, hidden: 0, done: false };
+      metrics.current = { start: performance.now(), frames: [], lastSample: 0, samples: 0, labelOverlap: 0, sunCovered: 0, offscreen: 0, hidden: 0, minimumPlanetClearance: Infinity, done: false };
     }
     const measurement = metrics.current;
     if (measurement.done) return;
@@ -257,6 +302,16 @@ function LabelLayout({ registry }: { registry: PlanetRegistry }) {
       if (rects.some((rect, index) => rects.slice(index + 1).some(other => intersects(rect, other)))) measurement.labelOverlap += 1;
       const sunRect = sun?.getBoundingClientRect();
       if (sunRect && rects.some(rect => intersects(rect, sunRect))) measurement.sunCovered += 1;
+      const planets = [...registry.values()].flatMap(entry => {
+        if (!entry.group.current) return [];
+        const position = new THREE.Vector3();
+        entry.group.current.getWorldPosition(position);
+        return [{ position, radius: entry.worldRadius }];
+      });
+      for (let i = 0; i < planets.length; i++) for (let j = i + 1; j < planets.length; j++) {
+        measurement.minimumPlanetClearance = Math.min(measurement.minimumPlanetClearance,
+          planets[i].position.distanceTo(planets[j].position) - planets[i].radius - planets[j].radius);
+      }
 
       const diagnosticOutput = document.querySelector<HTMLOutputElement>("output[data-scene-measurement]");
       if (diagnosticOutput) {
@@ -265,12 +320,13 @@ function LabelLayout({ registry }: { registry: PlanetRegistry }) {
           durationSeconds: elapsed / 1000, frames: measurement.frames.length, samples: measurement.samples,
           labelOverlapSamples: measurement.labelOverlap, sunCoveredSamples: measurement.sunCovered,
           offscreenSamples: measurement.offscreen, hiddenLabelSamples: measurement.hidden,
+          minimumPlanetClearance: Number(measurement.minimumPlanetClearance.toFixed(4)),
           meanFrameMs: measurement.frames.reduce((sum, value) => sum + value, 0) / measurement.frames.length,
           p95FrameMs: sorted[Math.floor(sorted.length * .95)], maxFrameMs: sorted.at(-1),
         });
       }
     }
-    if (elapsed >= 110_000) {
+    if (elapsed >= 110_500) {
       measurement.done = true;
     }
   });
@@ -285,15 +341,7 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
   const [registry] = useState<PlanetRegistry>(() => new Map());
   const [debugLayout] = useState(() => isDebugLayout());
   const [keyboardIndex, setKeyboardIndex] = useState(0);
-  const placements = useMemo(() => repositories.map((repo, i) => {
-    const ring = Math.floor(i / 4);
-    return {
-      repo,
-      angle: (i % 4) * Math.PI / 2 + ring * .65 + .3,
-      radius: INNER_RADIUS + ring * RING_GAP,
-      y: (seedFor(repo.name) - .5) * .8,
-    };
-  }), [repositories]);
+  const placements = useMemo(() => repositories.map((repo, i) => ({ repo, ...repositoryOrbit(i, seedFor(repo.name)) })), [repositories]);
   const safeKeyboardIndex = Math.min(keyboardIndex, Math.max(0, repositories.length - 1));
   const keyboardRepo = repositories[safeKeyboardIndex];
   const handleSystemKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -318,20 +366,19 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
     <CameraRig selected={Boolean(selected)} motion={motion} />
     {selected ? <>
       <World repo={selected} radius={2.15} active animate={motion} />
-      <Orbit radius={5.4} opacity={.2} />
-      {commits.map((commit, i) => <Satellite key={commit.sha} commit={commit} index={i} total={commits.length}
-        active={i === commitIndex} onSelect={() => onCommit(i)} />)}
+      <SatelliteSystem commits={commits} activeIndex={commitIndex} motion={motion} onCommit={onCommit} debug={debugLayout} />
     </> : <>
       <Sun animate={motion} />
       <Html center position={[0,3.3,0]} zIndexRange={[12,10]}><span className="sun-label">{centerLabel}</span></Html>
-      <group scale={[1.3,1,.9]}><Orbit radius={INNER_RADIUS} opacity={.26} /><Orbit radius={INNER_RADIUS + RING_GAP} opacity={.26} /></group>
+      <group scale={[ORBIT_X_SCALE,1,ORBIT_Z_SCALE]}>{placements.map(({ repo, radius }, index) =>
+        <Orbit key={repo.id} radius={radius} opacity={Math.max(.08, .24 - index * .018)} />)}</group>
       {placements.map(({ repo, angle, radius, y }, index) => (
         <OrbitingRepo key={repo.id} repo={repo} angle={angle} radius={radius} y={y}
           motion={motion} onOpen={() => onRepo(repo)} onFocus={() => setKeyboardIndex(index)}
           keyboardActive={index === safeKeyboardIndex} registry={registry} />
       ))}
       <OrbitMotion motion={motion} registry={registry} />
-      <LabelLayout registry={registry} />
+      <LabelLayout registry={registry} debug={debugLayout} />
     </>}
   </Canvas>{debugLayout && <output data-scene-measurement hidden />}</>;
 }

@@ -45,7 +45,8 @@ export function candidates(item: LabelItem): { dx: number; dy: number }[] {
       { dx: -diagX, dy: -diagY },
     ];
   };
-  return [...ring(0), ...ring(halfH * 2.2), ...ring(halfH * 4.4), ...ring(halfH * 7), ...ring(halfH * 10)];
+  return [...ring(0), ...ring(halfH * 2.2), ...ring(halfH * 4.4), ...ring(halfH * 7),
+    ...ring(halfH * 10), ...ring(halfH * 14), ...ring(halfH * 18)];
 }
 
 export function rectFor(item: LabelItem, dx: number, dy: number): Rect {
