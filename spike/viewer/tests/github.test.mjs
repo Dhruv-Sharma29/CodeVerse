@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeHandle, fetchProfile, fetchCommits, fetchRepositories } from '../src/github/api.ts';
-import { activityEncoding, archiveEncoding, planetStyle } from '../src/github/planetStyle.ts';
+import { activityEncoding, archiveEncoding, planetStyle, repositoryImportance, starEncoding } from '../src/github/planetStyle.ts';
 import { parseTrending } from '../server/trending.mjs';
 import { profileHandleFromUrl, profilePath } from '../src/github/profileRoute.ts';
 import { loadedCoverage, summarizeProfile } from '../src/github/profileSummary.ts';
@@ -51,6 +51,23 @@ test('planet identities are deterministic with bounded sizes', () => {
   assert.deepEqual(planetStyle(repo),planetStyle(repo));
   assert.ok(planetStyle({...repo,size:1e15}).radius <= 1.7);
   assert.notEqual(planetStyle(repo).dark,planetStyle({...repo,language:'Rust'}).dark);
+});
+
+test('GitHub stars map to a bounded visible spark count', () => {
+  assert.deepEqual(starEncoding(0), { sparks:0, intensity:.12 });
+  assert.ok(starEncoding(10).sparks < starEncoding(10_000).sparks);
+  assert.equal(starEncoding(1_000_000_000).sparks, 7);
+  assert.ok(starEncoding(1_000_000_000).intensity <= 1);
+});
+
+test('planet importance combines stars, forks, and recent activity', () => {
+  const now = Date.parse('2026-09-20T00:00:00Z');
+  const quiet = repositoryImportance({ stargazers_count:0, forks_count:0, pushed_at:'2020-01-01T00:00:00Z' }, now);
+  const active = repositoryImportance({ stargazers_count:0, forks_count:0, pushed_at:'2026-09-19T00:00:00Z' }, now);
+  const important = repositoryImportance({ stargazers_count:100_000, forks_count:10_000, pushed_at:'2026-09-19T00:00:00Z' }, now);
+  assert.ok(active > quiet);
+  assert.ok(important > active);
+  assert.ok(important <= 1);
 });
 
 test('repository activity maps to documented stepped atmosphere bands', () => {

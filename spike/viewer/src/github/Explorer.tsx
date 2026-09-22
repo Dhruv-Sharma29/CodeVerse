@@ -237,13 +237,25 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         <div className="stage-caption">
           <div className="section-eyebrow">{selected ? "REPOSITORY ORBIT" : (profile ? "EXPLORE THE CONSTELLATION" : "TRENDING THIS MONTH · GITHUB")}</div>
           <h2>{selected ? selected.name : profile ? `${profile.name ?? profile.login}’s system` : "Open source. Outer space."}</h2>
-          <p>{selected ? `${selected.language ?? "Mixed languages"} world · select a satellite to inspect a commit` : "Select a planet to discover what’s happening beneath the surface."}</p>
+          <p>{selected ? `${selected.language ?? "Mixed languages"} world · select a comet to inspect a recent commit` : "Select a repository planet to discover what’s happening beneath the surface."}</p>
         </div>
         {profile && !selected && <UniverseCard profile={profile} repositories={repos} onEvolve={timeline ? startEvolution : undefined} />}
         {selected && <button className="back-to-system" onClick={() => {setSelected(null);setPlaying(false);}}>← All planets</button>}
         <div className="system-canvas">
-          <RepositorySystem repositories={busy ? [] : visible} selected={selected} commits={commits} commitIndex={commitIndex}
-            onRepo={showRepo} onCommit={selectCommit} centerLabel={profile?.login ?? "OPEN SOURCE"} motion={motion} />
+          <RepositorySystem repositories={busy ? [] : visible} selected={selected} commits={commits} contributors={contributors} commitIndex={commitIndex}
+            onRepo={showRepo} onCommit={selectCommit} onContributor={contributor => void openUniverse(contributor.login)}
+            centerLabel={profile?.login ?? "OPEN SOURCE"} motion={motion} />
+        </div>
+        <div className="cosmic-legend" aria-label="Universe visual legend">
+          <span><b className="legend-star">★</b> GitHub stars</span>
+          <span><b>●</b> repository planet</span>
+          <span><b className="legend-moon">●</b> default-branch moon</span>
+          <span><b className="legend-comet">☄</b> recent commit</span>
+          <span><b className="legend-nebula">✦</b> primary-language nebula</span>
+          <span><b className="legend-satellite">▣</b> contributor satellite</span>
+          <span><b className="legend-black-hole">◉</b> archived black hole</span>
+          <span><b className="legend-atmosphere">○</b> activity atmosphere</span>
+          <span><b>↕</b> size = stars + forks + recency</span>
         </div>
         {evolutionActive && timeline && <div className="evolution-player">
           <button className="play-toggle" aria-label={evolutionPlaying ? "Pause universe evolution" : "Play universe evolution"}
@@ -315,6 +327,6 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
       </aside>}
     </div>
     {inspecting && <CommitInspector key={inspecting.commit.sha} repo={inspecting.repo} commit={inspecting.commit} onClose={() => setInspecting(null)} />}
-    <footer className="explorer-footer"><span><span className="status-dot" /> {mode === "trending" ? "LIVE MONTHLY TRENDING" : "PUBLIC GITHUB DATA"}{updated && ` · retrieved ${date(updated)}`}</span><span>Surface = primary language; archived = collapsed dark <i>·</i> {mode === "trending" ? "Size = total stars" : "Size = repository KB"} <i>·</i> Atmosphere by last push: ≤30d bright / 31–90d medium / 91–365d faint / &gt;365d minimal / unknown neutral <i>·</i> Orbit rings = decorative</span><button onClick={onDemo}>Local history viewer ↗</button></footer>
+    <footer className="explorer-footer"><span><span className="status-dot" /> {mode === "trending" ? "LIVE MONTHLY TRENDING" : "PUBLIC GITHUB DATA"}{updated && ` · retrieved ${date(updated)}`}</span><span>Atmosphere by last push: ≤30d bright / 31–90d medium / 91–365d faint / &gt;365d minimal / unknown neutral <i>·</i> orbit paths are decorative</span><button onClick={onDemo}>Local history viewer ↗</button></footer>
   </div>;
 }

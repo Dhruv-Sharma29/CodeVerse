@@ -91,7 +91,7 @@ const ringFragment = `
 `;
 
 export function World({ repo, radius = 1, active = false, onClick, animate = true }: {
-  repo: Pick<Repository, "name" | "id" | "language" | "size" | "pushed_at" | "archived">;
+  repo: Pick<Repository, "name" | "id" | "language" | "size" | "pushed_at" | "archived" | "stargazers_count" | "forks_count">;
   radius?: number; active?: boolean; onClick?: () => void; animate?: boolean;
 }) {
   const mesh = useRef<THREE.Mesh>(null);

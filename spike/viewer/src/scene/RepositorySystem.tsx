@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html, OrbitControls, Stars } from "@react-three/drei";
+import { Html, OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { World, Sun } from "./World";
-import { planetStyle, seedFor } from "../github/planetStyle";
-import type { Repository, GitCommit } from "../github/api";
+import { planetStyle, seedFor, starEncoding } from "../github/planetStyle";
+import type { Repository, GitCommit, Contributor } from "../github/api";
 import { layoutLabels, type LabelItem, type Rect } from "./labelLayout";
 import { ORBIT_X_SCALE, ORBIT_Z_SCALE, orbitalAngularSpeed, repositoryOrbit, stepOrbitPhysics } from "./orbitalPhysics";
 import * as THREE from "three";
@@ -23,6 +23,7 @@ interface PlanetEntry {
   radius: number;
 }
 type PlanetRegistry = Map<string, PlanetEntry>;
+const compactStars = (value: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 
 function Orbit({ radius, opacity = .1 }: { radius: number; opacity?: number }) {
   return <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
@@ -30,18 +31,50 @@ function Orbit({ radius, opacity = .1 }: { radius: number; opacity?: number }) {
     <meshBasicMaterial color="#9a9eb8" transparent opacity={opacity} side={THREE.DoubleSide} depthWrite={false} />
   </mesh>;
 }
-function Satellite({ commit, angle, radius, active, onSelect, probe }: {
+
+function TechnologyNebula({ color, seed, radius }: { color: string; seed: number; radius: number }) {
+  const positions = useMemo(() => {
+    const values = new Float32Array(42 * 3);
+    for (let index = 0; index < 42; index++) {
+      const phase = seed * 91 + index * 2.39996;
+      const spread = radius * (.72 + ((index * 37) % 17) / 28);
+      values[index * 3] = Math.cos(phase) * spread;
+      values[index * 3 + 1] = Math.sin(phase * 1.71) * radius * .32;
+      values[index * 3 + 2] = Math.sin(phase) * spread;
+    }
+    return values;
+  }, [radius, seed]);
+  return <points raycast={() => null}>
+    <bufferGeometry><bufferAttribute attach="attributes-position" args={[positions, 3]} /></bufferGeometry>
+    <pointsMaterial color={color} size={.13} transparent opacity={.13} depthWrite={false}
+      blending={THREE.AdditiveBlending} sizeAttenuation />
+  </points>;
+}
+
+function StarSparks({ stars, radius, seed }: { stars: number; radius: number; seed: number }) {
+  const encoding = starEncoding(stars);
+  return <group raycast={() => null}>{Array.from({ length: encoding.sparks }, (_, index) => {
+    const angle = index / Math.max(encoding.sparks, 1) * Math.PI * 2 + seed * Math.PI;
+    const distance = radius * (1.25 + (index % 2) * .18);
+    return <mesh key={index} position={[Math.cos(angle) * distance, (index % 3 - 1) * radius * .28, Math.sin(angle) * distance]} rotation={[0, angle, Math.PI / 4]}>
+      <octahedronGeometry args={[.055 + encoding.intensity * .045, 0]} />
+      <meshBasicMaterial color="#ffd879" transparent opacity={.58 + encoding.intensity * .38} />
+    </mesh>;
+  })}</group>;
+}
+
+function CommitComet({ commit, angle, radius, active, onSelect, probe }: {
   commit: GitCommit; angle: number; radius: number; active: boolean; onSelect: () => void;
   probe?: React.RefObject<THREE.Group | null>;
 }) {
   return <group ref={probe} position={[Math.cos(angle) * radius, 0, Math.sin(angle) * radius]}>
     <mesh onClick={e => { e.stopPropagation(); onSelect(); }}>
-      <sphereGeometry args={[active ? .24 : .125, 14, 14]} />
-      <meshBasicMaterial color={active ? "#ffd99e" : "#8eb9df"} />
+      <sphereGeometry args={[active ? .19 : .095, 12, 12]} />
+      <meshBasicMaterial color={active ? "#fff1bd" : "#8edcf2"} />
     </mesh>
-    <mesh scale={active ? 1.9 : 1.55} raycast={() => null}>
-      <sphereGeometry args={[active ? .24 : .125, 12, 12]} />
-      <meshBasicMaterial color={active ? "#edbd75" : "#729dc9"} transparent opacity={active ? .18 : .1} depthWrite={false} />
+    <mesh position={[Math.sin(angle) * .3, 0, -Math.cos(angle) * .3]} rotation={[0, -angle, Math.PI / 2]} raycast={() => null}>
+      <coneGeometry args={[active ? .12 : .07, active ? .85 : .58, 7]} />
+      <meshBasicMaterial color={active ? "#eabf72" : "#579fc2"} transparent opacity={active ? .42 : .24} depthWrite={false} blending={THREE.AdditiveBlending} />
     </mesh>
     {active && <>
       <Html center position={[0,.65,0]} zIndexRange={[8,0]}><span className="commit-beacon">{commit.sha.slice(0,7)}</span></Html>
@@ -49,26 +82,67 @@ function Satellite({ commit, angle, radius, active, onSelect, probe }: {
   </group>;
 }
 
-function SatelliteOrbit({ commits, band, activeIndex, motion, onCommit, probe }: {
+function CometOrbit({ commits, band, activeIndex, motion, onCommit, probe }: {
   commits: { commit: GitCommit; index: number }[]; band: number; activeIndex: number; motion: boolean;
   onCommit: (index: number) => void; probe: React.RefObject<THREE.Group | null>;
 }) {
   const group = useRef<THREE.Group>(null);
-  const radius = 4.15 + band * .9;
+  const radius = 3.85 + band * .55;
   const direction = band % 2 ? -1 : 1;
   useFrame((_, delta) => {
-    if (motion && group.current) group.current.rotation.y += delta * direction * (.34 - band * .045);
+    if (motion && group.current) group.current.rotation.y += delta * direction * (.43 - band * .055);
   });
   return <group ref={group} rotation={[.12 + band * .12, band * .7, band % 2 ? -.18 : .12]}>
     <Orbit radius={radius} opacity={.12 + band * .025} />
-    {commits.map(({ commit, index }, position) => <Satellite key={commit.sha} commit={commit}
+    {commits.map(({ commit, index }, position) => <CommitComet key={commit.sha} commit={commit}
       angle={position / Math.max(commits.length, 1) * Math.PI * 2 + band * .45} radius={radius}
       active={index === activeIndex} onSelect={() => onCommit(index)} probe={band === 0 && position === 0 ? probe : undefined} />)}
   </group>;
 }
 
-function SatelliteSystem({ commits, activeIndex, motion, onCommit, debug }: {
-  commits: GitCommit[]; activeIndex: number; motion: boolean; onCommit: (index: number) => void; debug: boolean;
+function DefaultBranchMoon({ branch, motion }: { branch: string; motion: boolean }) {
+  const orbit = useRef<THREE.Group>(null);
+  useFrame((_, delta) => { if (motion && orbit.current) orbit.current.rotation.y += delta * .31; });
+  return <group ref={orbit} rotation={[.18, .3, -.12]}>
+    <Orbit radius={2.95} opacity={.24} />
+    <group position={[2.95, 0, 0]}>
+      <mesh><sphereGeometry args={[.31, 18, 14]} /><meshStandardMaterial color="#a7a7b1" roughness={.92} /></mesh>
+      <mesh position={[-.07,.08,.27]}><sphereGeometry args={[.075,10,8]} /><meshBasicMaterial color="#696b78" /></mesh>
+      <Html center position={[0,.65,0]} zIndexRange={[7,0]}><span className="moon-label">{branch || "default branch"}</span></Html>
+    </group>
+  </group>;
+}
+
+function ContributorSatellite({ contributor, angle, radius, onOpen }: {
+  contributor: Contributor; angle: number; radius: number; onOpen: () => void;
+}) {
+  const scale = 1 + Math.min(.32, Math.log10(contributor.contributions + 1) * .09);
+  return <group position={[Math.cos(angle) * radius, Math.sin(angle * 2) * .28, Math.sin(angle) * radius]} rotation={[0,-angle,0]} scale={scale}>
+    <mesh onClick={e => { e.stopPropagation(); onOpen(); }}>
+      <boxGeometry args={[.28,.2,.34]} /><meshStandardMaterial color="#d1d5dd" metalness={.72} roughness={.32} />
+    </mesh>
+    <mesh position={[-.35,0,0]}><boxGeometry args={[.34,.025,.2]} /><meshBasicMaterial color="#326c9a" /></mesh>
+    <mesh position={[.35,0,0]}><boxGeometry args={[.34,.025,.2]} /><meshBasicMaterial color="#326c9a" /></mesh>
+    <mesh position={[0,.16,0]}><sphereGeometry args={[.055,8,8]} /><meshBasicMaterial color="#f5ba67" /></mesh>
+  </group>;
+}
+
+function ContributorSatellites({ contributors, motion, onContributor }: {
+  contributors: Contributor[]; motion: boolean; onContributor: (contributor: Contributor) => void;
+}) {
+  const orbit = useRef<THREE.Group>(null);
+  const radius = 5.75;
+  useFrame((_, delta) => { if (motion && orbit.current) orbit.current.rotation.y -= delta * .18; });
+  return <group ref={orbit} rotation={[-.13,.5,.16]}>
+    <Orbit radius={radius} opacity={.16} />
+    {contributors.map((contributor, index) => <ContributorSatellite key={contributor.id} contributor={contributor}
+      angle={index / contributors.length * Math.PI * 2} radius={radius} onOpen={() => onContributor(contributor)} />)}
+  </group>;
+}
+
+function RepositoryObjects({ repo, commits, contributors, activeIndex, motion, onCommit, onContributor, debug }: {
+  repo: Repository; commits: GitCommit[]; contributors: Contributor[]; activeIndex: number; motion: boolean;
+  onCommit: (index: number) => void; onContributor: (contributor: Contributor) => void; debug: boolean;
 }) {
   const probe = useRef<THREE.Group>(null);
   const bands = [0, 1, 2].map(band => commits.map((commit, index) => ({ commit, index })).filter(({ index }) => index % 3 === band));
@@ -79,10 +153,18 @@ function SatelliteSystem({ commits, activeIndex, motion, onCommit, debug }: {
     lastWrite.current = state.clock.elapsedTime;
     probe.current.getWorldPosition(point.current);
     const output = document.querySelector<HTMLOutputElement>("output[data-scene-measurement]");
-    if (output) output.textContent = JSON.stringify({ satelliteCount: commits.length, firstSatellite: point.current.toArray().map(value => Number(value.toFixed(4))) });
+    if (output) output.textContent = JSON.stringify({ cometCount: commits.length, satelliteCount: contributors.length, firstComet: point.current.toArray().map(value => Number(value.toFixed(4))) });
   });
-  return <>{bands.map((bandCommits, band) => bandCommits.length > 0 && <SatelliteOrbit key={band} commits={bandCommits}
-    band={band} activeIndex={activeIndex} motion={motion} onCommit={onCommit} probe={probe} />)}</>;
+  const style = planetStyle(repo);
+  const visualRadius = 2.15 * (repo.archived ? .58 : 1);
+  return <>
+    <TechnologyNebula color={style.glow} seed={style.seed} radius={visualRadius * 2.1} />
+    <StarSparks stars={repo.stargazers_count} radius={visualRadius} seed={style.seed} />
+    <DefaultBranchMoon branch={repo.default_branch} motion={motion} />
+    {bands.map((bandCommits, band) => bandCommits.length > 0 && <CometOrbit key={band} commits={bandCommits}
+      band={band} activeIndex={activeIndex} motion={motion} onCommit={onCommit} probe={probe} />)}
+    {contributors.length > 0 && <ContributorSatellites contributors={contributors} motion={motion} onContributor={onContributor} />}
+  </>;
 }
 
 // Orbital motion. The innermost ring completes a revolution in INNER_PERIOD seconds and
@@ -112,12 +194,14 @@ function OrbitingRepo({ repo, angle, radius, y, motion, onOpen, onFocus, keyboar
 
   // Anchored at the planet's centre; LabelLayout translates the card to a clear spot.
   return <group ref={group} position={orbitPosition(angle, radius, y)}>
+    <TechnologyNebula color={style.glow} seed={style.seed} radius={style.radius * 2.15} />
+    <StarSparks stars={repo.stargazers_count} radius={style.radius} seed={style.seed} />
     <World repo={repo} radius={style.radius} onClick={onOpen} animate={motion} />
     <Html center position={[0, 0, 0]} zIndexRange={[8, 0]}>
       <button ref={label} title={`${repo.full_name} · ${style.activity.label}`} aria-label={`Open ${repo.full_name}. ${repo.archived ? "Archived repository. " : ""}${style.activity.label}.`}
         className={`planet-label ${keyboardActive ? "is-keyboard-active" : ""} ${repo.archived ? "is-archived" : ""}`}
         onClick={onOpen} onFocus={onFocus}>
-        <span className="planet-label-dot" style={{ background: style.glow }} />{repo.name}
+        <span className="planet-label-dot" style={{ background: style.glow }} />{repo.name} <span className="planet-stars">★ {compactStars(repo.stargazers_count)}</span>
         <small>{repo.archived ? "ARCHIVED · BLACK HOLE" : repo.language ?? "Mixed languages"}</small>
       </button>
     </Html>
@@ -333,9 +417,10 @@ function LabelLayout({ registry, debug }: { registry: PlanetRegistry; debug: boo
   return null;
 }
 
-export function RepositorySystem({ repositories, selected, commits, commitIndex, onRepo, onCommit, centerLabel, motion }: {
-  repositories: Repository[]; selected: Repository | null; commits: GitCommit[]; commitIndex: number;
-  onRepo: (repo: Repository) => void; onCommit: (index: number) => void; centerLabel: string; motion: boolean;
+export function RepositorySystem({ repositories, selected, commits, contributors, commitIndex, onRepo, onCommit, onContributor, centerLabel, motion }: {
+  repositories: Repository[]; selected: Repository | null; commits: GitCommit[]; contributors: Contributor[]; commitIndex: number;
+  onRepo: (repo: Repository) => void; onCommit: (index: number) => void; onContributor: (contributor: Contributor) => void;
+  centerLabel: string; motion: boolean;
 }) {
   // One registry per mounted system; see PlanetRegistry above for why it is not module state.
   const [registry] = useState<PlanetRegistry>(() => new Map());
@@ -360,13 +445,15 @@ export function RepositorySystem({ repositories, selected, commits, commitIndex,
     onKeyDown={handleSystemKey}
     fallback={<p className="canvas-fallback">3D needs WebGL. You can still explore every repository and commit from the lists.</p>}>
     <color attach="background" args={["#07090f"]} />
-    <Stars radius={90} depth={35} count={2300} factor={3} fade speed={motion ? .15 : 0} />
+    <ambientLight intensity={.75} />
+    <directionalLight position={[8,12,10]} intensity={1.1} color="#f2dfbf" />
     {/* autoRotate orbits the camera around the system; three.js pauses it while the user is dragging
         and resumes afterwards. The "Pause rotation" button and reduced-motion both drive `motion`. */}
     <CameraRig selected={Boolean(selected)} motion={motion} />
     {selected ? <>
       <World repo={selected} radius={2.15} active animate={motion} />
-      <SatelliteSystem commits={commits} activeIndex={commitIndex} motion={motion} onCommit={onCommit} debug={debugLayout} />
+      <RepositoryObjects repo={selected} commits={commits} contributors={contributors} activeIndex={commitIndex}
+        motion={motion} onCommit={onCommit} onContributor={onContributor} debug={debugLayout} />
     </> : <>
       <Sun animate={motion} />
       <Html center position={[0,3.3,0]} zIndexRange={[12,10]}><span className="sun-label">{centerLabel}</span></Html>

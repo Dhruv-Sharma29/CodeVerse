@@ -23,6 +23,22 @@ export function archiveEncoding(archived: boolean | undefined) {
     ? { scale: .58, surfaceKind: 3, dark: "#000106", land: "#080914", glow: "#77708e", rings: false }
     : { scale: 1, surfaceKind: null, dark: null, land: null, glow: null, rings: null };
 }
+
+export function starEncoding(stars: number | undefined) {
+  const count = Math.max(0, stars ?? 0);
+  if (count === 0) return { sparks: 0, intensity: .12 };
+  return {
+    sparks: Math.min(7, Math.max(1, Math.ceil(Math.log10(count + 1) * 2))),
+    intensity: Math.min(1, .28 + Math.log10(count + 1) * .2),
+  };
+}
+
+export function repositoryImportance(repo: Partial<Pick<Repository, "stargazers_count" | "forks_count" | "pushed_at">>, now = Date.now()) {
+  const stars = Math.log10(Math.max(0, repo.stargazers_count ?? 0) + 1);
+  const forks = Math.log10(Math.max(0, repo.forks_count ?? 0) + 1);
+  const activity = activityEncoding(repo.pushed_at, now).intensity;
+  return Math.min(1, stars / 5 * .5 + forks / 4 * .2 + activity * .3);
+}
 const palettes: Record<string, [string, string, string, number]> = {
   TypeScript: ["#102c58", "#438bae", "#87e4f3", 0],
   JavaScript: ["#402222", "#c99857", "#ffe0a0", 1],
@@ -38,7 +54,7 @@ const palettes: Record<string, [string, string, string, number]> = {
   Swift: ["#46261d", "#cd9160", "#ffe0b0", 1],
   "Jupyter Notebook": ["#402c17", "#c08d40", "#ffe9bd", 0],
 };
-export function planetStyle(repo: Pick<Repository, "name" | "language" | "size" | "id"> & Partial<Pick<Repository, "stargazers_count" | "pushed_at" | "archived">>, now = Date.now()) {
+export function planetStyle(repo: Pick<Repository, "name" | "language" | "size" | "id"> & Partial<Pick<Repository, "stargazers_count" | "forks_count" | "pushed_at" | "archived">>, now = Date.now()) {
   const seed = seedFor(`${repo.id}/${repo.name}`);
   const [dark, land, glow, kind] = palettes[repo.language ?? ""] ?? palettes[Object.keys(palettes)[Math.floor(seedFor(repo.language ?? "Mixed") * Object.keys(palettes).length)]];
   const archive = archiveEncoding(repo.archived);
@@ -46,7 +62,7 @@ export function planetStyle(repo: Pick<Repository, "name" | "language" | "size" 
   return {
     dark: archive.dark ?? dark, land: archive.land ?? land, glow: archive.glow ?? glow,
     kind: archive.surfaceKind ?? kind, seed,
-    radius: Math.min(1.7, (0.65 + Math.log10(Math.max(repo.size ?? repo.stargazers_count ?? 1, 1)) * .22) * archive.scale),
+    radius: (0.68 + repositoryImportance(repo, now) * 1.02) * archive.scale,
     rings: archive.rings ?? (kind === 1 || seed > .77),
     activity,
     archived: Boolean(repo.archived),
