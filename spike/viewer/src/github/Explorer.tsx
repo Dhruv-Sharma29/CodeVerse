@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RepositorySystem } from "../scene/RepositorySystem";
 import { planetStyle } from "./planetStyle";
-import { fetchProfile, fetchRepositories, fetchCommits, fetchCommit, fetchContributors, normalizeHandle, errorMessage, repoUrl, commitUrl } from "./api";
+import { fetchProfile, fetchRepositories, fetchCommits, fetchCommit, fetchContributors, normalizeHandle, errorMessage, repoUrl, commitUrl, issuesUrl, discussionsUrl } from "./api";
 import type { Repository, GitHubProfile, GitCommit, CommitDetail, Contributor } from "./api";
 import { profileHandleFromUrl, profilePath } from "./profileRoute";
 import { evolutionTimeline, repositoriesAtTimestamp, formatEvolutionDate, initialEvolutionState } from "./evolution";
@@ -297,6 +297,14 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         <p className="detail-description">{selected.description || "This repository hasn’t added a description yet."}</p>
         <div className="repo-metrics"><div><strong>{compact(selected.stargazers_count)}</strong><span>STARS</span></div><div><strong>{compact(selected.forks_count)}</strong><span>FORKS</span></div>{selected.monthlyStars !== undefined && <div><strong>+{compact(selected.monthlyStars)}</strong><span>THIS MONTH</span></div>}</div>
         <a className="github-link" href={repoUrl(selected)} target="_blank" rel="noreferrer">View repository on GitHub ↗</a>
+        {(selected.has_discussions === true || selected.has_issues === true) && <section className="repository-community" aria-labelledby="repository-community-title">
+          <div className="contributor-heading"><h3 id="repository-community-title">Repository community</h3><span>ON GITHUB</span></div>
+          <p>Questions and conversation stay with the project’s maintainers and moderation.</p>
+          <div>
+            {selected.has_discussions === true && <a href={discussionsUrl(selected)} target="_blank" rel="noreferrer">Open discussions ↗</a>}
+            {selected.has_issues === true && <a href={issuesUrl(selected)} target="_blank" rel="noreferrer">{selected.open_issues_count?.toLocaleString() ?? "Open"} issues ↗</a>}
+          </div>
+        </section>}
         {contributors.length > 0 && <div className="contributor-section">
           <div className="contributor-heading"><h3>Orbiting Contributors</h3><span>{contributors.length} EXPLORERS</span></div>
           <div className="contributor-grid">

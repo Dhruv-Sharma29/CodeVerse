@@ -6,6 +6,7 @@ export interface Repository {
   id: number; name: string; full_name: string; description: string | null;
   language: string | null; stargazers_count: number; forks_count: number;
   size?: number; created_at?: string; pushed_at: string; default_branch: string; fork: boolean; archived: boolean;
+  has_issues?: boolean; open_issues_count?: number; has_discussions?: boolean;
 }
 export interface Contributor {
   login: string; id: number; avatar_url: string; contributions: number;
@@ -73,6 +74,8 @@ export async function fetchContributors(repo: Repository, signal?: AbortSignal):
 }
 export const repoUrl = (repo: Repository) => `https://github.com/${repoPath(repo)}`;
 export const commitUrl = (repo: Repository, sha: string) => `${repoUrl(repo)}/commit/${encodeURIComponent(sha)}`;
+export const issuesUrl = (repo: Repository) => `${repoUrl(repo)}/issues`;
+export const discussionsUrl = (repo: Repository) => `${repoUrl(repo)}/discussions`;
 export function errorMessage(error: unknown): string {
   if (error instanceof TypeError) return "Couldn’t reach GitHub. Check your connection and try again.";
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";

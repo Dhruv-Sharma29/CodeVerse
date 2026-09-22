@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeHandle, fetchProfile, fetchCommits, fetchRepositories } from '../src/github/api.ts';
+import { normalizeHandle, fetchProfile, fetchCommits, fetchRepositories, issuesUrl, discussionsUrl } from '../src/github/api.ts';
 import { activityEncoding, archiveEncoding, planetStyle, repositoryImportance, starEncoding } from '../src/github/planetStyle.ts';
 import { parseTrending } from '../server/trending.mjs';
 import { profileHandleFromUrl, profilePath } from '../src/github/profileRoute.ts';
@@ -9,6 +9,12 @@ import { loadedCoverage, summarizeProfile } from '../src/github/profileSummary.t
 test('handles accept usernames and profile URLs, rejecting paths and injected URLs', () => {
   for (const input of ['octocat','@octocat','https://github.com/octocat/']) assert.equal(normalizeHandle(input), 'octocat');
   for (const input of ['', '-bad', 'two--hyphens', 'owner/repo', 'https://evil.com/name', 'x?token=secret']) assert.throws(() => normalizeHandle(input));
+});
+
+test('repository community links stay on the selected GitHub repository', () => {
+  const repository = { full_name:'owner/project' };
+  assert.equal(issuesUrl(repository), 'https://github.com/owner/project/issues');
+  assert.equal(discussionsUrl(repository), 'https://github.com/owner/project/discussions');
 });
 
 test('profile routes support pretty and legacy links without accepting path traversal', () => {
