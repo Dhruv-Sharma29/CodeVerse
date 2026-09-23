@@ -315,12 +315,15 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         <div className="repo-metrics"><div><strong>{compact(selected.stargazers_count)}</strong><span>STARS</span></div><div><strong>{compact(selected.forks_count)}</strong><span>FORKS</span></div>{selected.monthlyStars !== undefined && <div><strong>+{compact(selected.monthlyStars)}</strong><span>THIS MONTH</span></div>}</div>
         <a className="github-link" href={repoUrl(selected)} target="_blank" rel="noreferrer">View repository on GitHub ↗</a>
         <section className="repository-moons" aria-labelledby="repository-moons-title">
-          <div className="contributor-heading"><h3 id="repository-moons-title">Moons</h3><span>{moonData ? 'BRANCHES + RELEASES' : 'DEFAULT BRANCH'}</span></div>
-          {moons.length > 0 && <div className="moon-links">{moons.map(moon => <a key={moon.key} href={moon.url} target="_blank" rel="noreferrer">
+          <div className="contributor-heading"><h3 id="repository-moons-title">Moons</h3><span>{moonData ? 'BRANCHES + RELEASES' : 'LOADING'}</span></div>
+          {moons.length > 0 && <div className="moon-links">{moons.map(moon => <a key={moon.key} href={moon.url} target="_blank" rel="noreferrer"
+            aria-label={`${moon.kind === 'release' ? 'Release' : 'Branch'} ${moon.label}${moon.defaultBranch ? ', default branch' : ''} on GitHub`}>
             <span aria-hidden="true">{moon.kind === 'release' ? '◆' : '●'}</span> {moon.label}{moon.defaultBranch && <small>DEFAULT</small>}
           </a>)}</div>}
-          {moonData && <p>Showing up to 6 branches and 4 latest releases{moonData.branchesHaveMore || moonData.releasesHaveMore ? '; more are available on GitHub.' : '.'}</p>}
-          {!moonData && <p>{moonBusy ? 'Checking for branches and releases…' : moonError || 'Other branches and releases need enhanced GitHub access. The known default branch is shown when available.'}</p>}
+          {moonData && <p>{moonData.branchesError ? 'Branches unavailable' : `${moonData.branches.length} branch${moonData.branches.length === 1 ? '' : 'es'} loaded`} · {moonData.releasesError ? 'releases unavailable' : `${moonData.releases.length} release${moonData.releases.length === 1 ? '' : 's'} loaded`} (first page: up to 6 branches and 4 latest releases){moonData.branchesHaveMore || moonData.releasesHaveMore ? '; more are available on GitHub.' : '.'}</p>}
+          {moonData?.branchesError && <p role="status">Branches could not be loaded; the known default branch is still shown.</p>}
+          {moonData?.releasesError && <p role="status">Releases could not be loaded. Try this repository again later.</p>}
+          {!moonData && <p>{moonBusy ? 'Checking for branches and releases…' : moonError || 'The known default branch is shown when available.'}</p>}
         </section>
         {(selected.has_discussions === true || selected.has_issues === true) && <section className="repository-community" aria-labelledby="repository-community-title">
           <div className="contributor-heading"><h3 id="repository-community-title">Repository community</h3><span>ON GITHUB</span></div>

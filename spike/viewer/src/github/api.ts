@@ -15,6 +15,7 @@ export interface Branch { name: string }
 export interface Release { id: number; tag_name: string; name: string | null; html_url: string }
 export interface MoonData {
   branches: Branch[]; releases: Release[]; branchesHaveMore: boolean; releasesHaveMore: boolean;
+  branchesError?: boolean; releasesError?: boolean;
 }
 export interface GitCommit {
   sha: string;
@@ -94,11 +95,28 @@ export async function fetchCommit(repo: Repository, sha: string, signal?: AbortS
 export async function fetchContributors(repo: Repository, signal?: AbortSignal): Promise<Contributor[]> {
   return (await request<Contributor[]>(`/repos/${repoPath(repo)}/contributors?per_page=12`, repoParams(repo, 'contributors'), signal)).data;
 }
-export async function fetchMoons(repo: Repository, signal?: AbortSignal): Promise<MoonData | null> {
-  if (!await githubProxyAvailable()) return null;
-  const response = await fetch(`/api/github?${repoParams(repo, 'moons')}`, { signal });
-  if (!response.ok) throw new Error(response.status === 429 ? 'GitHub moon data is temporarily limited. Try again later.' : 'Branches and releases could not be loaded. Try again later.');
-  return await response.json() as MoonData;
+export async function fetchMoons(repo: Repository, signal?: AbortSignal): Promise<MoonData> {
+  if (await githubProxyAvailable()) {
+    const response = await fetch(`/api/github?${repoParams(repo, 'moons')}`, { signal });
+    if (!response.ok) throw new Error(response.status === 429 ? 'GitHub moon data is temporarily limited. Try again later.' : 'Branches and releases could not be loaded. Try again later.');
+    return await response.json() as MoonData;
+  }
+  // Only the opened repository incurs these two unauthenticated requests; the shared
+  // request cache avoids spending the visitor's 60/hour GitHub allowance on revisits.
+  const base = `/repos/${repoPath(repo)}`;
+  const [branches, releases] = await Promise.allSettled([
+    request<Branch[]>(`${base}/branches?per_page=6`, repoParams(repo, 'moons'), signal),
+    request<Release[]>(`${base}/releases?per_page=4`, repoParams(repo, 'moons'), signal),
+  ]);
+  if (branches.status === 'rejected' && releases.status === 'rejected') throw branches.reason;
+  return {
+    branches:branches.status === 'fulfilled' ? branches.value.data : [],
+    releases:releases.status === 'fulfilled' ? releases.value.data : [],
+    branchesHaveMore:branches.status === 'fulfilled' && branches.value.hasMore,
+    releasesHaveMore:releases.status === 'fulfilled' && releases.value.hasMore,
+    branchesError:branches.status === 'rejected',
+    releasesError:releases.status === 'rejected',
+  };
 }
 export const repoUrl = (repo: Repository) => `https://github.com/${repoPath(repo)}`;
 export const commitUrl = (repo: Repository, sha: string) => `${repoUrl(repo)}/commit/${encodeURIComponent(sha)}`;
