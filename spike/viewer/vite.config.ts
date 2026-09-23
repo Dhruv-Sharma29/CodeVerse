@@ -4,6 +4,7 @@ import { createProfileHtmlMiddleware, profileHtmlMiddleware } from './server/pro
 import { ogMiddleware } from './server/og.mjs'
 import { oracleMiddleware } from './server/oracle.mjs'
 import { trendingMiddleware } from './server/trending.mjs'
+import { githubMiddleware } from './server/github.mjs'
 
 export const SITE_ORIGIN = 'https://codeverse-orbit.vercel.app'
 
@@ -18,12 +19,14 @@ export default defineConfig({
       server.middlewares.use(ogMiddleware);
       server.middlewares.use(oracleMiddleware);
       server.middlewares.use(trendingMiddleware);
+      server.middlewares.use(githubMiddleware);
     },
     configurePreviewServer(server) {
       server.middlewares.use(profileHtmlMiddleware);
       server.middlewares.use(ogMiddleware);
       server.middlewares.use(oracleMiddleware);
       server.middlewares.use(trendingMiddleware);
+      server.middlewares.use(githubMiddleware);
     },
   }],
 })

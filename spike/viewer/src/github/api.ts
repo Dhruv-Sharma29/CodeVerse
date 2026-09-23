@@ -11,6 +11,11 @@ export interface Repository {
 export interface Contributor {
   login: string; id: number; avatar_url: string; contributions: number;
 }
+export interface Branch { name: string }
+export interface Release { id: number; tag_name: string; name: string | null; html_url: string }
+export interface MoonData {
+  branches: Branch[]; releases: Release[]; branchesHaveMore: boolean; releasesHaveMore: boolean;
+}
 export interface GitCommit {
   sha: string;
   commit: { message: string; author: { name: string; date: string } | null };
@@ -30,11 +35,18 @@ export function normalizeHandle(input: string): string {
 }
 
 const cache = new Map<string, { expires: number; data: unknown; hasMore: boolean }>();
-async function request<T>(path: string, signal?: AbortSignal): Promise<{ data: T; hasMore: boolean }> {
+let proxyStatus: Promise<boolean> | undefined;
+export function githubProxyAvailable(): Promise<boolean> {
+  proxyStatus ??= fetch('/api/github/status').then(response => response.ok ? response.json() : null)
+    .then(value => value?.available === true).catch(() => false);
+  return proxyStatus;
+}
+async function request<T>(path: string, params: URLSearchParams, signal?: AbortSignal): Promise<{ data: T; hasMore: boolean }> {
   const cached = cache.get(path);
   if (cached && cached.expires > Date.now()) return { data: cached.data as T, hasMore: cached.hasMore };
-  const response = await fetch(`https://api.github.com${path}`, {
-    signal, headers: { Accept: "application/vnd.github+json" },
+  const useProxy = await githubProxyAvailable();
+  const response = await fetch(useProxy ? `/api/github?${params}` : `https://api.github.com${path}`, {
+    signal, headers: useProxy ? undefined : { Accept: "application/vnd.github+json" },
   });
   if (!response.ok) {
     if (response.status === 404) throw new Error("GitHub couldn’t find this public profile or repository. Check the spelling and try again.");
@@ -47,30 +59,46 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<{ data: T
     throw new Error(`GitHub is unavailable (${response.status}). Please try again.`);
   }
   if (response.status === 204) return { data: [] as unknown as T, hasMore: false };
-  const data = await response.json() as T;
-  const hasMore = (response.headers.get("link") ?? "").includes('rel="next"');
+  const result = await response.json() as T | { data:T; hasMore:boolean };
+  const data = useProxy ? (result as { data:T }).data : result as T;
+  const hasMore = useProxy ? (result as { hasMore:boolean }).hasMore : (response.headers.get("link") ?? "").includes('rel="next"');
   if (cache.size >= 100) cache.delete(cache.keys().next().value!);
   cache.set(path, { data, hasMore, expires: Date.now() + 300_000 });
   return { data, hasMore };
 }
 export async function fetchProfile(handle: string, signal?: AbortSignal) {
-  return (await request<GitHubProfile>(`/users/${encodeURIComponent(normalizeHandle(handle))}`, signal)).data;
+  const login = normalizeHandle(handle);
+  return (await request<GitHubProfile>(`/users/${encodeURIComponent(login)}`, new URLSearchParams({ kind:'profile', handle:login }), signal)).data;
 }
 export async function fetchRepositories(profile: GitHubProfile, page = 1, signal?: AbortSignal): Promise<RepoPage> {
   const kind = profile.type === "Organization" ? "orgs" : "users";
   const type = kind === "orgs" ? "public" : "owner";
-  const result = await request<Repository[]>(`/${kind}/${encodeURIComponent(profile.login)}/repos?type=${type}&sort=pushed&direction=desc&per_page=100&page=${page}`, signal);
+  const result = await request<Repository[]>(`/${kind}/${encodeURIComponent(profile.login)}/repos?type=${type}&sort=pushed&direction=desc&per_page=100&page=${page}`,
+    new URLSearchParams({ kind:'repositories', handle:profile.login, type:profile.type === 'Organization' ? 'organization' : 'user', page:String(page) }), signal);
   return { repositories: result.data, hasMore: result.hasMore };
 }
 function repoPath(repo: Repository) { return repo.full_name.split("/").map(encodeURIComponent).join("/"); }
+function repoParams(repo: Repository, kind: string) {
+  const [owner, name] = repo.full_name.split('/');
+  return new URLSearchParams({ kind, owner, repo:name });
+}
 export async function fetchCommits(repo: Repository, signal?: AbortSignal) {
-  return (await request<GitCommit[]>(`/repos/${repoPath(repo)}/commits?${repo.default_branch ? `sha=${encodeURIComponent(repo.default_branch)}&` : ""}per_page=60`, signal)).data;
+  const params = repoParams(repo, 'commits');
+  if (repo.default_branch) params.set('branch', repo.default_branch);
+  return (await request<GitCommit[]>(`/repos/${repoPath(repo)}/commits?${repo.default_branch ? `sha=${encodeURIComponent(repo.default_branch)}&` : ""}per_page=60`, params, signal)).data;
 }
 export async function fetchCommit(repo: Repository, sha: string, signal?: AbortSignal) {
-  return (await request<CommitDetail>(`/repos/${repoPath(repo)}/commits/${encodeURIComponent(sha)}?per_page=100`, signal)).data;
+  const params = repoParams(repo, 'commit'); params.set('sha', sha);
+  return (await request<CommitDetail>(`/repos/${repoPath(repo)}/commits/${encodeURIComponent(sha)}?per_page=100`, params, signal)).data;
 }
 export async function fetchContributors(repo: Repository, signal?: AbortSignal): Promise<Contributor[]> {
-  return (await request<Contributor[]>(`/repos/${repoPath(repo)}/contributors?per_page=12`, signal)).data;
+  return (await request<Contributor[]>(`/repos/${repoPath(repo)}/contributors?per_page=12`, repoParams(repo, 'contributors'), signal)).data;
+}
+export async function fetchMoons(repo: Repository, signal?: AbortSignal): Promise<MoonData | null> {
+  if (!await githubProxyAvailable()) return null;
+  const response = await fetch(`/api/github?${repoParams(repo, 'moons')}`, { signal });
+  if (!response.ok) throw new Error(response.status === 429 ? 'GitHub moon data is temporarily limited. Try again later.' : 'Branches and releases could not be loaded. Try again later.');
+  return await response.json() as MoonData;
 }
 export const repoUrl = (repo: Repository) => `https://github.com/${repoPath(repo)}`;
 export const commitUrl = (repo: Repository, sha: string) => `${repoUrl(repo)}/commit/${encodeURIComponent(sha)}`;
