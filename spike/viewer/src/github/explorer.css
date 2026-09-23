@@ -112,6 +112,10 @@
 .repository-community>div:last-child { display:flex;gap:8px;margin-top:10px; }
 .repository-community a { flex:1;padding:7px 8px;border:1px solid #45495b;border-radius:5px;color:#cfc8d9;text-align:center;font-size:9px; }
 .repository-community a:hover { border-color:#b89f75;color:#f4dec0;background:#b89f750c; }
+.repository-moons { margin-top:18px;padding:13px;border:1px solid #303443;border-radius:7px;background:#0d1019; }
+.repository-moons .contributor-heading { margin-bottom:9px; }.repository-moons .contributor-heading h3 { font-size:15px; }
+.repository-moons p { margin:8px 0 0;color:#85899a;font-size:9px;line-height:1.5; }
+.moon-links { display:flex;flex-wrap:wrap;gap:6px; }.moon-links a { max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 7px;border:1px solid #45495b;border-radius:5px;color:#cfc8d9;font-size:9px; }.moon-links a:hover { border-color:#b89f75;color:#f4dec0; }.moon-links a>span { color:#cbb58d; }.moon-links small { margin-left:6px;color:#8d91a0;font-size:7px; }
 .detail-divider { height:1px;background:var(--line);margin:25px 0; }
 .commit-heading { display:flex;align-items:center;justify-content:space-between;gap:8px; }
 .commit-heading h3 { font-family:Georgia,serif;font-size:20px;font-weight:400;margin:0; }

@@ -5,6 +5,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { World, Sun } from "./World";
 import { planetStyle, seedFor, starEncoding } from "../github/planetStyle";
 import type { Repository, GitCommit, Contributor } from "../github/api";
+import type { RepositoryMoon } from "../github/moons";
 import { layoutLabels, type LabelItem, type Rect } from "./labelLayout";
 import { ORBIT_X_SCALE, ORBIT_Z_SCALE, orbitalAngularSpeed, repositoryOrbit, stepOrbitPhysics } from "./orbitalPhysics";
 import * as THREE from "three";
@@ -100,16 +101,23 @@ function CometOrbit({ commits, band, activeIndex, motion, onCommit, probe }: {
   </group>;
 }
 
-function DefaultBranchMoon({ branch, motion }: { branch: string; motion: boolean }) {
+function MoonOrbit({ moons, motion }: { moons: RepositoryMoon[]; motion:boolean }) {
   const orbit = useRef<THREE.Group>(null);
   useFrame((_, delta) => { if (motion && orbit.current) orbit.current.rotation.y += delta * .31; });
   return <group ref={orbit} rotation={[.18, .3, -.12]}>
-    <Orbit radius={2.95} opacity={.24} />
-    <group position={[2.95, 0, 0]}>
-      <mesh><sphereGeometry args={[.31, 18, 14]} /><meshStandardMaterial color="#a7a7b1" roughness={.92} /></mesh>
-      <mesh position={[-.07,.08,.27]}><sphereGeometry args={[.075,10,8]} /><meshBasicMaterial color="#696b78" /></mesh>
-      <Html center position={[0,.65,0]} zIndexRange={[7,0]}><span className="moon-label">{branch || "default branch"}</span></Html>
-    </group>
+    <Orbit radius={3.05} opacity={.24} />
+    {moons.map((moon, index) => {
+      const angle = index / Math.max(moons.length, 1) * Math.PI * 2;
+      const radius = 3.05 + (index % 2) * .18;
+      const size = moon.defaultBranch ? .29 : moon.kind === 'release' ? .21 : .17;
+      return <group key={moon.key} position={[Math.cos(angle) * radius, (index % 3 - 1) * .16, Math.sin(angle) * radius]}>
+        <mesh rotation={[.3,angle,.2]}>
+          {moon.kind === 'release' ? <icosahedronGeometry args={[size,0]} /> : <sphereGeometry args={[size,16,12]} />}
+          <meshStandardMaterial color={moon.kind === 'release' ? '#eccb83' : '#a7a7b1'} roughness={.86} />
+        </mesh>
+        {moon.defaultBranch && <Html center position={[0,.58,0]} zIndexRange={[7,0]}><span className="moon-label">{moon.label}</span></Html>}
+      </group>;
+    })}
   </group>;
 }
 
@@ -140,8 +148,8 @@ function ContributorSatellites({ contributors, motion, onContributor }: {
   </group>;
 }
 
-function RepositoryObjects({ repo, commits, contributors, activeIndex, motion, onCommit, onContributor, debug }: {
-  repo: Repository; commits: GitCommit[]; contributors: Contributor[]; activeIndex: number; motion: boolean;
+function RepositoryObjects({ repo, commits, contributors, moons, activeIndex, motion, onCommit, onContributor, debug }: {
+  repo: Repository; commits: GitCommit[]; contributors: Contributor[]; moons: RepositoryMoon[]; activeIndex: number; motion: boolean;
   onCommit: (index: number) => void; onContributor: (contributor: Contributor) => void; debug: boolean;
 }) {
   const probe = useRef<THREE.Group>(null);
@@ -160,7 +168,7 @@ function RepositoryObjects({ repo, commits, contributors, activeIndex, motion, o
   return <>
     <TechnologyNebula color={style.glow} seed={style.seed} radius={visualRadius * 2.1} />
     <StarSparks stars={repo.stargazers_count} radius={visualRadius} seed={style.seed} />
-    <DefaultBranchMoon branch={repo.default_branch} motion={motion} />
+    <MoonOrbit moons={moons} motion={motion} />
     {bands.map((bandCommits, band) => bandCommits.length > 0 && <CometOrbit key={band} commits={bandCommits}
       band={band} activeIndex={activeIndex} motion={motion} onCommit={onCommit} probe={probe} />)}
     {contributors.length > 0 && <ContributorSatellites contributors={contributors} motion={motion} onContributor={onContributor} />}
@@ -417,8 +425,8 @@ function LabelLayout({ registry, debug }: { registry: PlanetRegistry; debug: boo
   return null;
 }
 
-export function RepositorySystem({ repositories, selected, commits, contributors, commitIndex, onRepo, onCommit, onContributor, centerLabel, motion }: {
-  repositories: Repository[]; selected: Repository | null; commits: GitCommit[]; contributors: Contributor[]; commitIndex: number;
+export function RepositorySystem({ repositories, selected, commits, contributors, moons, commitIndex, onRepo, onCommit, onContributor, centerLabel, motion }: {
+  repositories: Repository[]; selected: Repository | null; commits: GitCommit[]; contributors: Contributor[]; moons: RepositoryMoon[]; commitIndex: number;
   onRepo: (repo: Repository) => void; onCommit: (index: number) => void; onContributor: (contributor: Contributor) => void;
   centerLabel: string; motion: boolean;
 }) {
@@ -452,7 +460,7 @@ export function RepositorySystem({ repositories, selected, commits, contributors
     <CameraRig selected={Boolean(selected)} motion={motion} />
     {selected ? <>
       <World repo={selected} radius={2.15} active animate={motion} />
-      <RepositoryObjects repo={selected} commits={commits} contributors={contributors} activeIndex={commitIndex}
+      <RepositoryObjects repo={selected} commits={commits} contributors={contributors} moons={moons} activeIndex={commitIndex}
         motion={motion} onCommit={onCommit} onContributor={onContributor} debug={debugLayout} />
     </> : <>
       <Sun animate={motion} />

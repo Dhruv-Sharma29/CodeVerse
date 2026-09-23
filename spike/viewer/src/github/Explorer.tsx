@@ -2,8 +2,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RepositorySystem } from "../scene/RepositorySystem";
 import { planetStyle } from "./planetStyle";
-import { fetchProfile, fetchRepositories, fetchCommits, fetchCommit, fetchContributors, normalizeHandle, errorMessage, repoUrl, commitUrl, issuesUrl, discussionsUrl } from "./api";
-import type { Repository, GitHubProfile, GitCommit, CommitDetail, Contributor } from "./api";
+import { fetchProfile, fetchRepositories, fetchCommits, fetchCommit, fetchContributors, fetchMoons, normalizeHandle, errorMessage, repoUrl, commitUrl, issuesUrl, discussionsUrl } from "./api";
+import type { Repository, GitHubProfile, GitCommit, CommitDetail, Contributor, MoonData } from "./api";
+import { repositoryMoons } from './moons';
 import { profileHandleFromUrl, profilePath } from "./profileRoute";
 import { evolutionTimeline, repositoriesAtTimestamp, formatEvolutionDate, initialEvolutionState } from "./evolution";
 import "./explorer.css";
@@ -44,6 +45,9 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
   const [detail, setDetail] = useState<CommitDetail | null>(null);
   const [detailError, setDetailError] = useState("");
   const [contributors, setContributors] = useState<Contributor[]>([]);
+  const [moonData, setMoonData] = useState<MoonData | null>(null);
+  const [moonError, setMoonError] = useState("");
+  const [moonBusy, setMoonBusy] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [motion, setMotion] = useState(() => !matchMedia("(prefers-reduced-motion: reduce)").matches);
   const [updated, setUpdated] = useState("");
@@ -67,6 +71,7 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
   const sectorCount = Math.max(1, Math.ceil(filtered.length / SECTOR_SIZE));
   const visible = filtered.slice(sector * SECTOR_SIZE, (sector + 1) * SECTOR_SIZE);
   const commit = commits[commitIndex];
+  const moons = useMemo(() => selected ? repositoryMoons(selected, moonData) : [], [selected, moonData]);
 
   async function openUniverse(input?: string) {
     attemptedHandle.current = input;
@@ -134,6 +139,17 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
     fetchContributors(selected, task.signal).then(result => {
       if (!task.signal.aborted) setContributors(result || []);
     }).catch(() => { /* contributors error is non-fatal */ });
+    return () => task.abort();
+  }, [selected]);
+
+  useEffect(() => {
+    setMoonData(null); setMoonError("");
+    if (!selected) { setMoonBusy(false); return; }
+    const task = new AbortController();
+    setMoonBusy(true);
+    fetchMoons(selected, task.signal).then(value => { if (!task.signal.aborted) setMoonData(value); })
+      .catch(() => { if (!task.signal.aborted) setMoonError('Branches and releases are temporarily unavailable.'); })
+      .finally(() => { if (!task.signal.aborted) setMoonBusy(false); });
     return () => task.abort();
   }, [selected]);
 
@@ -244,14 +260,15 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         {profile && !selected && <UniverseCard profile={profile} repositories={repos} onEvolve={timeline ? startEvolution : undefined} />}
         {selected && <button className="back-to-system" onClick={() => {setSelected(null);setPlaying(false);}}>← All planets</button>}
         <div className="system-canvas">
-          <RepositorySystem repositories={busy ? [] : visible} selected={selected} commits={commits} contributors={contributors} commitIndex={commitIndex}
+          <RepositorySystem repositories={busy ? [] : visible} selected={selected} commits={commits} contributors={contributors} moons={moons} commitIndex={commitIndex}
             onRepo={showRepo} onCommit={selectCommit} onContributor={contributor => void openUniverse(contributor.login)}
             centerLabel={profile?.login ?? "OPEN SOURCE"} motion={motion} />
         </div>
         <div className="cosmic-legend" aria-label="Universe visual legend">
           <span><b className="legend-star">★</b> GitHub stars</span>
           <span><b>●</b> repository planet</span>
-          <span><b className="legend-moon">●</b> default-branch moon</span>
+          <span><b className="legend-moon">●</b> branch moon</span>
+          <span><b className="legend-star">◆</b> release moon</span>
           <span><b className="legend-comet">☄</b> recent commit</span>
           <span><b className="legend-nebula">✦</b> primary-language nebula</span>
           <span><b className="legend-satellite">▣</b> contributor satellite</span>
@@ -297,6 +314,14 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         <p className="detail-description">{selected.description || "This repository hasn’t added a description yet."}</p>
         <div className="repo-metrics"><div><strong>{compact(selected.stargazers_count)}</strong><span>STARS</span></div><div><strong>{compact(selected.forks_count)}</strong><span>FORKS</span></div>{selected.monthlyStars !== undefined && <div><strong>+{compact(selected.monthlyStars)}</strong><span>THIS MONTH</span></div>}</div>
         <a className="github-link" href={repoUrl(selected)} target="_blank" rel="noreferrer">View repository on GitHub ↗</a>
+        <section className="repository-moons" aria-labelledby="repository-moons-title">
+          <div className="contributor-heading"><h3 id="repository-moons-title">Moons</h3><span>{moonData ? 'BRANCHES + RELEASES' : 'DEFAULT BRANCH'}</span></div>
+          {moons.length > 0 && <div className="moon-links">{moons.map(moon => <a key={moon.key} href={moon.url} target="_blank" rel="noreferrer">
+            <span aria-hidden="true">{moon.kind === 'release' ? '◆' : '●'}</span> {moon.label}{moon.defaultBranch && <small>DEFAULT</small>}
+          </a>)}</div>}
+          {moonData && <p>Showing up to 6 branches and 4 latest releases{moonData.branchesHaveMore || moonData.releasesHaveMore ? '; more are available on GitHub.' : '.'}</p>}
+          {!moonData && <p>{moonBusy ? 'Checking for branches and releases…' : moonError || 'Other branches and releases need enhanced GitHub access. The known default branch is shown when available.'}</p>}
+        </section>
         {(selected.has_discussions === true || selected.has_issues === true) && <section className="repository-community" aria-labelledby="repository-community-title">
           <div className="contributor-heading"><h3 id="repository-community-title">Repository community</h3><span>ON GITHUB</span></div>
           <p>Questions and conversation stay with the project’s maintainers and moderation.</p>
