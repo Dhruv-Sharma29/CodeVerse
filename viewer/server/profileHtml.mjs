@@ -153,12 +153,12 @@ export async function getTemplateHtml(preferSource = false) {
   if (cached) return cached;
   const built = [
     resolve(process.cwd(), 'dist/index.html'),
-    resolve(process.cwd(), 'spike/viewer/dist/index.html'),
+    resolve(process.cwd(), 'viewer/dist/index.html'),
     fileURLToPath(new URL('../dist/index.html', import.meta.url)),
   ];
   const source = [
     resolve(process.cwd(), 'index.html'),
-    resolve(process.cwd(), 'spike/viewer/index.html'),
+    resolve(process.cwd(), 'viewer/index.html'),
     fileURLToPath(new URL('../index.html', import.meta.url)),
   ];
   const candidates = preferSource ? [...source, ...built] : [...built, ...source];

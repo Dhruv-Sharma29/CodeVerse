@@ -10,14 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: spike/viewer
+        working-directory: viewer
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: spike/viewer/package-lock.json
+          cache-dependency-path: viewer/package-lock.json
       - run: npm ci
       - run: npx tsc -b
       - run: npm run lint

@@ -585,7 +585,7 @@ Builds on the Oracle MVP shipped in v0.1 (above).
 
 ## 12. Immediate next steps (this week)
 1. ~~Check name availability~~ — done (§11): `codeverse` confirmed clear of PyPI/dominant-project conflicts.
-2. Build the Phase 0 spike: `analyzer/codeverse/history.py` + `spike/viewer/` — **done**, currently rendering FastAPI's history (5,448 files, 7,679 commits) in a live 3D scene.
+2. Build the Phase 0 spike: `analyzer/codeverse/history.py` + `viewer/` — **done**, currently rendering FastAPI's history (5,448 files, 7,679 commits) in a live 3D scene.
 3. Build the **Oracle MVP** (§0, §6.2 row 1) next — `llm.py` and the NIM connection already work; this is now higher priority than more viewer polish, since it's the part competitors don't have.
 4. Record the FastAPI clip, run the 5-developer gate **against CodeCohesion's live demo** (§1.4, §9 Phase 0 exit criteria).
 5. If it passes, write `docs/bundle-schema.md` and start Phase 1.
