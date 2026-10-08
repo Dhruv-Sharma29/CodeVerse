@@ -19,7 +19,7 @@ __pycache__/
 # spike (Phase 0) — regenerate via notebooks/01_phase0_history_spike.ipynb
 spike/repos/
 spike/out/
-spike/viewer/public/repo.json
+viewer/public/repo.json
 
 # node / vite
 node_modules/

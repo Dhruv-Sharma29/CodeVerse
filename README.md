@@ -9,7 +9,7 @@ Explore GitHub as a living planetary system: monthly trending repositories, any 
 ## GitHub explorer
 
 ```bash
-cd spike/viewer
+cd viewer
 npm install --legacy-peer-deps
 npm run dev
 ```
@@ -91,11 +91,11 @@ codeverse/
 │       ├── history.py       git log → commits / file-event DataFrame (renames, deletes, LOC)
 │       └── cli.py           `codeverse` CLI
 ├── notebooks/                see table above
-└── spike/                    Phase 0 "is it beautiful?" spike (see PLAN.md §9)
+├── viewer/                  Vite + React Three Fiber web product
+│   └── public/repo.json       optional local-history bundle
+└── spike/                   exploratory notebooks and generated data
     ├── repos/                cloned repos to analyze (gitignored)
-    ├── out/                  exported spike JSON bundles (e.g. fastapi.json)
-    └── viewer/                Vite + React Three Fiber 3D viewer
-        └── public/repo.json   bundle the viewer loads (copy from spike/out/)
+    └── out/                  exported JSON bundles (gitignored)
 ```
 
 ## Analyze a local repository
@@ -116,10 +116,10 @@ file contents are not exported. Line counts are estimates from Git's line deltas
 binary files have a line count of zero. Remote URLs must be cloned locally first.
 The current format is JSON, not the planned `.codeverse` archive format.
 
-## Viewer (Phase 0 spike)
+## Web viewer
 
 ```bash
-cd spike/viewer
+cd viewer
 npm install --legacy-peer-deps
 npm run dev
 ```
@@ -133,10 +133,14 @@ Choose **Open repository bundle** and select the exported JSON file. The viewer 
 ```bash
 cd analyzer
 uv run pytest tests -q
-cd ../spike/viewer
+cd ../viewer
 npm test                 # Node.js 22.6+ (native TypeScript stripping)
 npm run build
 npm run lint
 ```
 
 See [docs/bundle-schema.md](docs/bundle-schema.md) for the JSON contract.
+
+## Deployment directory
+
+The production web app is now in `viewer/`. Update any hosting provider's configured root directory from `spike/viewer` to `viewer` before redeploying; this setting is external to Git. The analyzer and exploratory data remain in their original directories.
