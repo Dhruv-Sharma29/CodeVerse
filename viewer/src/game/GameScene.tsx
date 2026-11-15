@@ -294,6 +294,30 @@ function RemoteShip({ sim, peer }: { sim: Sim; peer: Peer }) {
   </group>;
 }
 
+/** Ping markers: a light beam, a pulsing ring and a label, drawn from a fixed pool. */
+const PING_POOL = 12;
+function Pings({ sim }: { sim: Sim }) {
+  const groups = useRef<(THREE.Group | null)[]>([]), rings = useRef<(THREE.Mesh | null)[]>([]), labels = useRef<(HTMLSpanElement | null)[]>([]);
+  useFrame(({ clock }) => {
+    for (let i = 0; i < PING_POOL; i++) {
+      const g = groups.current[i], p = sim.pings[i]; if (!g) continue;
+      g.visible = !!p; if (!p) continue;
+      g.position.set(p.x, 0, p.z);
+      const left = p.until - sim.t, pulse = 1 + ((clock.elapsedTime * 1.6) % 1) * 1.4;
+      const ring = rings.current[i];
+      if (ring) { ring.scale.setScalar(pulse); const m = ring.material as THREE.MeshBasicMaterial; m.opacity = Math.min(1, left) * (1.5 - pulse * .5); m.color.set(p.color); }
+      g.children.forEach(ch => { const m = (ch as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined; if (m && ch !== ring && "color" in m) m.color.set(p.color); });
+      const el = labels.current[i];
+      if (el) { const t = `${p.label} · ${p.name}`; if (el.textContent !== t) el.textContent = t; el.style.borderColor = p.color; }
+    }
+  });
+  return <>{Array.from({ length: PING_POOL }, (_, i) => <group key={i} ref={el => { groups.current[i] = el; }} visible={false}>
+    <mesh position={[0, 9, 0]}><cylinderGeometry args={[.25, .9, 18, 12, 1, true]} /><meshBasicMaterial {...additive} opacity={.45} side={THREE.DoubleSide} /></mesh>
+    <mesh ref={el => { rings.current[i] = el; }} rotation={[-Math.PI / 2, 0, 0]} position={[0, .2, 0]}><ringGeometry args={[2.2, 2.7, 40]} /><meshBasicMaterial {...additive} side={THREE.DoubleSide} /></mesh>
+    <Html center position={[0, 19.5, 0]} zIndexRange={[6, 0]} pointerEvents="none"><span ref={el => { labels.current[i] = el; }} className="orbit-ping" /></Html>
+  </group>)}</>;
+}
+
 function Aliens({ sim }: { sim: Sim }) {
   const disc = useRef<THREE.InstancedMesh>(null), dome = useRef<THREE.InstancedMesh>(null), lights = useRef<THREE.InstancedMesh>(null);
   const hunter = useRef<THREE.InstancedMesh>(null), blades = useRef<THREE.InstancedMesh>(null), swarm = useRef<THREE.InstancedMesh>(null);
@@ -455,6 +479,7 @@ export const GameScene = memo(function GameScene({ ctl, peers, color, hull }: { 
     <Satellites sim={sim} />
     <Portal sim={sim} />
     <Comet sim={sim} />
+    <Pings sim={sim} />
     <LocalShip ctl={ctl} color={color} hull={hull} />
     {peers.map(p => <RemoteShip key={p.id} sim={sim} peer={p} />)}
     <Aliens sim={sim} />

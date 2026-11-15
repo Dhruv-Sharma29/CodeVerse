@@ -20,7 +20,7 @@ A client is in at most one room. Joining another room leaves the previous one.
 | Ship position, heading, velocity, hull points (10 Hz) | Aliens and waves |
 | Shots (as they are fired), with damage | Charge, commits |
 | Score and dogfight wins (10 Hz, self-reported) | |
-| Dogfight kill announcements, emotes | |
+| Dogfight kill announcements, emotes, pings | |
 | Held and flung planets (10 Hz while active) | Tutorial progress |
 | Supernovas, explosions | Particles and effects |
 | Name, colour, hull | |
@@ -40,6 +40,7 @@ All messages are JSON objects with a `t` field.
 | `shot` | `x`, `z`, `a`, `d` (damage 1 or 2) | Relayed as `shot` |
 | `killed` | `by` | Sent by a pilot who was shot down in a dogfight; relayed to the whole room (sender included) as `killed` with `id` and `by`, only if `by` is in the room |
 | `emote` | `e` (0–5) | Relayed as `emote` |
+| `ping` | `x`, `z` | Relayed as `ping`; each client labels it from its own copy of the world |
 | `grab` | `planet`, `x`, `z`, `vx`, `vz`, `held` | Planet throw, relayed as `grab` |
 | `nova` | `x`, `z` | Relayed as `nova` |
 | `boom` | `x`, `z` | Relayed as `boom` |
@@ -52,7 +53,7 @@ All messages are JSON objects with a `t` field.
 | `welcome` | `id`, `room`, `peers: [{ id, name, color, hull, state }]` |
 | `joined` | `id`, `name`, `color`, `hull` |
 | `left` | `id` |
-| `state`, `shot`, `grab`, `nova`, `boom`, `emote` | The sender's fields plus `id` |
+| `state`, `shot`, `grab`, `nova`, `boom`, `emote`, `ping` | The sender's fields plus `id` |
 | `killed` | `id` (shot down), `by` (winner) |
 | `rooms` | `rooms: [{ room, count }]`, busiest 12 |
 | `error` | `message` (invalid room, room full) |

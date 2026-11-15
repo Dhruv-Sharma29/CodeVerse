@@ -70,6 +70,8 @@ export function createRelay() {
       // The shot-down pilot announces who got them; only ids of pilots in this room are passed on.
       const by = num(m.by, 1e9) | 0;
       if ([...rooms.get(c.room) ?? []].some(p => p.id === by && p !== c)) cast(c.room, { t: 'killed', id: c.id, by });
+    } else if (m.t === 'ping') {
+      cast(c.room, { t: 'ping', id: c.id, x: num(m.x), z: num(m.z) }, c);
     } else if (m.t === 'emote') {
       const e = num(m.e, 99) | 0;
       if (e >= 0 && e < EMOTE_COUNT) cast(c.room, { t: 'emote', id: c.id, e }, c);

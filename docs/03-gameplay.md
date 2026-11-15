@@ -83,9 +83,34 @@ shared; aliens are separate for each pilot.
   pilot. 8 damage per shot (16 for the Titan), 45 from a supernova. Shooting someone down gives +300
   and a dogfight win, and the whole universe sees it in the kill feed. Respawning gives a short
   shield, so nobody can be farmed at the spawn point.
-- **Pilots board.** Press **Tab** (or **Pilots**) to see everyone here with ship, score and dogfight wins.
+- **Invite links.** `/?u=<login>` opens that universe directly; the lobby shows it behind the title
+  and the launch button names it. The address bar follows you through hyperjumps, so copying it
+  shares the universe you are in. A bad or rate-limited link falls back to the trending hub and says
+  why.
+- **Pings.** Press **P** (or **PING** on touch) to mark the spot under your mouse, or ahead of your ship
+  on keyboard or touch. Everyone in the universe sees a beam, a pulsing ring and a label worked out
+  from what is there: ⚠️ Danger near aliens, 🪐 a planet's name, 🌀 the gate, ☄ the comet, or 📍 Here.
+  Pings last 6 seconds, each pilot has at most 3 at once, there is a 1.2 s cooldown, and they show on
+  the radar (pinned to its edge when far away).
+- **Pilots board.** Press **Tab** to see everyone here with ship, score and dogfight wins. Touch
+  devices have no Tab key, so they get a **Pilots** button instead.
 - **Emotes.** Press **1–6** (or use the buttons on the board): 👋 Hi, GG, 🔥 Nice!, 🆘 Help!,
   ⚔ Fight me, 🤝 Truce. They appear above your ship for every pilot. Emotes are preset only.
+
+## Phones, tablets and full screen
+
+- **Touch controls.** Left stick to fly; buttons for **FIRE**, **GRAB**, **BOOST** (hold), **NOVA** and
+  **PING**. Two columns in portrait with FIRE under the right thumb; three columns in short landscape.
+- **Tilt to steer.** Tap **TILT** to fly by tilting the phone: tilt the top away to fly up the screen,
+  toward you to fly down, left and right to steer. It calibrates to however you are holding the phone
+  when you switch it on (tap it off and on to re-centre) and re-centres when the screen rotates. The
+  stick still works and wins while you touch it. iPhone and iPad ask for motion permission the first
+  time. Tilt angles: 3° dead zone, full speed at 18°.
+- **Full screen.** **⛶ Full screen** in the HUD, or **F** on a keyboard. Phones go full screen
+  automatically on Launch where the browser allows it. iPhone Safari has no full-screen API for web
+  pages, so the lobby suggests **Share → Add to Home Screen**; the installed game opens full screen.
+- **Any window size.** The game fills the window or the screen and re-lays-out on resize; short
+  screens (phones in landscape, small laptop windows) get a compact HUD.
 
 ## The creator's comet
 

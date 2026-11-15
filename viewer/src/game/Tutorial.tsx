@@ -4,7 +4,7 @@ export type LessonId = "move" | "shot" | "fling" | "commit" | "nova" | "portal";
 interface Lesson { id: LessonId; title: string; text: string; keys: string[]; touchText: string; touchKeys: string[] }
 export const LESSONS: Lesson[] = [
   { id: "move", title: "Fly", text: "W thrusts where your nose points. A and D strafe, Shift boosts.", keys: ["W", "A", "S", "D", "Shift"],
-    touchText: "Drag the stick to fly.", touchKeys: ["Stick"] },
+    touchText: "Drag the stick, or tap TILT and tilt the phone, to fly. Hold BOOST to go faster.", touchKeys: ["Stick", "TILT", "BOOST"] },
   { id: "shot", title: "Aim and fire", text: "Point with the mouse. Click or press Space to fire.", keys: ["Mouse", "Click", "Space"],
     touchText: "Your guns aim at the closest alien. Hold FIRE.", touchKeys: ["FIRE"] },
   { id: "fling", title: "Gravity beam", text: "Hold E or right-click near a planet, then let go to fling it.", keys: ["E", "Right-click"],
@@ -40,6 +40,8 @@ export function KeySheet({ touch, onReplay, onClose }: { touch: boolean; onRepla
     {LESSONS.map(l => <div className="orbit-sheet-row" key={l.id}><span>{l.title}</span><Keys keys={touch ? l.touchKeys : l.keys} /></div>)}
     <div className="orbit-sheet-row"><span>Pilots board</span><Keys keys={["Tab"]} /></div>
     <div className="orbit-sheet-row"><span>Emotes</span><Keys keys={["1", "–", "6"]} /></div>
+    <div className="orbit-sheet-row"><span>Ping a spot</span><Keys keys={touch ? ["PING"] : ["P"]} /></div>
+    {!touch && <div className="orbit-sheet-row"><span>Full screen</span><Keys keys={["F"]} /></div>}
     <button type="button" className="orbit-link" onClick={onReplay}>Replay first flight</button>
   </aside>;
 }

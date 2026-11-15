@@ -1,0 +1,15 @@
+{
+  "name": "CodeVerse Orbit",
+  "short_name": "Orbit",
+  "description": "A multiplayer space game built from real GitHub data.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#03040c",
+  "theme_color": "#05060a",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

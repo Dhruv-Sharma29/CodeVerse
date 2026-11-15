@@ -51,7 +51,7 @@ The original explorer stays available at `/explorer/` for calm, analytical brows
 | # | Criterion | How it is checked |
 |---|---|---|
 | S1 | A first-time player can launch and play within seconds of the page loading | Lobby renders over the live universe; launch reuses it ([03](03-gameplay.md)) |
-| S2 | The game rules run identically in the browser and in tests | `sim.ts` has no React or three.js imports; 12 simulation tests ([04](04-simulation.md)) |
+| S2 | The game rules run identically in the browser and in tests | `sim.ts` has no React or three.js imports; 13 simulation tests ([04](04-simulation.md)) |
 | S3 | Pilots in one universe see the same world events | Gate and comet are seeded from room and clock; relay tests ([05](05-multiplayer.md)) |
 | S4 | Combat between pilots is fair to the one being hit | The victim's own client decides hits; a respawn shield blocks spawn farming; covered by a simulation test |
 | S5 | The live site works on free hosting | Vercel for the site, Render for the relay, a keep-warm schedule, and an in-game waking state ([06](06-deployment.md)) |

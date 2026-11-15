@@ -14,12 +14,13 @@ fly through, where you can grab a repository and throw it, and where other peopl
 
 **Status: live and multiplayer, on free hosting.** **[Play it at codeverse-orbit.vercel.app](https://codeverse-orbit.vercel.app).**
 Three ships, four alien types with a boss every fifth wave, a gravity beam, commit-charged
-supernovas, dogfights between every pilot with a kill feed, a pilots board, emotes, a hyperjump gate that moves,
+supernovas, dogfights between every pilot with a kill feed, a pilots board, emotes, pings,
+invite links, tilt-to-steer on phones, full screen on laptops and phones, a hyperjump gate that moves,
 and a comet that links to the creator. The website is on Vercel; the multiplayer relay is on Render,
 kept warm during waking hours in India. The original explorer is still at
 [`/explorer/`](https://codeverse-orbit.vercel.app/explorer/).
 
-**72 tests in `viewer/`, no network calls.** New here? **[`docs/01-getting-started.md`](docs/01-getting-started.md)**.
+**78 tests in `viewer/`, no network calls.** New here? **[`docs/01-getting-started.md`](docs/01-getting-started.md)**.
 Full design record in [`docs/`](docs/README.md); everything the build got wrong on the way is in
 [`docs/10-implementation-notes.md`](docs/10-implementation-notes.md); everything *not* done, and
 whether that was a constraint or a choice, is in [`REMAINING.md`](REMAINING.md).
@@ -27,7 +28,7 @@ whether that was a constraint or a choice, is in [`REMAINING.md`](REMAINING.md).
 ```console
 $ cd viewer && npm install --legacy-peer-deps
 $ npm run dev                                   # game at :5173, explorer at :5173/explorer/, relay included
-$ npm test                                      # 72 tests, no network
+$ npm test                                      # 78 tests, no network
 $ npm run build && npm start                    # production server with the relay on :4173
 $ npm run relay                                 # the relay on its own (what Render runs)
 $ npm run check:relay -- https://codeverse-relay.onrender.com   # test a deployed relay end to end
@@ -56,7 +57,7 @@ close. The planets are the explorer's shader worlds, lit from the central sun.
 `viewer/src/game/sim.ts` is a plain module with no React and no three.js: ships, aliens, bullets,
 planets, the gate, the comet, supernovas and dogfights. The 3D scene reads it every frame and draws
 it with instanced meshes; the UI samples it ten times a second. Because it is plain code, the rules
-run identically in the browser and in Node, and the 12 simulation tests exercise the real thing
+run identically in the browser and in Node, and the 13 simulation tests exercise the real thing
 rather than a mock of it.
 
 ## Multiplayer without a game server
@@ -65,6 +66,11 @@ The relay (`viewer/server/multiplayer.mjs`) validates and forwards messages betw
 same universe and holds no game state. Ships, shots, thrown planets, supernovas, kills and emotes are
 shared; aliens are simulated by each pilot. Rooms are per universe, up to 24 pilots, with size and
 rate limits, an origin allow-list, and heartbeats.
+
+**Invite links and pings.** `/?u=torvalds` opens straight into that universe (it is shown behind the
+lobby, too), and the address bar follows you through hyperjumps, so copying it shares the universe
+you are in. Press **P** to drop a ping everyone in the universe sees, labelled
+from what is there: ⚠️ Danger, a planet's name, the gate, the comet, or 📍 Here.
 
 **Some things need no messages at all.** The hyperjump gate moves to a random spot on the outer rim
 every three minutes, and the comet crosses on a new random path every two. Both positions come from

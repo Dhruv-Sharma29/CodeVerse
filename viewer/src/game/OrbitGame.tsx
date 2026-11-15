@@ -3,8 +3,10 @@ import { Canvas } from "@react-three/fiber";
 import { commitUrl, errorMessage, fetchCommits, repoUrl, type GitCommit } from "../github/api";
 import { GameScene, ShipPreview, type Control, type Peer } from "./GameScene";
 import { connectNet, type NetMessage, type NetStatus } from "./net";
-import { ALIENS, EMOTES, HULLS, PVP, SPAWN, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
+import { ALIENS, EMOTES, HULLS, PING, PVP, SPAWN, addPing, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
 import { loadUniverse, ownerOf } from "./universe";
+import { invitePath, inviteTarget } from "./invite";
+import { screenTilt, tiltToMove, type Tilt } from "./tilt";
 import { KeySheet, LESSONS, Tutorial, type LessonId } from "./Tutorial";
 import "./game.css";
 
@@ -30,6 +32,7 @@ function tone(freq: number, dur = .08, type: OscillatorType = "sine", vol = .05,
   o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
 }
 const sfx = {
+  ping: () => { tone(1320, .09, "sine", .045); setTimeout(() => tone(1760, .12, "sine", .035), 90); },
   shot: () => tone(1400, .05, "square", .012, .5), kill: () => tone(160, .35, "sawtooth", .05, .3),
   hurt: () => tone(110, .2, "square", .04, .6), commit: () => { tone(880, .08, "triangle"); setTimeout(() => tone(1320, .1, "triangle"), 70); },
   grab: () => tone(220, .4, "sine", .05, 2.5), fling: () => tone(600, .3, "sawtooth", .04, .25),
@@ -184,6 +187,9 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         if (by === myId.current) { sim.pvpKills++; sim.score += PVP.killScore; sfx.kill(); toast(`⚔️ You shot down ${who(id)}! +${PVP.killScore}`, "good"); }
         else if (id === myId.current) toast(`⚔️ ${who(by)} shot you down`, "bad");
         else toast(`⚔️ ${who(by)} shot down ${who(id)}`);
+      } else if (m.t === "ping") {
+        const r = sim.remotes.get(id);
+        addPing(sim, Number(m.x), Number(m.z), { owner: id, name: r?.name ?? "A pilot", color: r?.color ?? "#ffffff" }); sfx.ping();
       } else if (m.t === "emote") {
         const r = sim.remotes.get(id), e = EMOTES[Number(m.e)];
         if (r && e) { r.emote = e; r.emoteUntil = performance.now() + 3500; }
@@ -206,12 +212,18 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     ask(); const id = setInterval(ask, 4000);
     return () => clearInterval(id);
   }, [phase, status]);
-  // Lobby backdrop: the trending universe, loaded once and kept for launch.
+  // Lobby backdrop: the universe from the invite link (?u=login), else trending; kept for launch.
   useEffect(() => {
-    const abort = new AbortController();
-    loadUniverse("trending", abort.signal).then(u => {
-      const c = makeControl(u); c.attract = true; adoptControl(c); setUniverse(u);
-    }).catch(e => { if (!abort.signal.aborted) setLobbyError(errorMessage(e)); });
+    const abort = new AbortController(), target = inviteTarget(location.search);
+    const show = (u: Universe) => { const c = makeControl(u); c.attract = true; adoptControl(c); setUniverse(u); };
+    loadUniverse(target, abort.signal).then(show).catch(e => {
+      if (abort.signal.aborted) return;
+      if (target === "trending") { setLobbyError(errorMessage(e)); return; }
+      // A bad or rate-limited invite still gets you flying: fall back to the hub and say why.
+      setLobbyError(`Couldn't open ${target}'s universe (${errorMessage(e)}). Showing the trending hub instead.`);
+      history.replaceState(null, "", "/");
+      loadUniverse("trending", abort.signal).then(show).catch(err => { if (!abort.signal.aborted) setLobbyError(errorMessage(err)); });
+    });
     return () => abort.abort();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -253,6 +265,8 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       if (e.target instanceof HTMLInputElement || jumpOpen) return;
       const k = e.key.toLowerCase();
       if (k === "q" && ctl.current) ctl.current.input.nova = true;
+      if (k === "p" && !e.repeat) { ping(); return; }
+      if (k === "f" && !e.repeat && canFullscreen) { void toggleFullscreen(); return; }
       if (k === "h" && !e.repeat) setSheet(v => !v);
       if (k === "tab") { e.preventDefault(); if (!e.repeat) setBoard(v => !v); return; }
       if (/^[1-6]$/.test(k) && !e.repeat) { sendEmote(Number(k) - 1); return; }
@@ -274,12 +288,43 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     net.current?.send({ t: "emote", e: i });
   }
 
+  /* ---- pings ---- */
+  const lastPing = useRef(-9);
+  function ping() {
+    const c = ctl.current; if (!c || c.attract || c.sim.t - lastPing.current < PING.cooldown) return;
+    lastPing.current = c.sim.t;
+    const s = c.sim.ship, at = c.input.aim ?? { x: s.x + Math.cos(s.a) * 24, z: s.z + Math.sin(s.a) * 24 };
+    addPing(c.sim, at.x, at.z, { owner: myId.current, name, color }); sfx.ping();
+    net.current?.send({ t: "ping", x: at.x, z: at.z });
+  }
+
+  /* ---- full screen ---- */
+  type FsDoc = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> };
+  type FsEl = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+  const root = document.documentElement as FsEl, doc = document as FsDoc;
+  const canFullscreen = !!(root.requestFullscreen || root.webkitRequestFullscreen);
+  const [fullscreen, setFullscreen] = useState(() => !!(doc.fullscreenElement ?? doc.webkitFullscreenElement));
+  useEffect(() => {
+    const sync = () => setFullscreen(!!(doc.fullscreenElement ?? doc.webkitFullscreenElement));
+    document.addEventListener("fullscreenchange", sync); document.addEventListener("webkitfullscreenchange", sync);
+    return () => { document.removeEventListener("fullscreenchange", sync); document.removeEventListener("webkitfullscreenchange", sync); };
+  }, [doc]);
+  async function toggleFullscreen(on = !fullscreen) {
+    try {
+      if (on) await (root.requestFullscreen?.({ navigationUI: "hide" }) ?? root.webkitRequestFullscreen?.());
+      else await (document.exitFullscreen?.() ?? doc.webkitExitFullscreen?.());
+    } catch { /* refused (no user gesture, or not allowed): stay windowed */ }
+  }
+  // iPhone Safari has no full-screen API for pages; a home-screen install opens full screen instead.
+  const iosBrowser = /iPhone|iPod/.test(navigator.userAgent) && !(navigator as { standalone?: boolean }).standalone;
+
   /* ---- universes ---- */
   async function launch() {
     if (!ac) try { ac = new AudioContext(); } catch { /* no audio */ }
     const callsign = name.replace(/[^\w .-]/g, "").trim().slice(0, 18) || "Pilot";
     setName(callsign); store.set("name", callsign); store.set("color", color); store.set("hull", hull);
     const c = ctl.current;
+    if (touch && canFullscreen && !fullscreen) void toggleFullscreen(true); // phones: full screen on launch
     if (c) { c.attract = false; Object.assign(c.sim.ship, { inv: 2.5, hull, hp: HULLS[hull].hp }); setPhase("play"); return; }
     setBusy(true); setLobbyError("");
     try {
@@ -311,6 +356,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       adoptControl(next); setPeers([]); setLog([]); setUniverse(u);
       const recent = [u.room, ...store.get<string[]>("recent", []).filter(r => r !== u.room)].slice(0, 6);
       store.set("recent", recent);
+      history.replaceState(null, "", invitePath(u.room)); // the address bar is always a working invite
       void ramp(0, 900, next);
       toast(`Arrived in ${u.title}`, "good");
     } catch (e) {
@@ -326,6 +372,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     <div className="orbit-lobby-inner">
       <p className="orbit-tagline">A multiplayer flight through GitHub</p>
       <h1 className="orbit-title" aria-label="Orbit">{"ORBIT".split("").map((ch, i) => <span key={i} aria-hidden="true" style={{ "--i": i } as React.CSSProperties}>{ch}</span>)}</h1>
+      {universe && universe.room !== "trending" && <p className="orbit-invited">📨 You're heading into <b>{universe.title}</b>'s universe{universe.subtitle ? ` · ${universe.subtitle}` : ""}</p>}
       <form className="orbit-launch" onSubmit={e => { e.preventDefault(); void launch(); }}>
         <label className="orbit-hello">
           <span>Hello,</span>
@@ -350,7 +397,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
           <div className="orbit-swatches" role="radiogroup" aria-label="Ship colour">
             {COLORS.map(c => <button type="button" key={c} role="radio" aria-checked={c === color} aria-label={`Colour ${c}`} className="orbit-swatch" style={{ "--sw": c } as React.CSSProperties} onClick={() => setColor(c)} />)}
           </div>
-          <button className="orbit-go" type="submit" disabled={busy}>{busy ? "Loading…" : "Launch"}</button>
+          <button className="orbit-go" type="submit" disabled={busy}>{busy ? "Loading…" : universe && universe.room !== "trending" ? `Launch into ${universe.title}` : "Launch"}</button>
         </div>
         {lobbyError && <p className="orbit-error" role="alert">{lobbyError}</p>}
       </form>
@@ -362,6 +409,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
           : status === "waking" ? <span className="orbit-live-dot waking">Waking the multiplayer server. It sleeps when nobody is playing and takes up to a minute. You can launch now; other pilots appear once it is up.</span>
           : status === "connecting" ? <span>Looking for other pilots…</span> : <span>Multiplayer server offline. You will fly solo.</span>}
       </section>
+      {iosBrowser && <p className="orbit-foot">📱 For full screen on iPhone: Share → <b>Add to Home Screen</b>, then open Orbit from there.</p>}
       <p className="orbit-foot">{lessons.length < LESSONS.length ? "New here? A short first flight shows you the controls." : "Press H in flight for the controls."}</p>
       <p className="orbit-foot"><a href="/explorer/">Prefer to browse quietly? Open the explorer →</a></p>
     </div>
@@ -395,8 +443,10 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         <span className={`orbit-net ${status}`}>{status === "online" ? `${peers.length + 1} pilot${peers.length ? "s" : ""} here` : status === "waking" ? "Waking multiplayer server (up to a minute)…" : status === "connecting" ? "Connecting…" : "Solo: multiplayer server offline"}</span>
       </div>
       <div className="orbit-actions">
+        {canFullscreen && <button className="orbit-ghost" onClick={() => void toggleFullscreen()} aria-pressed={fullscreen} title="Full screen (F)">{fullscreen ? "⤡ Exit full screen" : "⛶ Full screen"}</button>}
         <button className="orbit-ghost" onClick={() => { const m = !muted; setMuted(m); store.set("muted", m); }} aria-pressed={!muted}>{muted ? "Sound off" : "Sound on"}</button>
-        <button className="orbit-ghost" onClick={() => setBoard(v => !v)} aria-pressed={board}>Pilots · Tab</button>
+        {/* Keyboards open the pilots board with Tab; touch has no Tab key. */}
+        {touch && <button className="orbit-ghost" onClick={() => setBoard(v => !v)} aria-pressed={board}>Pilots</button>}
         <button className="orbit-ghost" onClick={() => setSheet(v => !v)} aria-pressed={sheet}>Controls</button>
         <button className="orbit-ghost" onClick={onExit}>Leave</button>
       </div>
@@ -472,7 +522,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
 
     {warping && <div className="orbit-warp" aria-hidden="true" />}
 
-    {touch && c && <TouchControls ctl={c} />}
+    {touch && c && <TouchControls ctl={c} onPing={ping} toast={toast} />}
 
     {board && hud && <aside className="orbit-board" aria-label="Pilots in this universe">
       <div className="orbit-tut-head"><span className="orbit-eyebrow">PILOTS · {hud.board.length}</span><button type="button" className="orbit-link" onClick={() => setBoard(false)}>Close</button></div>
@@ -491,8 +541,12 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   </div>;
 }
 
-function TouchControls({ ctl }: { ctl: Control }) {
+type OrientationCtor = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<"granted" | "denied"> };
+
+function TouchControls({ ctl, onPing, toast }: { ctl: Control; onPing: () => void; toast: (t: string, k?: Toast["kind"]) => void }) {
   const knob = useRef<HTMLSpanElement>(null), origin = useRef<{ x: number; y: number; id: number } | null>(null);
+  const [tilt, setTilt] = useState(() => store.get("tilt", false));
+  const rest = useRef<Tilt | null>(null);
   const move = (x: number, y: number) => {
     const o = origin.current; if (!o) return;
     let dx = x - o.x, dy = y - o.y; const l = Math.hypot(dx, dy), max = 46;
@@ -501,17 +555,54 @@ function TouchControls({ ctl }: { ctl: Control }) {
     if (knob.current) knob.current.style.transform = `translate(${dx}px, ${dy}px)`;
   };
   const end = () => { origin.current = null; ctl.input.move = { x: 0, z: 0 }; if (knob.current) knob.current.style.transform = ""; };
-  const hold = (key: "fire" | "grab") => ({
+  const hold = (key: "fire" | "grab" | "boost") => ({
     onPointerDown: (e: React.PointerEvent) => { e.currentTarget.setPointerCapture(e.pointerId); ctl.input[key] = true; },
     onPointerUp: () => { ctl.input[key] = false; }, onPointerCancel: () => { ctl.input[key] = false; },
   });
+
+  // Tilt-to-steer. The stick still works and wins while you are touching it.
+  useEffect(() => {
+    if (!tilt) return;
+    rest.current = null; // recalibrate to however the phone is held right now
+    const angle = () => screen.orientation?.angle ?? Number((window as { orientation?: number }).orientation ?? 0);
+    const onTilt = (e: DeviceOrientationEvent) => {
+      if (e.beta == null || e.gamma == null) return;
+      const t = screenTilt(e.beta, e.gamma, angle());
+      if (!rest.current) rest.current = t;
+      if (!origin.current) ctl.input.move = tiltToMove(t, rest.current);
+    };
+    const recalibrate = () => { rest.current = null; };
+    addEventListener("deviceorientation", onTilt); addEventListener("orientationchange", recalibrate);
+    screen.orientation?.addEventListener?.("change", recalibrate);
+    return () => {
+      removeEventListener("deviceorientation", onTilt); removeEventListener("orientationchange", recalibrate);
+      screen.orientation?.removeEventListener?.("change", recalibrate);
+      if (!origin.current) ctl.input.move = { x: 0, z: 0 };
+    };
+  }, [tilt, ctl]);
+  useEffect(() => { store.set("tilt", tilt); }, [tilt]);
+
+  async function toggleTilt() {
+    if (tilt) { setTilt(false); return; }
+    const DOE = window.DeviceOrientationEvent as OrientationCtor | undefined;
+    if (!DOE) { toast("This device has no motion sensor. Use the stick.", "bad"); return; }
+    try {
+      // iPhone and iPad ask for permission, and only from a tap.
+      if (DOE.requestPermission && (await DOE.requestPermission()) !== "granted") { toast("Motion access was declined. Use the stick, or allow it in Safari settings.", "bad"); return; }
+    } catch { toast("Motion access isn't available here. Use the stick.", "bad"); return; }
+    setTilt(true); toast("Tilt to steer: hold the phone the way you like and tilt from there. Tap TILT again to stop.", "good");
+  }
+
   return <>
-    <div className="orbit-stick" onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); const r = e.currentTarget.getBoundingClientRect(); origin.current = { x: r.left + r.width / 2, y: r.top + r.height / 2, id: e.pointerId }; move(e.clientX, e.clientY); }}
+    <div className={`orbit-stick ${tilt ? "dim" : ""}`} onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); const r = e.currentTarget.getBoundingClientRect(); origin.current = { x: r.left + r.width / 2, y: r.top + r.height / 2, id: e.pointerId }; move(e.clientX, e.clientY); }}
       onPointerMove={e => move(e.clientX, e.clientY)} onPointerUp={end} onPointerCancel={end} aria-label="Movement stick">
       <span ref={knob} />
     </div>
+    <button className={`orbit-tilt ${tilt ? "on" : ""}`} onClick={() => void toggleTilt()} aria-pressed={tilt}>{tilt ? "TILT ON" : "TILT"}</button>
     <div className="orbit-buttons">
+      <button className="ping" onPointerDown={onPing}>PING</button>
       <button className="nova" onPointerDown={() => { ctl.input.nova = true; }}>NOVA</button>
+      <button className="boost" {...hold("boost")}>BOOST</button>
       <button className="grab" {...hold("grab")}>GRAB</button>
       <button className="fire" {...hold("fire")}>FIRE</button>
     </div>
@@ -531,6 +622,11 @@ function drawRadar(cv: HTMLCanvasElement | null, sim: Sim) {
   };
   dot(0, 0, "#ffcf6e", 5);
   dot(sim.comet.x, sim.comet.z, "#e8fbff", 3.5);
+  // Pings: a ring on the radar (pinned to its edge when out of range) so they are findable.
+  for (const p of sim.pings) {
+    const dx = (p.x - s.x) * k, dz = (p.z - s.z) * k, l = Math.hypot(dx, dz), m = Math.min(1, (R - 7) / (l || 1));
+    g.strokeStyle = p.color; g.lineWidth = 2; g.beginPath(); g.arc(R + dx * m, R + dz * m, 4.5, 0, Math.PI * 2); g.stroke();
+  }
   for (const p of sim.planets) dot(p.x, p.z, p.glow, Math.max(2, p.R * k * 1.4));
   // Gate: drawn on the rim when out of range so it always shows the way.
   { const gate = sim.portal, dx = (gate.x - s.x) * k, dz = (gate.z - s.z) * k, l = Math.hypot(dx, dz), m = Math.min(1, (R - 6) / (l || 1));

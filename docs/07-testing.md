@@ -1,6 +1,6 @@
 # 07 — Testing
 
-**72 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
+**78 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
 (22.6+, native TypeScript stripping) or `pytest`. CI runs all of them, plus type-checking, lint and
 the production build, on every push and pull request.
 
@@ -14,8 +14,10 @@ $ cd ../analyzer && uv run pytest tests -q
 
 | Suite | Tests | What it pins down |
 |---|---|---|
-| `orbitSim.test.mjs` | 12 | The game rules: shooting and aim assist, gravity grab and fling, gate placement and triggering, comet path and once-per-crossing bonus, supernova, ship-relative thrust, hull firepower, the mothership's capped damage, aliens not passing through planets, the ship never entering a held planet, dogfight damage from any other pilot, kill credit, and the respawn shield |
-| `multiplayer.test.mjs` | 3 | The relay: rooms are separate, names and colours are cleaned, invalid rooms are refused, leaving is broadcast, hulls fall back, the origin allow-list refuses other sites, dogfight state, kill announcements and emotes are relayed and validated |
+| `orbitSim.test.mjs` | 13 | The game rules: shooting and aim assist, gravity grab and fling, gate placement and triggering, comet path and once-per-crossing bonus, supernova, ship-relative thrust, hull firepower, the mothership's capped damage, aliens not passing through planets, the ship never entering a held planet, dogfight damage from any other pilot, kill credit, the respawn shield, and ping labels, per-pilot caps and expiry |
+| `multiplayer.test.mjs` | 4 | The relay: rooms are separate, names and colours are cleaned, invalid rooms are refused, leaving is broadcast, hulls fall back, the origin allow-list refuses other sites, dogfight state, kill announcements, emotes and pings are relayed and validated |
+| `tilt.test.mjs` | 3 | Tilt-to-steer: portrait and both landscape orientations map to the same screen directions; dead zone and linear ramp |
+| `invite.test.mjs` | 1 | Invite links: a valid GitHub login opens that universe; anything else falls back to the trending hub |
 | `net.test.mjs` | 2 | The client connection: a sleeping hosted relay reports "waking" without flicker and then goes online; a refused local server reports "offline" |
 | `orbitalPhysics.test.mjs` | 2 | Explorer orbits and collision separation |
 | `github.test.mjs` | 21 | GitHub client, profile routes, profile share metadata |
@@ -36,6 +38,10 @@ and are listed here so nobody mistakes them for automated coverage:
   origin, and refusal of other origins. It passed against the Render relay.
 
 ## What is not tested
+
+- Tilt-to-steer and the motion permission prompt on a real phone (the maths is unit-tested; the
+  sensors and iOS permission flow need a device).
+- Full screen and the home-screen install on real phones.
 
 - Several real players at once, and the relay under load.
 - Frame rate on low-end phones, especially with a mothership on screen.

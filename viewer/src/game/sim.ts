@@ -69,6 +69,9 @@ export interface Remote { id: number; name: string; color: string; x: number; z:
 export const PVP = { bullet: 8, nova: 45, killScore: 300 };
 /** Quick emotes (keys 1-6). Preset only, so there is no free text to moderate. */
 export const EMOTES = ["👋 Hi", "GG", "🔥 Nice!", "🆘 Help!", "⚔️ Fight me", "🤝 Truce"];
+/** Pings: map markers every pilot in the universe sees. */
+export interface Ping { x: number; z: number; label: string; name: string; color: string; owner: number; until: number }
+export const PING = { life: 6, cooldown: 1.2, perPilot: 3 };
 export interface Input { move: { x: number; z: number }; aim: { x: number; z: number } | null; fire: boolean; grab: boolean; boost: boolean; nova: boolean; autoAim: boolean; relative?: boolean }
 export type SimEvent =
   | { type: "commit"; planet: Planet; commit: GitCommit }
@@ -100,6 +103,7 @@ export function createSim(universe: Universe) {
     remotes: new Map<number, Remote>(),
     /** Dogfights are always on: every pilot can damage every other pilot. */
     pvpKills: 0, emote: "", emoteUntil: 0,
+    pings: [] as Ping[],
     grab: null as null | { planet?: Planet; alien?: Alien },
     score: 0, charge: 0, wave: 0, waveTimer: 4, kills: 0, deaths: 0, commits: 0, shake: 0, portalCool: 2.5, nextAlien: 1,
     near: null as Planet | null,
@@ -120,6 +124,25 @@ export function explode(sim: Sim, x: number, z: number, color: string, n = 36, s
     sim.particles.push({ x, y: 1, z, vx: Math.cos(a) * v, vy: up, vz: Math.sin(a) * v, life: .5 + Math.random() * .7, max: 1.2, r, g, b });
   }
   sim.flashes.push({ x, z, t: 0, max: .5, size, color });
+}
+
+/** What a ping points at, worked out from each pilot's own copy of the world. */
+export function pingLabel(sim: Sim, x: number, z: number): string {
+  const p0 = { x, z };
+  if (sim.aliens.some(a => a.hp > 0 && dist(a, p0) < 18 + ALIENS[a.kind].r)) return "⚠️ Danger";
+  if (dist(sim.portal, p0) < sim.portal.r + 10) return "🌀 Hyperjump gate";
+  if (dist(sim.comet, p0) < 14) return "☄ Comet";
+  let best: Planet | null = null;
+  for (const p of sim.planets) if (dist(p, p0) < p.R + 9 && (!best || dist(p, p0) < dist(best, p0))) best = p;
+  return best ? `🪐 ${best.repo.name}` : "📍 Here";
+}
+/** Add a ping; each pilot keeps at most PING.perPilot live markers (oldest dropped). */
+export function addPing(sim: Sim, x: number, z: number, who: { owner: number; name: string; color: string }) {
+  const mine = sim.pings.filter(p => p.owner === who.owner);
+  if (mine.length >= PING.perPilot) sim.pings.splice(sim.pings.indexOf(mine[0]), 1);
+  const ping: Ping = { x, z, label: pingLabel(sim, x, z), ...who, until: sim.t + PING.life };
+  sim.pings.push(ping);
+  return ping;
 }
 
 /** True when the given id is another pilot in this universe (there is no peace mode). */
@@ -191,6 +214,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   const epoch = gateEpoch();
   if (epoch !== sim.portal.epoch && sim.portalCool < 1e8) { sim.portal = gateSpot(sim.universe.room, sim.edge, epoch); ev.push({ type: "gate" }); }
   sim.comet = cometAt(sim.universe.room, sim.edge, Date.now());
+  if (sim.pings.length) sim.pings = sim.pings.filter(p => p.until > sim.t);
   if (Math.random() < .6 && sim.particles.length < 1300) { // sparkle trail
     const c = sim.comet;
     sim.particles.push({ x: c.x + (Math.random() - .5) * 2, y: 1.5, z: c.z + (Math.random() - .5) * 2, vx: -c.vx * .4 + (Math.random() - .5) * 2, vy: (Math.random() - .5) * 2, vz: -c.vz * .4 + (Math.random() - .5) * 2, life: 1.4, max: 1.4, r: .75, g: .95, b: 1 });

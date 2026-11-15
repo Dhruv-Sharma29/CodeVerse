@@ -69,3 +69,17 @@ test('dogfight state, kill announcements and emotes are relayed and validated', 
   assert.equal((await a.next('emote')).e, 1);
   a.ws.close(); b.ws.close(); await new Promise(r => server.close(r));
 });
+
+test('pings are relayed to the room with clamped coordinates', async () => {
+  const server = createServer(); attachMultiplayer(server);
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const url = `ws://127.0.0.1:${server.address().port}${PLAY_PATH}`;
+  const a = client(url), b = client(url);
+  await Promise.all([a.open, b.open]);
+  a.send({ t: 'join', room: 'u:torvalds', name: 'Ada' }); await a.next('welcome');
+  b.send({ t: 'join', room: 'u:torvalds', name: 'Lin' }); const wb = await b.next('welcome'); await a.next('joined');
+  b.send({ t: 'ping', x: 12.345, z: 'nope' });
+  const p = await a.next('ping');
+  assert.deepEqual([p.id, p.x, p.z], [wb.id, 12.35, 0]);
+  a.ws.close(); b.ws.close(); await new Promise(r => server.close(r));
+});
