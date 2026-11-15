@@ -78,6 +78,19 @@ minute to wake. Two things handle that:
 A paid instance stays awake without any of this. Preview deployments on other origins are refused by `RELAY_ORIGINS`
 and run solo unless you add their origins.
 
+## Measuring it
+
+- **Relay counters:** `GET /stats` on the relay (for example
+  `https://codeverse-relay.onrender.com/stats`) returns aggregate counters since the relay last
+  started: connections, sessions (connections that launched into a universe), joins, joins where
+  someone was already there, hyperjumps per session, the share of joins with company, peak pilots
+  online and the busiest universe. Nothing about any pilot is collected; it resets when the free
+  relay sleeps or restarts.
+- **Page views:** the game page loads Vercel Web Analytics (cookieless) on
+  `codeverse-orbit.vercel.app` only. It counts once Web Analytics is enabled for the project in the
+  Vercel dashboard. Custom events would need a paid Vercel plan, which is why the multiplayer
+  numbers come from the relay instead.
+
 ## Health checks
 
 - `GET /` returns the game page.

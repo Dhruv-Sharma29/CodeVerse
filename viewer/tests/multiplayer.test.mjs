@@ -83,3 +83,20 @@ test('pings are relayed to the room with clamped coordinates', async () => {
   assert.deepEqual([p.id, p.x, p.z], [wb.id, 12.35, 0]);
   a.ws.close(); b.ws.close(); await new Promise(r => server.close(r));
 });
+
+test('relay stats count sessions, company and hyperjumps without any pilot data', async () => {
+  const server = createServer(); const relay = attachMultiplayer(server);
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const url = `ws://127.0.0.1:${server.address().port}${PLAY_PATH}`;
+  const a = client(url), b = client(url), lobby = client(url);
+  await Promise.all([a.open, b.open, lobby.open]);
+  a.send({ t: 'join', room: 'trending', name: 'Ada' }); await a.next('welcome');
+  b.send({ t: 'join', room: 'trending', name: 'Lin' }); await b.next('welcome'); // joins with company
+  a.send({ t: 'join', room: 'u:torvalds', name: 'Ada' }); await a.next('welcome'); // a hyperjump
+  const st = relay.stats();
+  assert.deepEqual([st.connections, st.sessions, st.joins, st.joinsWithCompany, st.peakPilots], [3, 2, 3, 1, 2]);
+  assert.equal(st.hyperjumpsPerSession, 0.5);
+  assert.equal(st.peakRoom.pilots, 2);
+  assert.ok(!JSON.stringify(st).includes('Ada') && !JSON.stringify(st).includes('Lin'), 'no pilot names');
+  a.ws.close(); b.ws.close(); lobby.ws.close(); await new Promise(r => server.close(r));
+});

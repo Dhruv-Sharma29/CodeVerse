@@ -85,6 +85,12 @@ client owns its own ship: the pilot who gets hit detects the hit and applies the
 shot down announces `killed` with the winner's id. The winner's client then credits itself +300
 score and a dogfight win. The respawn shield blocks damage for a few seconds after respawning.
 
+## Stats
+
+The standalone relay serves `GET /stats`: aggregate, anonymous counters (connections, sessions,
+joins, joins with company, hyperjumps per session, peak pilots, busiest universe). See
+[06](06-deployment.md#measuring-it).
+
 ## Trust model
 
 Clients are not trusted to be honest about gameplay: a modified client could report any position

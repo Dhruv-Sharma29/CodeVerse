@@ -22,6 +22,15 @@ export function createRelay() {
   const send = (c, msg) => { if (c.ws.readyState === 1) c.ws.send(JSON.stringify(msg)); };
   const cast = (room, msg, except) => { for (const c of rooms.get(room) ?? []) if (c !== except) send(c, msg); };
   const summary = () => [...rooms].map(([room, set]) => ({ room, count: set.size })).sort((a, b) => b.count - a.count).slice(0, 12);
+  // Aggregate counters for /stats: totals and peaks only, in memory, nothing about any pilot.
+  const counters = { since: new Date().toISOString(), connections: 0, sessions: 0, joins: 0, joinsWithCompany: 0, peakPilots: 0, peakRoom: { room: '', pilots: 0 } };
+  const online = () => [...rooms.values()].reduce((n, set) => n + set.size, 0);
+  const stats = () => ({
+    ...counters, pilotsOnline: online(), roomsActive: rooms.size,
+    // A session is a connection that launched into at least one universe; later joins are hyperjumps.
+    hyperjumpsPerSession: counters.sessions ? +((counters.joins - counters.sessions) / counters.sessions).toFixed(2) : 0,
+    shareOfJoinsWithCompany: counters.joins ? +(counters.joinsWithCompany / counters.joins).toFixed(2) : 0,
+  });
 
   function leave(c) {
     if (!c.room) return;
@@ -47,7 +56,11 @@ export function createRelay() {
       c.name = cleanName(m.name); c.color = cleanColor(m.color); c.hull = HULLS.has(m.hull) ? m.hull : 'dart'; c.room = room; c.state = null;
       if (!rooms.has(room)) rooms.set(room, new Set());
       const peers = [...rooms.get(room)].map(p => ({ id: p.id, name: p.name, color: p.color, hull: p.hull, state: p.state }));
+      if (rooms.get(room).size > 0) counters.joinsWithCompany++;
       rooms.get(room).add(c);
+      counters.joins++; if (!c.joined) { c.joined = true; counters.sessions++; }
+      const total = online(); if (total > counters.peakPilots) counters.peakPilots = total;
+      if (rooms.get(room).size > counters.peakRoom.pilots) counters.peakRoom = { room, pilots: rooms.get(room).size };
       send(c, { t: 'welcome', id: c.id, room, peers });
       cast(room, { t: 'joined', id: c.id, name: c.name, color: c.color, hull: c.hull }, c);
       return;
@@ -80,13 +93,14 @@ export function createRelay() {
 
   function connect(ws) {
     const c = { id: nextId++, ws, room: null, name: 'Pilot', color: '#74e2ff', state: null, windowStart: 0, count: 0, alive: true };
+    counters.connections++;
     ws.on('message', data => handle(c, String(data)));
     ws.on('pong', () => { c.alive = true; });
     ws.on('close', () => leave(c));
     ws.on('error', () => ws.terminate());
     return c;
   }
-  return { connect, rooms, summary };
+  return { connect, rooms, summary, stats };
 }
 
 /** Attach the relay to an HTTP server. Other upgrade paths (e.g. Vite HMR) are left alone. */
