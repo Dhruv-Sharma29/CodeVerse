@@ -1,6 +1,6 @@
 # 07 — Testing
 
-**78 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
+**83 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
 (22.6+, native TypeScript stripping) or `pytest`. CI runs all of them, plus type-checking, lint and
 the production build, on every push and pull request.
 
@@ -20,9 +20,10 @@ $ cd ../analyzer && uv run pytest tests -q
 | `invite.test.mjs` | 1 | Invite links: a valid GitHub login opens that universe; anything else falls back to the trending hub |
 | `net.test.mjs` | 2 | The client connection: a sleeping hosted relay reports "waking" without flicker and then goes online; a refused local server reports "offline" |
 | `orbitalPhysics.test.mjs` | 2 | Explorer orbits and collision separation |
-| `github.test.mjs` | 21 | GitHub client, profile routes, profile share metadata |
+| `github.test.mjs` | 22 | GitHub client (including README decoding for docking), profile routes, profile share metadata |
+| `readme.test.mjs` | 3 | Docking's README excerpt: no badges, headings, HTML, code or lists; one solid paragraph; clean cuts |
 | `oracle.test.mjs` | 11 | The Oracle's evidence bounds, citations, budgets and origin checks |
-| `bundle.test.mjs`, `labelLayout.test.mjs`, `moons.test.mjs`, `githubProxy.test.mjs`, `githubMoonFallback.test.mjs`, `githubClientProxy.test.mjs` | 21 | Explorer bundle loading, label layout, moons and the GitHub proxy |
+| `bundle.test.mjs`, `labelLayout.test.mjs`, `moons.test.mjs`, `githubProxy.test.mjs`, `githubMoonFallback.test.mjs`, `githubClientProxy.test.mjs` | 22 | Explorer bundle loading, label layout, moons and the GitHub proxy |
 
 ## Checks that are not unit tests
 

@@ -401,3 +401,14 @@ test('non-navigation requests under /@ fall through, so Vite dev modules still l
     assert.ok(passedOn, `accept=${accept} should fall through to the next handler`);
   }
 });
+
+test('fetchReadme decodes the base64 README and treats a missing README as empty', async () => {
+  const { fetchReadme } = await import('../src/github/api.ts');
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ content: Buffer.from('# Héllo\n\nA kernel.').toString('base64'), encoding: 'base64' }), { status: 200 });
+    assert.equal(await fetchReadme({ full_name: 'octo/readme-ok' }), '# Héllo\n\nA kernel.');
+    globalThis.fetch = async () => new Response('{}', { status: 404 });
+    assert.equal(await fetchReadme({ full_name: 'octo/readme-none' }), '');
+  } finally { globalThis.fetch = original; }
+});

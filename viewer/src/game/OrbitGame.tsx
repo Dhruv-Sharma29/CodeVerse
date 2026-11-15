@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { commitUrl, errorMessage, fetchCommits, repoUrl, type GitCommit } from "../github/api";
+import { commitUrl, errorMessage, fetchCommits, fetchContributors, fetchReadme, repoUrl, type Contributor, type GitCommit } from "../github/api";
+import { readmeExcerpt } from "./readme";
 import { GameScene, ShipPreview, type Control, type Peer } from "./GameScene";
 import { connectNet, type NetMessage, type NetStatus } from "./net";
 import { ALIENS, EMOTES, HULLS, PING, PVP, SPAWN, addPing, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
@@ -80,6 +81,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const [sheet, setSheet] = useState(false);
   const [board, setBoard] = useState(false);
   const myId = useRef(-1);
+  const [dock, setDock] = useState<{ planet: Planet; readme: string | null; contributors: Contributor[] | null; error: string } | null>(null);
 
   const toast = useCallback((text: string, kind: Toast["kind"] = "") => {
     const id = ++toastId.current;
@@ -139,8 +141,14 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       pointer: { x: 0, y: 0, mouse: false },
       onStep: dt => {
         if (c.attract) { c.sim.waveTimer = 5; c.input.fire = c.input.grab = false; } // lobby: no aliens, no shooting
+        if (c.docked) { c.input.fire = c.input.grab = c.input.boost = false; c.input.move = { x: 0, z: 0 }; }
         events.length = 0;
         step(c.sim, c.input, dt, events);
+        if (c.docked) {
+          // Parked on the surface on the side facing the ship, riding the planet's orbit.
+          const p = c.docked, s = c.sim.ship, a = Math.atan2(s.z - p.z, s.x - p.x), r = p.R + 3.2;
+          Object.assign(s, { x: p.x + Math.cos(a) * r, z: p.z + Math.sin(a) * r, vx: 0, vz: 0, inv: Math.max(s.inv, .4), a: a + Math.PI });
+        }
         if (events.length) handleEvents(c.sim, events);
         c.input.nova = false;
       },
@@ -267,6 +275,9 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       if (k === "q" && ctl.current) ctl.current.input.nova = true;
       if (k === "p" && !e.repeat) { ping(); return; }
       if (k === "f" && !e.repeat && canFullscreen) { void toggleFullscreen(); return; }
+      if (k === "enter" && !e.repeat) { if (ctl.current?.docked) undock(); else if (ctl.current?.sim.near) dockAt(ctl.current.sim.near); return; }
+      if (k === "escape" && ctl.current?.docked) { undock(); return; }
+      if (ctl.current?.docked && ["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) undock(); // flying off undocks
       if (k === "h" && !e.repeat) setSheet(v => !v);
       if (k === "tab") { e.preventDefault(); if (!e.repeat) setBoard(v => !v); return; }
       if (/^[1-6]$/.test(k) && !e.repeat) { sendEmote(Number(k) - 1); return; }
@@ -287,6 +298,24 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     sim.emote = e; sim.emoteUntil = performance.now() + 3500;
     net.current?.send({ t: "emote", e: i });
   }
+
+  /* ---- docking: read a repository and jump along its contributors ---- */
+  const dockAbort = useRef<AbortController | null>(null);
+  function dockAt(planet: Planet) {
+    const c = ctl.current; if (!c || c.attract) return;
+    dockAbort.current?.abort(); const abort = dockAbort.current = new AbortController();
+    c.docked = planet; sfx.grab();
+    setDock({ planet, readme: null, contributors: null, error: "" });
+    Promise.allSettled([fetchReadme(planet.repo, abort.signal), fetchContributors(planet.repo, abort.signal)]).then(([readme, people]) => {
+      if (abort.signal.aborted) return;
+      setDock(d => d && d.planet === planet ? {
+        ...d, readme: readme.status === "fulfilled" ? readmeExcerpt(readme.value) : "",
+        contributors: people.status === "fulfilled" ? people.value.filter(p => p.login && !p.login.endsWith("[bot]")).slice(0, 8) : [],
+        error: readme.status === "rejected" ? errorMessage(readme.reason) : people.status === "rejected" ? errorMessage(people.reason) : "",
+      } : d);
+    });
+  }
+  function undock() { dockAbort.current?.abort(); if (ctl.current) ctl.current.docked = null; setDock(null); }
 
   /* ---- pings ---- */
   const lastPing = useRef(-9);
@@ -336,7 +365,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   async function jump(target: string) {
     const t = target.trim(); if (!t) return;
     const room = t.toLowerCase() === "trending" ? "trending" : t;
-    setJumpOpen(false); setWarping(true); sfx.warp();
+    undock(); setJumpOpen(false); setWarping(true); sfx.warp();
     jumpAbort.current?.abort(); const abort = jumpAbort.current = new AbortController();
     const c = ctl.current!;
     // One warp tween at a time: starting a new one stops the old. (A failed load used to start the
@@ -481,12 +510,27 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         <a className="orbit-primary small" href={CREATOR.url} target="_blank" rel="noreferrer">Visit @{CREATOR.login} on GitHub</a>
       </div>
     </section>}
-    {near && !hud?.comet && !jumpOpen && <section className="orbit-card" aria-label="Nearby planet">
+    {dock && !jumpOpen && <aside className="orbit-dock" aria-label={`Docked at ${dock.planet.repo.full_name}`}>
+      <div className="orbit-tut-head"><span className="orbit-eyebrow">🛰 DOCKED · {dock.planet.repo.language ?? "MIXED"}</span><button type="button" className="orbit-link" onClick={undock}>Undock{touch ? "" : " · Esc"}</button></div>
+      <strong>{dock.planet.repo.full_name}</strong>
+      <div className="orbit-facts"><span>★ {compact(dock.planet.repo.stargazers_count)}</span><span>forks {compact(dock.planet.repo.forks_count)}</span>{dock.planet.commits && <span>{dock.planet.commits.length} recent commits</span>}</div>
+      {dock.planet.repo.description && <p className="orbit-dock-desc">{dock.planet.repo.description}</p>}
+      <p className="orbit-dock-readme">{dock.readme === null ? "Reading the README…" : dock.readme || "No README excerpt to show."}</p>
+      <span className="orbit-label-text">Top contributors · jump into their universe</span>
+      {dock.contributors === null ? <p className="orbit-dock-readme">Loading contributors…</p>
+        : dock.contributors.length === 0 ? <p className="orbit-dock-readme">{dock.error || "No contributors listed."}</p>
+        : <div className="orbit-crew">{dock.contributors.map(p => <button type="button" key={p.login} disabled={warping} onClick={() => void jump(p.login)} title={`${p.contributions.toLocaleString()} contributions`}>
+            <img src={`${p.avatar_url}${p.avatar_url.includes("?") ? "&" : "?"}s=64`} alt="" width={28} height={28} loading="lazy" /><span>{p.login}</span><i>→</i>
+          </button>)}</div>}
+      <div className="orbit-card-actions"><a className="orbit-ghost" href={repoUrl(dock.planet.repo)} target="_blank" rel="noreferrer">Open on GitHub</a></div>
+    </aside>}
+    {near && !dock && !hud?.comet && !jumpOpen && <section className="orbit-card" aria-label="Nearby planet">
       <div className="orbit-card-head"><strong>{near.repo.name}</strong><span>{near.repo.language ?? "Mixed"}</span></div>
       {near.repo.description && <p>{clip(near.repo.description, 150)}</p>}
       <div className="orbit-facts"><span>★ {compact(near.repo.stargazers_count)}</span><span>forks {compact(near.repo.forks_count)}</span>
         <span>{near.commits === null ? "scanning commits…" : `${near.sats.filter(s => !s.done).length}/${near.commits.length} commits left`}</span></div>
       <div className="orbit-card-actions">
+        <button className="orbit-primary small" onClick={() => dockAt(near)}>🛰 Dock{touch ? "" : " · Enter"}</button>
         <a className="orbit-ghost" href={repoUrl(near.repo)} target="_blank" rel="noreferrer">Open on GitHub</a>
         {showOwnerJump && <button className="orbit-primary small" disabled={warping} onClick={() => void jump(nearOwner)}>Hyperjump to {nearOwner}</button>}
       </div>

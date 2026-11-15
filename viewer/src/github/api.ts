@@ -95,6 +95,18 @@ export async function fetchCommit(repo: Repository, sha: string, signal?: AbortS
 export async function fetchContributors(repo: Repository, signal?: AbortSignal): Promise<Contributor[]> {
   return (await request<Contributor[]>(`/repos/${repoPath(repo)}/contributors?per_page=12`, repoParams(repo, 'contributors'), signal)).data;
 }
+/** The repository's README as text (GitHub returns it base64-encoded); "" when there is none. */
+export async function fetchReadme(repo: Repository, signal?: AbortSignal): Promise<string> {
+  try {
+    const { data } = await request<{ content?: string; encoding?: string }>(`/repos/${repoPath(repo)}/readme`, repoParams(repo, 'readme'), signal);
+    if (!data?.content || data.encoding !== 'base64') return '';
+    const bytes = Uint8Array.from(atob(data.content.replace(/\s/g, '')), c => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch (e) {
+    if ((e as Error)?.message?.startsWith('GitHub couldn’t find')) return ''; // no README
+    throw e;
+  }
+}
 export async function fetchMoons(repo: Repository, signal?: AbortSignal): Promise<MoonData> {
   if (await githubProxyAvailable()) {
     const response = await fetch(`/api/github?${repoParams(repo, 'moons')}`, { signal });

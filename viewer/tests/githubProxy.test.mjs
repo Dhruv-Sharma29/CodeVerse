@@ -76,3 +76,11 @@ test('moons combine bounded branches and releases and preserve pagination disclo
   assert.ok(requests[0].endsWith('/branches?per_page=6'));
   assert.ok(requests[1].endsWith('/releases?per_page=4'));
 });
+
+test('proxy serves a repository README for docking, and nothing else under /readme', async () => {
+  const requests = [];
+  const proxy = createGitHubProxy({ token:() => 'test-token', fetchImpl:async request => { requests.push(request); return new Response('{"content":"","encoding":"base64"}'); } });
+  await proxy.get(url({kind:'readme',owner:'torvalds',repo:'linux'}), 'visitor');
+  assert.deepEqual(requests, ['https://api.github.com/repos/torvalds/linux/readme']);
+  await assert.rejects(() => proxy.get(url({kind:'readme',owner:'torvalds',repo:'..'}), 'visitor'), {status:400});
+});

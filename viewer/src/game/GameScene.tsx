@@ -4,13 +4,15 @@ import { Html, Stars } from "@react-three/drei";
 import * as THREE from "three";
 import { Sun, World } from "../scene/World";
 import { seedFor } from "../github/planetStyle";
-import { PORTAL_R, SUN_R, novaRadius, type HullId, type Input, type Sim } from "./sim";
+import { PORTAL_R, SUN_R, novaRadius, type HullId, type Input, type Planet, type Sim } from "./sim";
 
 /** Mutable bridge between the React shell and the render loop (never triggers React renders). */
 export interface Control {
   sim: Sim; input: Input; zoom: number; warp: number; color: string; reduceMotion: boolean;
   /** Lobby backdrop: ship hidden, camera circles the sun. */
   attract?: boolean;
+  /** Docked at this planet: the ship is parked on its surface, shielded, weapons off. */
+  docked?: Planet | null;
   pointer: { x: number; y: number; mouse: boolean };
   onStep: (dt: number) => void;
 }

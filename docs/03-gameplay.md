@@ -49,6 +49,17 @@ The mothership can't be grabbed. Planets, supernovas and blasts deal it a capped
 once every 0.6 seconds, so it takes several big hits or sustained fire. Its health bar shows at the
 top of the screen.
 
+## Docking
+
+Fly close to a planet and press **Enter** (or **🛰 Dock** on its card). The ship parks on the planet's
+surface, shielded and with weapons off, and a panel shows the repository: description, stars, forks,
+a short excerpt of its README, and its top contributors (bots left out). Each contributor is a
+hyperjump: pick one to warp into their universe. That is the way to walk GitHub's real social graph:
+repository → person → their repositories → their collaborators.
+
+Enter, **Esc** or any movement key undocks. Docking costs two GitHub requests (README and
+contributors), cached for five minutes; when the hourly limit is used up, the panel says so.
+
 ## Gravity beam
 
 Hold **E** or **right-click** to lock onto the nearest planet or alien within 18 units, or within 55

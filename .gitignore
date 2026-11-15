@@ -40,3 +40,6 @@ npm-debug.log*
 
 # vercel CLI link metadata
 .vercel/
+
+# personal to-do list
+do.txt

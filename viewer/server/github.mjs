@@ -33,6 +33,7 @@ function target(url) {
   }
   if (kind === 'commit' && SHA.test(sha)) return { kind, paths:[`${prefix}/commits/${sha}?per_page=100`] };
   if (kind === 'contributors') return { kind, paths:[`${prefix}/contributors?per_page=12`] };
+  if (kind === 'readme') return { kind, paths:[`${prefix}/readme`] };
   if (kind === 'moons') return { kind, paths:[`${prefix}/branches?per_page=6`, `${prefix}/releases?per_page=4`] };
   return null;
 }
