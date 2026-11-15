@@ -1,4 +1,4 @@
-# Architecture
+# 02 — Architecture
 
 CodeVerse is one Vite application (`viewer/`) with two pages, a small Node server, and a separate
 Python analyzer.
@@ -69,7 +69,7 @@ rules testable in plain Node.
 | `oracle.mjs` | `/api/oracle` | Optional AI commit explanations |
 | `profileHtml.mjs` | `/@handle` | Explorer page with per-profile share metadata |
 | `og.mjs` | `/api/og` | Share images |
-| `multiplayer.mjs` | `/api/play` | WebSocket relay; see [multiplayer.md](game/multiplayer.md) |
+| `multiplayer.mjs` | `/api/play` | WebSocket relay; see [multiplayer.md](05-multiplayer.md) |
 | `start.mjs` | — | Production server: static `dist/` plus everything above |
 
 The same middlewares are mounted in Vite's dev and preview servers (`vite.config.ts`). On Vercel,
@@ -83,3 +83,22 @@ The same middlewares are mounted in Vite's dev and preview servers (`vite.config
 | Gate position from clock + room seed | Everyone agrees with no server state | Depends on roughly correct clocks |
 | One relay process, rooms in memory | Simple, fast, no infrastructure | No horizontal scaling; restart drops rooms |
 | Reusing the explorer's planet shaders | Strongest visuals already existed | Game and explorer share `src/scene/` |
+
+## Repository layout
+
+```
+├── viewer/                  Web app (Vite + React + React Three Fiber)
+│   ├── index.html           The game, served at /
+│   ├── explorer/index.html  The explorer, served at /explorer/ and /@handle
+│   ├── src/game/            Game: simulation, 3D scene, UI, tutorial, networking
+│   ├── src/github/          GitHub client, planet styling, explorer UI
+│   ├── src/scene/           Shared shader planets and sun
+│   ├── server/              Node server: GitHub proxy, trending, Oracle, multiplayer relay
+│   ├── api/                 Vercel serverless functions
+│   └── tests/               node:test suites
+├── analyzer/                Python package: Git history → JSON bundle
+├── docs/                    Documentation and README images
+├── game/                    Earlier single-file prototype (snapshot data, no multiplayer)
+├── render.yaml              The relay as a Render service
+└── .github/workflows/       CI and the relay keep-warm schedule
+```

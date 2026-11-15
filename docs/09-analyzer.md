@@ -1,7 +1,7 @@
-# Analyzer
+# 09 — Analyzer
 
 The analyzer is a Python package (`analyzer/`, import name `codeverse`) that turns a local Git
-repository into a JSON bundle for the [local history viewer](explorer.md#local-history-viewer).
+repository into a JSON bundle for the [local history viewer](08-explorer.md#local-history-viewer).
 It is independent of the game.
 
 ## Setup

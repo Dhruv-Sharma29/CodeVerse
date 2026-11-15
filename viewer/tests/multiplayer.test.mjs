@@ -49,3 +49,23 @@ test('a relay with an origin allow-list refuses other sites', async () => {
   assert.equal(await opened('https://evil.example'), false);
   await new Promise(r => server.close(r));
 });
+
+test('dogfight state, kill announcements and emotes are relayed and validated', async () => {
+  const server = createServer(); attachMultiplayer(server);
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const url = `ws://127.0.0.1:${server.address().port}${PLAY_PATH}`;
+  const a = client(url), b = client(url);
+  await Promise.all([a.open, b.open]);
+  a.send({ t: 'join', room: 'trending', name: 'Ada' }); const wa = await a.next('welcome');
+  b.send({ t: 'join', room: 'trending', name: 'Lin' }); const wb = await b.next('welcome'); await a.next('joined');
+  b.send({ t: 'state', x: 1, z: 2, a: 0, vx: 0, vz: 0, hp: 160, s: 1234, k: 3 });
+  const st = await a.next('state');
+  assert.deepEqual([st.hp, st.s, st.k], [160, 1234, 3]);
+  b.send({ t: 'shot', x: 0, z: 0, a: 0, d: 2 }); assert.equal((await a.next('shot')).d, 2);
+  b.send({ t: 'killed', by: 999999 }); // not in the room: dropped
+  b.send({ t: 'killed', by: wa.id });
+  const k = await a.next('killed'); assert.deepEqual([k.id, k.by], [wb.id, wa.id]);
+  b.send({ t: 'emote', e: 42 }); b.send({ t: 'emote', e: 1 });
+  assert.equal((await a.next('emote')).e, 1);
+  a.ws.close(); b.ws.close(); await new Promise(r => server.close(r));
+});

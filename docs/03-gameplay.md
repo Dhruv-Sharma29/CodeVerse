@@ -1,4 +1,4 @@
-# Gameplay
+# 03 — Gameplay
 
 ## The loop
 
@@ -73,6 +73,19 @@ edge points to it with the distance, and the radar pins it to its rim.
 
 Fly into the gate to open the hyperjump dialog: type any GitHub username or organization, pick a
 universe where other pilots are flying, or choose a recent or suggested one.
+
+## Multiplayer
+
+Everyone in the same universe flies together. Ships, shots, thrown planets and supernovas are
+shared; aliens are separate for each pilot.
+
+- **Dogfights, always on.** There is no peace mode: every pilot in a universe can shoot every other
+  pilot. 8 damage per shot (16 for the Titan), 45 from a supernova. Shooting someone down gives +300
+  and a dogfight win, and the whole universe sees it in the kill feed. Respawning gives a short
+  shield, so nobody can be farmed at the spawn point.
+- **Pilots board.** Press **Tab** (or **Pilots**) to see everyone here with ship, score and dogfight wins.
+- **Emotes.** Press **1–6** (or use the buttons on the board): 👋 Hi, GG, 🔥 Nice!, 🆘 Help!,
+  ⚔ Fight me, 🤝 Truce. They appear above your ship for every pilot. Emotes are preset only.
 
 ## The creator's comet
 

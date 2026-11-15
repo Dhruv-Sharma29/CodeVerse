@@ -1,104 +1,164 @@
-# CodeVerse Orbit
+# codeverse
 
-> Fly through GitHub, together.
+### Fly through GitHub, together.
 
-CodeVerse Orbit is a multiplayer space game set inside real GitHub data. Repositories are planets,
-recent commits are collectibles in orbit around them, and every GitHub user or organization is a
-universe you can hyperjump into.
+![The Orbit lobby: the trending universe circling behind the title, the ship hangar, and the dogfights switch](docs/images/lobby.jpg)
 
-Everyone starts in the **trending hub**: GitHub's monthly trending repositories circling a shared
-sun. Find the hyperjump gate on the outer rim, type any username, and warp into their universe.
-Other pilots in the same universe fly beside you in real time.
+> Repositories are planets, recent commits are satellites you collect, and every GitHub account is
+> a universe. Launch into the trending hub, find the hyperjump gate on the outer rim, type any
+> username, and warp into their universe, with whoever else is flying there.
 
-The original, calmer **explorer** is still part of the app at `/explorer/`.
+*Why a game:* the earlier CodeVerse explorer turned GitHub into a planetary system you could look
+at. Looking is passive and solo. The same real data gets more interesting when it is a place you
+fly through, where you can grab a repository and throw it, and where other people are flying too.
 
-**Live:** <https://codeverse-orbit.vercel.app> (multiplayer goes through a relay hosted on Render; see [Deployment](docs/deployment.md))
+**Status: live and multiplayer, on free hosting.** **[Play it at codeverse-orbit.vercel.app](https://codeverse-orbit.vercel.app).**
+Three ships, four alien types with a boss every fifth wave, a gravity beam, commit-charged
+supernovas, dogfights between every pilot with a kill feed, a pilots board, emotes, a hyperjump gate that moves,
+and a comet that links to the creator. The website is on Vercel; the multiplayer relay is on Render,
+kept warm during waking hours in India. The original explorer is still at
+[`/explorer/`](https://codeverse-orbit.vercel.app/explorer/).
 
-## Features
+**72 tests in `viewer/`, no network calls.** New here? **[`docs/01-getting-started.md`](docs/01-getting-started.md)**.
+Full design record in [`docs/`](docs/README.md); everything the build got wrong on the way is in
+[`docs/10-implementation-notes.md`](docs/10-implementation-notes.md); everything *not* done, and
+whether that was a constraint or a choice, is in [`REMAINING.md`](REMAINING.md).
 
-- **Real data, real places.** Universes are built from GitHub's public API: trending repositories, or a user's own repositories ranked by importance. Planet colour and surface come from the repository's language.
-- **Hyperjump gate.** Each universe has one gate in an outer band past the last planet. It moves to a new random spot every three minutes, the same spot for every pilot, and an on-screen arrow always points to it.
-- **Three ships.** *Dart* (balanced), *Wasp* (fast, rapid fire, light hull) and *Titan* (armoured, three-way heavy cannon), in six colours, previewed in a 3D hangar.
-- **Four alien types.** Saucers strafe and shoot, hunters ram, swarmer drones weave in packs, and every fifth wave a mothership boss rings the area with fire and launches swarmers.
-- **Gravity beam.** Grab a planet or an alien, drag it, and fling it. Flung planets smash aliens and knock other planets out of orbit, and every pilot in the universe sees it.
-- **The creator's comet.** One comet crosses every universe on a new random path every two minutes. Fly near it for a link to the creator's GitHub profile, and through it for a bonus.
-- **Commits as power.** Fly through a planet's gold satellites to collect its real recent commits. They charge a supernova that clears the area.
-- **Onboarding.** A lobby over the live universe, then a six-step first flight that ticks off as you actually do each thing.
-- **Multiplayer.** A small WebSocket relay syncs ships, shots, flung planets and supernovas, up to 24 pilots per universe.
-- **Touch support.** On-screen stick plus Fire, Grab and Nova buttons.
-
-## Quick start
-
-Requires Node.js 22.6 or newer.
-
-```bash
-cd viewer
-npm install --legacy-peer-deps
-npm run dev
+```console
+$ cd viewer && npm install --legacy-peer-deps
+$ npm run dev                                   # game at :5173, explorer at :5173/explorer/, relay included
+$ npm test                                      # 72 tests, no network
+$ npm run build && npm start                    # production server with the relay on :4173
+$ npm run relay                                 # the relay on its own (what Render runs)
+$ npm run check:relay -- https://codeverse-relay.onrender.com   # test a deployed relay end to end
 ```
 
-Open <http://localhost:5173/> for the game or <http://localhost:5173/explorer/> for the explorer.
-To try multiplayer, open the game in a second tab and pick a different callsign.
-
-| Key | Action |
+| | |
 |---|---|
-| W / S | Thrust where the nose points / reverse |
-| A / D | Strafe (with a mouse) or turn (keyboard only) |
-| Mouse, click or Space | Aim and fire |
-| Shift | Boost |
-| E or hold right-click | Gravity beam: hold to grab, release to fling |
-| Q | Supernova, when the bar is full |
-| H | Controls sheet |
+| ![Collecting real commits from a planet's satellites while a mothership arrives](docs/images/commits.jpg) | ![A mothership boss with its health bar, the nova charged, and the arrow to the hyperjump gate](docs/images/mothership.jpg) |
+| **Commits are real.** Each gold satellite is one of the planet's recent commits; flying through it collects it and charges the supernova. | **Every fifth wave, a mothership.** It rings the area with fire and launches swarmers; planets and novas only chip it. |
 
-## Documentation
+![The pilots board with two pilots, and a rival Titan nearby with a "Fight me" emote](docs/images/multiplayer.jpg)
 
-| Guide | What it covers |
-|---|---|
-| [Getting started](docs/getting-started.md) | Install, run, build, environment variables, troubleshooting |
-| [Gameplay](docs/game/gameplay.md) | Ships, aliens, waves, scoring, the gate, the first flight |
-| [Architecture](docs/architecture.md) | How the pages, simulation, scene, relay and data fit together |
-| [Simulation](docs/game/simulation.md) | The game loop, entities, tuning tables and tests |
-| [Multiplayer protocol](docs/game/multiplayer.md) | Rooms, messages, validation, limits, what is and isn't shared |
-| [Deployment](docs/deployment.md) | `npm start`, Vercel, and hosting the relay |
-| [Contributing](docs/contributing.md) | Workflow, checks, code conventions |
-| [Explorer](docs/explorer.md) | The non-game explorer at `/explorer/`, the local history viewer, the Oracle |
-| [Analyzer](docs/analyzer.md) | The Python exporter for full local Git history |
+**Other pilots are really there.** The pilots board (Tab) lists everyone in the universe with ship, score
+and dogfight wins; emotes appear above ships for everyone.
 
-The full index is in [docs/README.md](docs/README.md).
+## The universe is real data
 
-## Repository layout
+Every universe is built from GitHub's public API on the fly. The trending hub is GitHub's monthly
+trending page; any other universe is one account's public, non-fork repositories, ranked by
+importance, up to 18 planets. Palette and surface come from the language, size from repository size
+or stars, and a planet's satellites are its 14 most recent commits, loaded the first time you fly
+close. The planets are the explorer's shader worlds, lit from the central sun.
 
-```
-├── viewer/                  Web app (Vite + React + React Three Fiber)
-│   ├── index.html           The game, served at /
-│   ├── explorer/index.html  The explorer, served at /explorer/ and /@handle
-│   ├── src/game/            Game: simulation, 3D scene, UI, tutorial, networking
-│   ├── src/github/          GitHub client, planet styling, explorer UI
-│   ├── src/scene/           Shared shader planets and sun
-│   ├── server/              Node server: GitHub proxy, trending, Oracle, multiplayer relay
-│   ├── api/                 Vercel serverless functions
-│   └── tests/               node:test suites
-├── analyzer/                Python package: Git history → JSON bundle
-├── docs/                    Documentation
-└── game/                    Earlier single-file prototype (snapshot data, no multiplayer)
-```
+## The simulation owns the rules
 
-## Verification
+`viewer/src/game/sim.ts` is a plain module with no React and no three.js: ships, aliens, bullets,
+planets, the gate, the comet, supernovas and dogfights. The 3D scene reads it every frame and draws
+it with instanced meshes; the UI samples it ten times a second. Because it is plain code, the rules
+run identically in the browser and in Node, and the 12 simulation tests exercise the real thing
+rather than a mock of it.
 
-```bash
-cd viewer
-npx tsc -b
-npm run lint
-npm test
-npm run build
-```
+## Multiplayer without a game server
 
-CI runs the same steps on every push and pull request, plus the analyzer's `pytest` suite.
+The relay (`viewer/server/multiplayer.mjs`) validates and forwards messages between pilots in the
+same universe and holds no game state. Ships, shots, thrown planets, supernovas, kills and emotes are
+shared; aliens are simulated by each pilot. Rooms are per universe, up to 24 pilots, with size and
+rate limits, an origin allow-list, and heartbeats.
 
-## Known limits
+**Some things need no messages at all.** The hyperjump gate moves to a random spot on the outer rim
+every three minutes, and the comet crosses on a new random path every two. Both positions come from
+the universe name and the current time window, so every pilot computes the same answer without
+asking anyone.
 
-- The relay keeps rooms in one process's memory. Multiplayer needs the included Node server (`npm run dev`, `npm run preview`, `npm start`) or the standalone relay (`npm run relay`, deployed on Render for the live site). Without either, the game runs solo and says so in the HUD.
-- On Render's free plan the relay sleeps when idle; the first connection after that can take up to a minute.
-- Aliens are simulated on each player's machine; two pilots in one universe fight different alien waves.
-- GitHub's unauthenticated API rate limit applies when loading universes and commits.
-- The gate's position is computed from each player's clock, so a clock that is minutes off shows an outdated spot.
+## There is no peace mode
+
+Every pilot in a universe can shoot every other pilot. Each pilot owns their own ship: whoever gets
+hit detects it and applies the damage, and when shot down announces who won. The winner's client
+credits itself +300 and a dogfight win, and the whole universe sees it in the kill feed. Respawning
+gives a short shield, so nobody can be farmed at the spawn point.
+
+## What I would not trust
+
+- **Scores are self-reported.** A modified client can claim any score or any kill. Nothing is stored
+  or ranked, which is the only reason that is acceptable.
+- **Two pilots fight different aliens.** "We beat wave 10 together" is true for the dogfights and the
+  thrown planets, not for the waves.
+- **The gate and the comet trust your clock.** A clock that is minutes off shows them in the old place.
+- **The free relay can still sleep.** GitHub can delay scheduled runs, and outside 07:30–00:29 IST
+  the first pilot waits up to a minute while it wakes. The game says so instead of looking broken.
+- **Not load-tested, and not measured on low-end phones.**
+
+## Design decisions
+
+Four choices that shaped the rest, with what each one cost.
+
+### 1. The simulation lives outside React
+
+**Why.** Sixty updates a second through React state would re-render the UI constantly, and rules
+buried in components cannot be tested without a browser. A plain mutable simulation, stepped from
+one frame callback and read by the scene, keeps the frame loop out of React and puts every rule
+under a Node test.
+
+**What that costs.** Two worlds have to be kept in step by hand: React state for the HUD and a
+mutable object for everything else. It also made one class of bug easy: render code that does work
+every time it runs. The asteroid belt re-scattered itself ten times a second for exactly that reason
+([10](docs/10-implementation-notes.md)).
+
+### 2. Each pilot owns their own ship
+
+**Why.** A server that decides hits needs the whole game on the server. Letting the pilot who is
+hit detect the hit keeps the relay a dumb forwarder and makes hits match what the victim saw on
+their own screen.
+
+**What that costs.** Trust. A modified client can ignore damage. That is acceptable only because
+nothing is stored or ranked, and it is the reason leaderboards are on the "choice, not done" list in
+[`REMAINING.md`](REMAINING.md).
+
+### 3. World events come from a seed, not a message
+
+**Why.** The gate and the comet have to be in the same place for everyone in a universe. Sending
+their positions means state on the relay and a message storm on every change. Hashing the universe
+name with the current time window gives every client the same answer for free.
+
+**What that costs.** Clock dependence, and a world that can only change on a schedule. Anything that
+must react to players, like a boss everyone fights together, cannot work this way.
+
+### 4. Free hosting, and designing around its limits
+
+**Why.** The project should be playable by anyone without anyone paying for it. Vercel serves the
+site; Render's free plan runs the relay.
+
+**What that costs.** Render's free relay sleeps after 15 idle minutes and the workspace has 750 free
+hours a month. A scheduled ping keeps it awake for about 530 of them, and the client shows a "waking"
+state the rest of the time. Neither would exist on a paid instance.
+
+## What I would do differently
+
+**Check the hosting settings when folders move.** The app moved from `spike/viewer/` to `viewer/`
+and every production deploy failed for five weeks, including the one that shipped the game, because a
+setting outside Git still pointed at the old folder. The code built fine the whole time.
+
+**Look at the screen sooner.** The belt flicker and the "x" that should have been ⚔️ both survived
+passing tests, type-checks and builds. Both were obvious the moment someone looked at the game.
+
+**Write the two-player test first.** Most multiplayer bugs only appear with two clients. Testing with
+two tabs and a scripted test client found more than the unit tests did.
+
+## Docs
+
+Start at [`docs/README.md`](docs/README.md) for the reading order. Highlights:
+
+- [Charter](docs/00-charter.md) — scope, non-goals, success criteria
+- [Gameplay](docs/03-gameplay.md) — ships, aliens, dogfights, the gate and the comet, with numbers
+- [Multiplayer protocol](docs/05-multiplayer.md) — every message, validation, trust model
+- [Deployment](docs/06-deployment.md) — Vercel, the Render relay, keeping it warm
+- [Testing](docs/07-testing.md) — what is automated, what was checked by hand, what is not tested
+- [Implementation notes](docs/10-implementation-notes.md) — what went wrong on the way
+
+## Scope (v1)
+
+Public GitHub data, desktop and touch browsers with WebGL, up to 18 planets and 24 pilots per
+universe, one relay process. Accounts, persistent scores, shared alien waves and free-text chat are
+explicit non-goals — see the [charter](docs/00-charter.md) for why each one follows from keeping the
+relay stateless and the hosting free.

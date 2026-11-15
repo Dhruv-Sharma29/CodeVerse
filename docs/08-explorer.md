@@ -1,4 +1,4 @@
-# Explorer and local history viewer
+# 08 — Explorer and local history viewer
 
 The explorer is CodeVerse's original, calmer view: browse GitHub as a planetary system without the
 game. It lives at **`/explorer/`**. Profile links (`/@handle`) open it directly with that user's

@@ -1,45 +1,55 @@
-# CodeVerse documentation
+# codeverse — Documentation
 
-## Game
+A multiplayer space game built from real GitHub data. Repositories are planets, recent commits
+are collectibles, and every GitHub account is a universe you can hyperjump into with other pilots.
+The original explorer is still part of the app at `/explorer/`.
 
-| Document | What it covers |
-|---|---|
-| [getting-started.md](getting-started.md) | Install, run, build, environment variables, troubleshooting |
-| [game/gameplay.md](game/gameplay.md) | Ships, aliens, waves, scoring, the hyperjump gate, the first-flight tutorial |
-| [architecture.md](architecture.md) | Pages, simulation, 3D scene, relay and data sources, and how they connect |
-| [game/simulation.md](game/simulation.md) | The step loop, entities, tuning tables, collision rules, tests |
-| [game/multiplayer.md](game/multiplayer.md) | Relay protocol: rooms, messages, validation, limits, what is shared |
-| [deployment.md](deployment.md) | Production server, Vercel, hosting the relay |
-| [contributing.md](contributing.md) | Workflow, required checks, conventions |
+These docs are the design record and the reference. Read them in order the first time; use them
+as reference afterwards.
 
-## Explorer, analyzer and Oracle
+## Reading order
 
-| Document | What it covers |
-|---|---|
-| [explorer.md](explorer.md) | The non-game explorer at `/explorer/`, the local history viewer |
-| [analyzer.md](analyzer.md) | The Python `codeverse analyze` exporter |
-| [bundle-schema.md](bundle-schema.md) | JSON contract between the analyzer and the local history viewer |
-| [oracle.md](oracle.md) | Commit messages, diffs and optional cited AI explanations |
-| [github-proxy.md](github-proxy.md) | The optional server-side GitHub proxy |
+| # | Doc | What it settles |
+|---|---|---|
+| 00 | [Charter](00-charter.md) | Problem, scope, non-goals, what "done" means |
+| 01 | [Getting started](01-getting-started.md) | Install, run, build, environment variables, troubleshooting |
+| 02 | [Architecture](02-architecture.md) | Pages, modules, the frame loop, the server, design trade-offs |
+| 03 | [Gameplay](03-gameplay.md) | Ships, aliens, waves, multiplayer, the gate, the comet, the first flight |
+| 04 | [Simulation](04-simulation.md) | The step order, units, damage model, and what the tests pin down |
+| 05 | [Multiplayer protocol](05-multiplayer.md) | Rooms, every message, validation, limits, dogfights, trust model |
+| 06 | [Deployment](06-deployment.md) | Node server, Vercel, the Render relay, keeping it warm |
+| 07 | [Testing](07-testing.md) | Every suite, the manual checks, and what is not tested |
+| 08 | [Explorer](08-explorer.md) | The non-game explorer, the local history viewer, the Oracle |
+| 09 | [Analyzer](09-analyzer.md) | The Python exporter for full local Git history |
+| 10 | [Implementation notes](10-implementation-notes.md) | Where the build proved the plan or earlier code wrong, and why |
+| 11 | [Contributing](11-contributing.md) | Workflow, required checks, conventions |
 
-## Planning
+Reference: [bundle schema](bundle-schema.md) · [Oracle](oracle.md) · [GitHub proxy](github-proxy.md) ·
+[original build plan](PLAN.md) · [social layer proposal](social-layer.md). What is not done is in
+[`REMAINING.md`](../REMAINING.md).
 
-| Document | What it covers |
-|---|---|
-| [PLAN.md](PLAN.md) | Original build plan: product definition, architecture, roadmap, risks |
-| [social-layer.md](social-layer.md) | **Proposal.** Sharing, profiles and discovery, with cost and consent constraints |
+## The one-paragraph version
 
-## Status at a glance
+Most "visualise your GitHub" projects stop at something you look at. This one is built around the
+opposite assumption: the data becomes interesting when it is a **place other people are in**. That
+means three things the visualisations skip. The game rules live in a plain simulation that runs the
+same in the browser and in tests. Multiplayer is a stateless relay rather than a game server, so the
+things everyone must agree on (the gate, the comet) are computed from the universe name and the clock
+instead of being sent. And there is **no peace mode**: every pilot can fight every other pilot, with
+each pilot's own client deciding when it was hit.
 
-**Built:** the multiplayer game at `/` (three ships, four alien types, gravity beam, supernova,
-moving hyperjump gate, lobby and tutorial, WebSocket relay); the GitHub explorer at `/explorer/`;
-the local history viewer; the `codeverse analyze` exporter; the commit Oracle.
+## Status
 
-**Not built:** server-authoritative aliens, persistent scores or accounts, a hosted relay on the
-production deployment, and the proposals in [social-layer.md](social-layer.md).
+**Live and multiplayer on free hosting.** The game is served by Vercel and the relay by Render,
+kept warm during waking hours in India. 72 tests in `viewer/`, 5 in `analyzer/`. See
+[07](07-testing.md) for what is checked by hand and [`REMAINING.md`](../REMAINING.md) for what is not
+done.
 
-## Conventions
+## Conventions used in these docs
 
-- Decorative and analytical encodings stay separate. In the explorer, rings are decoration; size, colour and heat carry data.
-- Honest names: "test presence", not "coverage"; "likely bug-fix commits", not "bugs".
-- No provider secrets in browser code. Tokens and keys live server-side.
+- Numbers (speeds, limits, intervals) are taken from the code. When you change a constant, change
+  the doc in the same commit.
+- "Choice" and "constraint" are used deliberately: a choice could be reversed by deciding
+  differently; a constraint needs money, infrastructure or a different design.
+- Code snippets are illustrative. The authoritative rules live in `viewer/src/game/sim.ts` and the
+  relay in `viewer/server/multiplayer.mjs`.

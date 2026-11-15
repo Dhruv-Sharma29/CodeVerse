@@ -1,4 +1,4 @@
-# Simulation
+# 04 — Simulation
 
 `viewer/src/game/sim.ts` holds every game rule. It has no React or three.js imports, so the
 browser and the Node tests run the same code.

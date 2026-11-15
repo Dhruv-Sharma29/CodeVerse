@@ -60,16 +60,20 @@ export const HULLS: Record<HullId, { name: string; blurb: string; hp: number; ac
   titan: { name: "Titan", blurb: "Armoured. Three-way heavy cannon.", hp: 160, acc: 58, max: 38, boost: 60, fire: .3, guns: 3, dmg: 2, spread: .17, trail: "#ffb547" },
 };
 export const isHull = (h: unknown): h is HullId => typeof h === "string" && h in HULLS;
-export interface Bullet { x: number; z: number; vx: number; vz: number; life: number; from: "me" | "ally" | "alien"; dmg?: number; big?: boolean }
+export interface Bullet { x: number; z: number; vx: number; vz: number; life: number; from: "me" | "ally" | "alien"; dmg?: number; big?: boolean; owner?: number }
 export interface Particle { x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; max: number; r: number; g: number; b: number }
 export interface Flash { x: number; z: number; t: number; max: number; size: number; color: string }
-export interface Nova { x: number; z: number; t: number; mine: boolean; hit: Set<Alien | Planet> }
-export interface Remote { id: number; name: string; color: string; x: number; z: number; a: number; vx: number; vz: number; hp: number; tx: number; tz: number; seen: number }
+export interface Nova { x: number; z: number; t: number; mine: boolean; hit: Set<object>; owner?: number }
+export interface Remote { id: number; name: string; color: string; x: number; z: number; a: number; vx: number; vz: number; hp: number; tx: number; tz: number; seen: number; score?: number; kills?: number; emote?: string; emoteUntil?: number; hull?: HullId }
+/** Dogfight damage: per bullet (x the shot's dmg), and for a supernova that reaches you. */
+export const PVP = { bullet: 8, nova: 45, killScore: 300 };
+/** Quick emotes (keys 1-6). Preset only, so there is no free text to moderate. */
+export const EMOTES = ["👋 Hi", "GG", "🔥 Nice!", "🆘 Help!", "⚔️ Fight me", "🤝 Truce"];
 export interface Input { move: { x: number; z: number }; aim: { x: number; z: number } | null; fire: boolean; grab: boolean; boost: boolean; nova: boolean; autoAim: boolean; relative?: boolean }
 export type SimEvent =
   | { type: "commit"; planet: Planet; commit: GitCommit }
   | { type: "kill"; kind: Alien["kind"]; points: number }
-  | { type: "hurt" } | { type: "dead" } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean }
+  | { type: "hurt" } | { type: "dead"; by?: number } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean }
   | { type: "load"; planet: Planet } | { type: "shot"; x: number; z: number; a: number }
   | { type: "nova"; x: number; z: number } | { type: "grab" } | { type: "fling" } | { type: "boom"; x: number; z: number };
 
@@ -94,6 +98,8 @@ export function createSim(universe: Universe) {
     ship: { hull: "dart" as HullId, x: SPAWN.x, z: SPAWN.z, vx: 0, vz: 10, a: Math.PI / 2, hp: 100, inv: 2, dead: 0, fireCool: 0, gun: 1, thrust: 0, lastHit: -9 },
     aliens: [] as Alien[], bullets: [] as Bullet[], particles: [] as Particle[], flashes: [] as Flash[], novas: [] as Nova[],
     remotes: new Map<number, Remote>(),
+    /** Dogfights are always on: every pilot can damage every other pilot. */
+    pvpKills: 0, emote: "", emoteUntil: 0,
     grab: null as null | { planet?: Planet; alien?: Alien },
     score: 0, charge: 0, wave: 0, waveTimer: 4, kills: 0, deaths: 0, commits: 0, shake: 0, portalCool: 2.5, nextAlien: 1,
     near: null as Planet | null,
@@ -116,13 +122,16 @@ export function explode(sim: Sim, x: number, z: number, color: string, n = 36, s
   sim.flashes.push({ x, z, t: 0, max: .5, size, color });
 }
 
-function hurt(sim: Sim, amount: number, ev: SimEvent[]) {
+/** True when the given id is another pilot in this universe (there is no peace mode). */
+export const pvpWith = (sim: Sim, id: number | undefined) => id != null && sim.remotes.has(id);
+
+function hurt(sim: Sim, amount: number, ev: SimEvent[], by?: number) {
   const s = sim.ship;
   if (s.inv > 0 || s.dead > 0) return;
   s.hp -= amount; s.inv = .12; s.lastHit = sim.t; sim.shake = Math.min(1, sim.shake + .45); ev.push({ type: "hurt" });
   if (s.hp <= 0) {
     s.hp = 0; s.dead = 2.6; sim.deaths++; sim.grab = null; sim.shake = 1;
-    explode(sim, s.x, s.z, "#74e2ff", 90, 16); ev.push({ type: "dead" });
+    explode(sim, s.x, s.z, "#74e2ff", 90, 16); ev.push(by == null ? { type: "dead" } : { type: "dead", by });
   }
 }
 
@@ -436,7 +445,21 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     if (b.life <= 0) continue;
     if (b.from === "alien") {
       if (alive && dist(b, s) < 1.8) { b.life = 0; hurt(sim, 6, ev); }
-    } else for (const a of sim.aliens) {
+      continue;
+    }
+    // Dogfights: the pilot who gets hit detects it and applies the damage (each client owns its ship).
+    if (b.from === "ally" && alive && pvpWith(sim, b.owner) && dist(b, s) < 1.8) {
+      b.life = 0; explode(sim, b.x, b.z, "#ff6f7f", 6, 3); hurt(sim, PVP.bullet * (b.dmg ?? 1), ev, b.owner); continue;
+    }
+    if (b.from === "me") {
+      // My shots stop on other pilots' ships (the damage happens on their side).
+      let hitShip = false;
+      for (const r of sim.remotes.values()) if (r.hp > 0 && pvpWith(sim, r.id) && dist(b, r) < 1.8) {
+        b.life = 0; explode(sim, b.x, b.z, "#ffffff", 6, 3); ev.push({ type: "pvpHit", id: r.id }); hitShip = true; break;
+      }
+      if (hitShip) continue;
+    }
+    for (const a of sim.aliens) {
       if (a.hp > 0 && dist(b, a) < ALIENS[a.kind].r) {
         b.life = 0;
         if (a.kind !== "mothership") { a.vx += b.vx * .04; a.vz += b.vz * .04; }
@@ -454,6 +477,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     n.t += dt;
     const radius = novaRadius(n.t);
     for (const a of sim.aliens) if (!n.hit.has(a) && a.hp > 0 && dist(n, a) < radius) { n.hit.add(a); damageAlien(sim, a, 99, ev, n.mine); }
+    if (!n.mine && alive && pvpWith(sim, n.owner) && !n.hit.has(s) && dist(n, s) < radius) { n.hit.add(s); hurt(sim, PVP.nova, ev, n.owner); }
     for (const p of sim.planets) if (!n.hit.has(p) && dist(n, p) < radius) {
       n.hit.add(p);
       const d = dist(n, p) || 1, k = 14 * (1 - d / 100);
