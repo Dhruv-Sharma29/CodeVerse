@@ -31,7 +31,7 @@ const noise = `
 const surface = `${noise}
   varying vec3 vPoint; varying vec3 vNormal; varying vec3 vWorld;
   uniform vec3 uDark; uniform vec3 uLand; uniform vec3 uGlow;
-  uniform float uSeed; uniform float uKind;
+  uniform float uSeed; uniform float uKind; uniform float uSunAtOrigin;
   void main() {
     vec3 p=normalize(vPoint); vec3 q=p*4.0+uSeed*73.0;
     float terrain=fbm(q); float detail=fbm(q*7.0);
@@ -60,7 +60,7 @@ const surface = `${noise}
       color*=.6+detail*.65+craters*.17;
     }
     vec3 normal=normalize(vNormal);
-    vec3 light=normalize(vec3(-9.0,12.0,16.0)-vWorld*.1);
+    vec3 light=normalize(mix(vec3(-9.0,12.0,16.0)-vWorld*.1, -vWorld, uSunAtOrigin));
     float daylight=dot(normal,light);
     float diffuse=smoothstep(-.18,.9,daylight);
     float rim=pow(1.0-max(dot(normal,normalize(cameraPosition-vWorld)),0.0),3.0);
@@ -90,17 +90,19 @@ const ringFragment = `
   }
 `;
 
-export function World({ repo, radius = 1, active = false, onClick, animate = true }: {
+export function World({ repo, radius = 1, active = false, onClick, animate = true, sunAtOrigin = false }: {
   repo: Pick<Repository, "name" | "id" | "language" | "size" | "pushed_at" | "archived" | "stargazers_count" | "forks_count">;
   radius?: number; active?: boolean; onClick?: () => void; animate?: boolean;
+  /** Light from a sun at the world origin (Orbit game) instead of the fixed key light. */
+  sunAtOrigin?: boolean;
 }) {
   const mesh = useRef<THREE.Mesh>(null);
   const style = useMemo(() => planetStyle(repo), [repo]);
   const uniforms = useMemo(() => ({
     uDark: { value: new THREE.Color(style.dark) }, uLand: { value: new THREE.Color(style.land) },
     uGlow: { value: new THREE.Color(style.glow) }, uSeed: { value: style.seed }, uKind: { value: style.kind },
-    uAtmosphere: { value: style.activity.intensity },
-  }), [style]);
+    uAtmosphere: { value: style.activity.intensity }, uSunAtOrigin: { value: sunAtOrigin ? 1 : 0 },
+  }), [style, sunAtOrigin]);
   useFrame((_, delta) => { if (mesh.current && animate) mesh.current.rotation.y += delta * .025; });
   return <group scale={radius * (active && style.archived ? .58 : 1)} rotation={[.12, style.seed * 6, .15]}>
     <mesh ref={mesh} onClick={onClick ? e => { e.stopPropagation(); onClick(); } : undefined}>

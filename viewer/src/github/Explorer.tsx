@@ -96,7 +96,7 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
         if (!Array.isArray(data.repositories) || !data.repositories.length) throw new Error("The trending feed returned no repositories. Try a GitHub handle instead.");
         if (task.signal.aborted) return;
         setRepos(data.repositories); setUpdated(data.fetchedAt); setProfile(null); setMode("trending"); setHasMore(false);
-        history.replaceState(null, "", "/");
+        history.replaceState(null, "", "/explorer/");
       }
       setQuery(""); setSector(0); setPage(1);
     } catch (e) { if (!task.signal.aborted) setError(errorMessage(e)); }

@@ -5,10 +5,12 @@ import { ogMiddleware } from './server/og.mjs'
 import { oracleMiddleware } from './server/oracle.mjs'
 import { trendingMiddleware } from './server/trending.mjs'
 import { githubMiddleware } from './server/github.mjs'
+import { attachMultiplayer } from './server/multiplayer.mjs'
 
 export const SITE_ORIGIN = 'https://codeverse-orbit.vercel.app'
 
 export default defineConfig({
+  build: { rolldownOptions: { input: { main: 'index.html', explorer: 'explorer/index.html' } } },
   plugins: [react(), {
     name: 'codeverse-server-and-metadata',
     transformIndexHtml(html) { return html.replaceAll('__SITE_ORIGIN__', SITE_ORIGIN) },
@@ -20,6 +22,7 @@ export default defineConfig({
       server.middlewares.use(oracleMiddleware);
       server.middlewares.use(trendingMiddleware);
       server.middlewares.use(githubMiddleware);
+      attachMultiplayer(server.httpServer);
     },
     configurePreviewServer(server) {
       server.middlewares.use(profileHtmlMiddleware);
@@ -27,6 +30,7 @@ export default defineConfig({
       server.middlewares.use(oracleMiddleware);
       server.middlewares.use(trendingMiddleware);
       server.middlewares.use(githubMiddleware);
+      attachMultiplayer(server.httpServer);
     },
   }],
 })

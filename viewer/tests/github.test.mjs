@@ -358,7 +358,7 @@ test('profileHtmlMiddleware handles /@:handle, sets Cache-Control, and rejects j
     };
     await profileHtmlMiddleware({ url: '/@invalid--handle', method: 'GET', headers: { accept: 'text/html,application/xhtml+xml' } }, junkRes, () => {});
     assert.equal(junkHeaders['cache-control'], 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
-    assert.ok(junkBody.includes('Codeverse — Your code, in orbit'));
+    assert.ok(junkBody.includes('CodeVerse Explorer — your code, in orbit'));
 
     // Test nonexistent handle
     const nonHeaders = {};
@@ -370,7 +370,7 @@ test('profileHtmlMiddleware handles /@:handle, sets Cache-Control, and rejects j
     };
     await profileHtmlMiddleware({ url: '/@ghost404user', method: 'GET', headers: { accept: 'text/html,application/xhtml+xml' } }, nonRes, () => {});
     assert.equal(nonHeaders['cache-control'], 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
-    assert.ok(nonBody.includes('Codeverse — Your code, in orbit'));
+    assert.ok(nonBody.includes('CodeVerse Explorer — your code, in orbit'));
     assert.ok(nonBody.includes('content="https://codeverse-orbit.vercel.app/@ghost404user"'));
 
     // Test non-GET method returns 405

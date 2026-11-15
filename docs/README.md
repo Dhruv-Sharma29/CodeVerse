@@ -1,29 +1,45 @@
-# CODEVERSE docs
+# CodeVerse documentation
 
-| Document | What it covers | Read it when |
-|---|---|---|
-| [PLAN.md](PLAN.md) | The build plan: current direction, product definition, competitive landscape, architecture, analyzer and viewer internals, roadmap, risks | Start here. It's the source of truth for what's being built and why |
-| [social-layer.md](social-layer.md) | **Proposal.** Turning the viewer into a developer identity/discovery product: share links, universe evolution, trending, social features — priced by infrastructure cost, with the GitHub rate-limit and consent constraints | Considering anything about sharing, profiles, leaderboards, or social features |
-| [oracle.md](oracle.md) | Commit messages, code diffs, and optional cited AI explanations; provider setup and limits | Using or developing the Oracle |
-| [bundle-schema.md](bundle-schema.md) | The JSON contract between `codeverse analyze` and the viewer, including legacy-export handling | Changing the analyzer's output or the viewer's loader |
+## Game
+
+| Document | What it covers |
+|---|---|
+| [getting-started.md](getting-started.md) | Install, run, build, environment variables, troubleshooting |
+| [game/gameplay.md](game/gameplay.md) | Ships, aliens, waves, scoring, the hyperjump gate, the first-flight tutorial |
+| [architecture.md](architecture.md) | Pages, simulation, 3D scene, relay and data sources, and how they connect |
+| [game/simulation.md](game/simulation.md) | The step loop, entities, tuning tables, collision rules, tests |
+| [game/multiplayer.md](game/multiplayer.md) | Relay protocol: rooms, messages, validation, limits, what is shared |
+| [deployment.md](deployment.md) | Production server, Vercel, hosting the relay |
+| [contributing.md](contributing.md) | Workflow, required checks, conventions |
+
+## Explorer, analyzer and Oracle
+
+| Document | What it covers |
+|---|---|
+| [explorer.md](explorer.md) | The non-game explorer at `/explorer/`, the local history viewer |
+| [analyzer.md](analyzer.md) | The Python `codeverse analyze` exporter |
+| [bundle-schema.md](bundle-schema.md) | JSON contract between the analyzer and the local history viewer |
+| [oracle.md](oracle.md) | Commit messages, diffs and optional cited AI explanations |
+| [github-proxy.md](github-proxy.md) | The optional server-side GitHub proxy |
+
+## Planning
+
+| Document | What it covers |
+|---|---|
+| [PLAN.md](PLAN.md) | Original build plan: product definition, architecture, roadmap, risks |
+| [social-layer.md](social-layer.md) | **Proposal.** Sharing, profiles and discovery, with cost and consent constraints |
 
 ## Status at a glance
 
-**Built:** GitHub explorer (monthly trending → handle → repository planets → commit satellites), local-bundle history viewer with time travel, the `codeverse analyze` exporter, a commit inspector with full messages and code diffs, and the optional commit Oracle (cited AI explanations).
+**Built:** the multiplayer game at `/` (three ships, four alien types, gravity beam, supernova,
+moving hyperjump gate, lobby and tutorial, WebSocket relay); the GitHub explorer at `/explorer/`;
+the local history viewer; the `codeverse analyze` exporter; the commit Oracle.
 
-**Not built:** file-origin stories, repository-wide retrieval and guided tours, durable server-side storage, accounts, and the proposed additions in [social-layer.md](social-layer.md). The Oracle keeps only bounded in-memory caches and request budgets.
-
-**The two scales, deliberately distinct** — keep them labeled clearly in the UI:
-
-| | GitHub explorer | Local history viewer |
-|---|---|---|
-| Unit | A repository is a planet | A *file* is a planet |
-| Source | GitHub public REST API | `repo.json` from `codeverse analyze` |
-| Depth | Up to 60 recent commits | Full first-parent history |
-| Needs | Nothing | A local clone |
+**Not built:** server-authoritative aliens, persistent scores or accounts, a hosted relay on the
+production deployment, and the proposals in [social-layer.md](social-layer.md).
 
 ## Conventions
 
-- Decorative vs. analytical encodings stay separate — rings are decoration; size, color, and heat carry data, and every visible metric must be explainable.
-- Honest metric names: "test presence", not "coverage"; "likely bug-fix commits", not "bugs".
+- Decorative and analytical encodings stay separate. In the explorer, rings are decoration; size, colour and heat carry data.
+- Honest names: "test presence", not "coverage"; "likely bug-fix commits", not "bugs".
 - No provider secrets in browser code. Tokens and keys live server-side.

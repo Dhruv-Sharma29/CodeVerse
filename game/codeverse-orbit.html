@@ -1,0 +1,866 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>CodeVerse Orbit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syncopate:wght@700&family=Sora:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: full-bleed flight canvas; HUD pinned to the four corners; modal cards float centre. Single dark look by design (deep space). */
+:root {
+  --void: #070b1f;
+  --panel: rgba(13, 19, 46, .9);
+  --line: #2b376b;
+  --ink: #e9ecff;
+  --dim: #929cc6;
+  --amber: #ffb547;
+  --cyan: #74e2ff;
+  --good: #7dffb4;
+  --bad: #ff6f7f;
+  --f-display: 'Syncopate', 'Arial Black', sans-serif;
+  --f-body: 'Sora', system-ui, sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --sl: max(16px, env(safe-area-inset-left, 0px));
+  --sr: max(16px, env(safe-area-inset-right, 0px));
+  --st: calc(env(safe-area-inset-top, 0px) + 12px);
+  --sb: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--void); color: var(--ink); font-family: var(--f-body); }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+#hud2d { z-index: 1; pointer-events: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+a { color: var(--cyan); }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.label { font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+
+/* HUD */
+.hud { position: fixed; z-index: 2; pointer-events: none; }
+.hud > * { pointer-events: auto; }
+#stats { top: var(--st); left: var(--sl); display: grid; gap: 10px; max-width: min(320px, calc(100vw - 32px)); }
+.score { font-family: var(--f-mono); font-size: 28px; font-weight: 600; line-height: 1; }
+.score small { font-size: 12px; color: var(--amber); margin-left: 8px; }
+.shields { display: flex; gap: 6px; }
+.shields i { width: 22px; height: 8px; border-radius: 2px; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+.shields i.off { background: var(--line); box-shadow: none; }
+#missions { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; font-size: 13px; }
+#missions li { list-style: none; display: grid; grid-template-columns: 16px 1fr; gap: 8px; align-items: start; color: var(--ink); }
+#missions li::before { content: ""; width: 10px; height: 10px; margin-top: 4px; border: 1.5px solid var(--amber); border-radius: 50%; }
+#missions li.done { color: var(--dim); text-decoration: line-through; }
+#missions li.done::before { background: var(--good); border-color: var(--good); }
+#missions ul { margin: 0; padding: 0; display: grid; gap: 6px; }
+#controls { top: var(--st); right: var(--sr); display: flex; gap: 6px; }
+.icon-btn { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-family: var(--f-mono); font-size: 12px; }
+.icon-btn:hover { border-color: var(--amber); }
+.icon-btn b { color: var(--amber); font-weight: 600; }
+#planetCard { bottom: var(--sb); left: 50%; transform: translateX(-50%); width: min(460px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; }
+#planetCard h3 { margin: 0; font-size: 17px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; overflow-wrap: anywhere; }
+#planetCard p { margin: 0; color: var(--dim); font-size: 13px; overflow-wrap: anywhere; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-family: var(--f-mono); font-size: 12px; color: var(--ink); }
+.facts span em { font-style: normal; color: var(--dim); margin-right: 4px; }
+#toasts { top: var(--st); left: 50%; transform: translateX(-50%); display: grid; gap: 6px; justify-items: center; width: min(440px, calc(100vw - 32px)); pointer-events: none; }
+.toast { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 6px; padding: 7px 12px; font-size: 13px; animation: in .2s ease-out; max-width: 100%; overflow-wrap: anywhere; }
+.toast.good { border-left-color: var(--good); }
+.toast.bad { border-left-color: var(--bad); }
+@keyframes in { from { transform: translateY(-6px); opacity: .3; } }
+#touchHint { bottom: var(--sb); right: var(--sr); font-size: 12px; color: var(--dim); pointer-events: none; }
+
+/* Overlays */
+.overlay { position: fixed; inset: 0; z-index: 5; display: flex; overflow-y: auto; padding: var(--st) var(--sr) var(--sb) var(--sl); background: radial-gradient(ellipse at center, rgba(7,11,31,.55), rgba(7,11,31,.92)); }
+.card { margin: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; width: min(640px, 100%); display: grid; gap: 16px; min-width: 0; }
+h1 { font-family: var(--f-display); font-size: clamp(26px, 6vw, 44px); letter-spacing: .04em; margin: 0; line-height: 1.05; text-wrap: balance; }
+h1 span { color: var(--amber); }
+h2 { font-family: var(--f-display); font-size: 18px; margin: 0; letter-spacing: .04em; text-wrap: balance; }
+.lede { margin: 0; color: var(--dim); line-height: 1.55; max-width: 62ch; }
+.systems { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.sys { text-align: left; background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 4px; min-width: 0; }
+.sys:hover, .sys:focus-visible { border-color: var(--amber); background: rgba(255,181,71,.06); }
+.sys strong { font-size: 15px; overflow-wrap: anywhere; }
+.sys .mono { font-size: 12px; color: var(--dim); }
+.sys .best { color: var(--amber); }
+.keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 16px; font-size: 13px; color: var(--dim); }
+kbd { font-family: var(--f-mono); font-size: 11px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 1px 5px; color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; color: var(--dim); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.primary { background: var(--amber); color: #1c1203; border: 0; border-radius: 6px; padding: 10px 16px; font-weight: 600; }
+.ghost { background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 10px 16px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.foot { font-size: 12px; color: var(--dim); margin: 0; }
+
+/* Decode */
+.signal { font-family: var(--f-mono); font-size: 13px; background: rgba(0,0,0,.25); border: 1px dashed var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 6px; overflow-wrap: anywhere; min-width: 0; }
+.signal .add { color: var(--good); } .signal .del { color: var(--bad); }
+.signal ul { margin: 0; padding-left: 18px; color: var(--dim); }
+.answers { display: grid; gap: 8px; }
+.answer { text-align: left; background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; grid-template-columns: 22px 1fr; gap: 8px; overflow-wrap: anywhere; min-width: 0; }
+.answer:hover:not(:disabled) { border-color: var(--amber); }
+.answer kbd { align-self: start; }
+.answer.right { border-color: var(--good); background: rgba(125,255,180,.08); }
+.answer.wrong { border-color: var(--bad); background: rgba(255,111,127,.08); }
+.answer:disabled { cursor: default; }
+#reveal { font-size: 13px; color: var(--dim); margin: 0; overflow-wrap: anywhere; }
+
+/* Logbook */
+#log { position: fixed; z-index: 4; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); background: var(--panel); border-left: 1px solid var(--line); display: grid; grid-template-rows: auto 1fr; padding-top: var(--st); padding-right: var(--sr); padding-bottom: var(--sb); padding-left: 16px; backdrop-filter: blur(6px); }
+#log header { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+#logList { overflow-y: auto; display: grid; gap: 10px; align-content: start; padding-top: 12px; min-width: 0; }
+.entry { border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; gap: 6px; font-size: 13px; min-width: 0; }
+.entry .meta { font-family: var(--f-mono); font-size: 11px; color: var(--dim); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.entry summary { cursor: pointer; overflow-wrap: anywhere; }
+.entry pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--f-mono); font-size: 12px; color: var(--dim); margin: 6px 0 0; }
+.oracle { font-size: 13px; line-height: 1.5; border-left: 2px solid var(--cyan); padding-left: 10px; color: var(--ink); white-space: pre-wrap; }
+.oracle-btn { justify-self: start; background: transparent; border: 1px solid var(--cyan); color: var(--cyan); border-radius: 6px; padding: 5px 10px; font-size: 12px; }
+.empty { color: var(--dim); font-size: 13px; }
+
+@media (max-width: 640px) {
+  #stats { top: calc(var(--st) + 44px); }
+  #missions { display: none; }
+  #missions.open { display: grid; }
+  .score { font-size: 22px; }
+  #controls .wide { display: none; }
+}
+@media (min-width: 641px) { #missionsBtn { display: none; } }
+</style>
+
+<canvas id="hud2d" aria-hidden="true"></canvas>
+<canvas id="c" aria-label="Flight view of the repository star system. Every action also has a list control in the logbook and missions panel."></canvas>
+
+<div class="hud" id="stats" hidden>
+  <div class="score mono" aria-live="polite"><span id="score">0</span><small id="combo"></small></div>
+  <div class="shields" id="shields" aria-label="Shields"></div>
+  <div id="missions" aria-label="Missions">
+    <div class="label" id="sysLabel">Missions</div>
+    <ul id="missionList"></ul>
+  </div>
+</div>
+
+<div class="hud" id="controls" hidden>
+  <button class="icon-btn" id="missionsBtn" aria-controls="missions">Missions</button>
+  <button class="icon-btn" id="logBtn"><b>L</b> Logbook <span id="logCount" class="mono">0</span></button>
+  <button class="icon-btn" id="soundBtn" aria-pressed="true">Sound</button>
+  <button class="icon-btn" id="pauseBtn"><b class="wide">P</b> Pause</button>
+</div>
+
+<div class="hud" id="toasts" aria-live="polite"></div>
+<div class="hud" id="planetCard" hidden></div>
+<div class="hud" id="touchHint" hidden>Hold and drag to fly</div>
+
+<div class="overlay" id="menu">
+  <div class="card">
+    <div class="label" id="snapLabel">GitHub snapshot</div>
+    <h1>Code<span>Verse</span> Orbit</h1>
+    <p class="lede">Each GitHub account is a star. Its repositories orbit as worlds, and their latest commits circle them as satellites. Fly in, scan commits, and decode the glowing signals by reading real commit history.</p>
+    <div class="label">Choose a star system</div>
+    <div class="systems" id="systems"></div>
+    <div class="keys">
+      <div><kbd>←</kbd> <kbd>→</kbd> or <kbd>A</kbd> <kbd>D</kbd> rotate</div>
+      <div><kbd>↑</kbd> or <kbd>W</kbd> thrust, <kbd>↓</kbd> brake</div>
+      <div>Mouse or touch: hold to fly toward the pointer. Scroll to zoom</div>
+      <div><kbd>L</kbd> logbook, <kbd>P</kbd> pause, <kbd>1</kbd>–<kbd>3</kbd> answer</div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--dim)"></i>commit satellite: scan for points</span>
+      <span><i style="background:var(--amber)"></i>signal: commit with a diff, decode it</span>
+      <span><i style="background:var(--bad)"></i>merge conflict: costs a shield</span>
+    </div>
+    <p class="foot">World size follows stars, forks and recent pushes. Colour follows language. Correct decodes restore a shield.</p>
+  </div>
+</div>
+
+<div class="overlay" id="decode" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="decodeTitle">
+    <div class="label" id="decodeKicker">Signal decode</div>
+    <h2 id="decodeTitle"></h2>
+    <div class="signal" id="decodeSignal"></div>
+    <div class="answers" id="answers"></div>
+    <p id="reveal" hidden></p>
+    <div class="row"><button class="primary" id="decodeNext" hidden>Continue <kbd>Enter</kbd></button></div>
+  </div>
+</div>
+
+<div class="overlay" id="paused" hidden>
+  <div class="card">
+    <h2>Paused</h2>
+    <div class="row">
+      <button class="primary" id="resumeBtn">Resume</button>
+      <button class="ghost" id="quitBtn">Change system</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="over" hidden>
+  <div class="card">
+    <div class="label">Shields down</div>
+    <h2 id="overTitle">Run complete</h2>
+    <div class="facts" id="overFacts"></div>
+    <div class="row">
+      <button class="primary" id="againBtn">Fly again</button>
+      <button class="ghost" id="overQuitBtn">Change system</button>
+      <button class="ghost" id="overLogBtn">Open logbook</button>
+    </div>
+  </div>
+</div>
+
+<aside id="log" hidden aria-label="Logbook">
+  <header>
+    <div><div class="label">Logbook</div><strong id="logTitle">Scanned commits</strong></div>
+    <button class="icon-btn" id="logClose">Close</button>
+  </header>
+  <div id="logList"></div>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<script id="data" type="application/json">{"snapshot":"2026-11-15","systems":[{"login":"Dhruv-Sharma29","name":"Dhruv Sharma","type":"User","followers":16,"public_repos":37,"repos":[{"id":1344782901,"name":"Visio-Space","description":"Organize ideas, discover patterns, and create meaningful affinity maps collaboratively.","language":"TypeScript","stargazers_count":5,"forks_count":6,"size":611,"created_at":"2026-08-24T09:38:03Z","pushed_at":"2026-10-22T15:01:28Z","archived":false,"default_branch":"main","commits":[{"sha":"dce6904","msg":"Merge pull request #53 from Dhruv-Sharma29/fix/board-sharing-permissions\n\nfix: enforce board sharing permissions and guard member access","author":"Dhruv Sharma","date":"2026-10-22T15:01:28Z","add":359,"del":13,"files":["src/services/notificationService.ts","src/services/projectService.ts","supabase/README.md","supabase/bootstrap.sql","supabase/migrations/20261022_fix_board_sharing_permissions.sql","supabase/tests/bootstrap.test.mjs"],"nfiles":7},{"sha":"f112713","msg":"fix: enforce board sharing permissions and guard member access\n\n- Prevent link editors from altering board ownership, sharing access, or managing collaborators\n- Use UUIDs and omit RETURNING on notification insert to prevent RLS rollback\n- Handle 'local-*' workspaces consistently in projectService\n- Add migration, update bootstrap.sql, and include regression tests","author":"NewUsername","date":"2026-10-22T14:50:45Z","add":359,"del":13,"files":["src/services/notificationService.ts","src/services/projectService.ts","supabase/README.md","supabase/bootstrap.sql","supabase/migrations/20261022_fix_board_sharing_permissions.sql","supabase/tests/bootstrap.test.mjs"],"nfiles":7},{"sha":"62a4b10","msg":"Merge pull request #52 from Dhruv-Sharma29/supabase-bootstrap-workspace-rls\n\nSupabase bootstrap workspace rls","author":"Dhruv Sharma","date":"2026-10-10T05:05:22Z","add":1352,"del":6,"files":["README.md","package-lock.json","package.json","src/services/profileService.ts","supabase/README.md","supabase/bootstrap.sql"],"nfiles":9},{"sha":"c1c5aaa","msg":"Persist cached profiles when their cloud row is missing\n\nUse an own-profile upsert when saving settings so accounts created before database initialization gain a cloud profile. Verify profile persistence across cache loss and subsequent updates with the real Supabase client and an isolated HTTP fixture.","author":"Dhruv Sharma","date":"2026-10-10T05:01:56Z","add":65,"del":5,"files":["src/services/profileService.ts","tests/profilePersistence.test.mts"],"nfiles":2},{"sha":"473beb5","msg":"Initialize Supabase reliably and fix workspace creation RLS","author":"Dhruv Sharma","date":"2026-10-10T04:51:56Z"},{"sha":"7208127","msg":"Merge pull request #51 from Dhruv-Sharma29/47-bug-boards-not-persisting-in-database\n\nfix: boards not persisting in database (#47)","author":"Dhruv Sharma","date":"2026-10-10T02:46:02Z"},{"sha":"0254dec","msg":"fix: boards not persisting in database (#47)\n\nRoot causes identified and fixed:\n\n- RLS race condition: boards SELECT policy did not include created_by = auth.uid(), so a board could be invisible to its own creator if the on_board_created trigger hadn't added them to board_members yet. Fixed in migration.\n\n- Silent localStorage fallback: createBoard() silently fell back to a local-only board (id: '","author":"Akhil-00001","date":"2026-10-09T17:46:52Z"},{"sha":"d9352dc","msg":"Merge pull request #50 from Dhruv-Sharma29/fix/repository-review\n\nSplit board store into typed action modules with regression tests","author":"Dhruv Sharma","date":"2026-10-08T11:16:01Z"},{"sha":"c431de5","msg":"Split board store into typed action modules with regression tests","author":"Dhruv Sharma","date":"2026-10-08T10:45:18Z"},{"sha":"0797d85","msg":"Merge pull request #49 from Dhruv-Sharma29/45-unexpected-background-behind-text\n\nfix(text): remove unexpected background overlay behind text letters (#45)","author":"Dhruv Sharma","date":"2026-09-25T16:20:07Z"},{"sha":"0e0fd19","msg":"fix(text): remove unexpected background overlay behind text letters (#45)","author":"Dhruv Sharma","date":"2026-09-25T16:17:01Z"},{"sha":"6d11211","msg":"Merge pull request #48 from Dhruv-Sharma29/44-fix-profile-completion-being-requested-on-every-login\n\nfix: persist profile by using upsert instead of insert in createProfile","author":"Dhruv Sharma","date":"2026-09-23T16:17:01Z"}]},{"id":1432027536,"name":"Squint","description":"Screen OCR for code on macOS: indentation, blank lines and brackets intact. On-device, free and open source.","language":"Swift","stargazers_count":2,"forks_count":0,"size":7573,"created_at":"2026-10-24T09:37:57Z","pushed_at":"2026-10-25T02:11:55Z","archived":false,"default_branch":"main","commits":[{"sha":"5f082aa","msg":"Install from the Squint repository's own tap again, with Homebrew 7's trust step","author":"Dhruv Sharma","date":"2026-10-25T02:11:53Z","add":15,"del":17,"files":["README.md","docs/development.md","docs/installation.md","site/index.html"],"nfiles":4},{"sha":"557b4ef","msg":"Install from the dhruv-sharma29/tap tap, with Homebrew 7's trust step","author":"Dhruv Sharma","date":"2026-10-25T01:51:42Z","add":20,"del":14,"files":["README.md","docs/development.md","docs/installation.md","docs/roadmap.md","site/index.html"],"nfiles":5},{"sha":"e5af68a","msg":"Release 0.3.0 in the Homebrew formula","author":"Dhruv Sharma","date":"2026-10-25T01:49:49Z","add":2,"del":2,"files":["Formula/squint.rb"],"nfiles":1},{"sha":"612444a","msg":"Release 0.3.0","author":"Dhruv Sharma","date":"2026-10-25T01:46:51Z","add":3,"del":3,"files":["CHANGELOG.md","bundle.sh"],"nfiles":2},{"sha":"91602af","msg":"Record the 90% parse target as an open goal in the roadmap","author":"Dhruv Sharma","date":"2026-10-25T01:38:39Z"},{"sha":"cf24f5f","msg":"Use less memory for emoji, fix history saving, and update the docs\n\nEmoji glyphs are drawn at 26 pt instead of 34: a capture's peak memory\nfootprint drops by about 25 MB (to about 120 MB in a one-off run), with\nemoji accuracy unchanged on the 300-line benchmark (76% found, none\ninvented). 20 pt saved slightly more but matched worse. Benchmark\noutputs are identical.\n\nHistory: the atomic write with ","author":"Dhruv Sharma","date":"2026-10-24T18:34:23Z"},{"sha":"a5f9b08","msg":"Run the Hindi test only where Vision reads Hindi\n\nCI's macOS 15 doesn't support hi-IN in Vision.","author":"Dhruv Sharma","date":"2026-10-24T18:15:08Z"},{"sha":"8def107","msg":"Build with Swift 6.1 again\n\nCI (Xcode 16.4, Swift 6.1) has failed since parse-guided repair: Swift\n6.1 doesn't concatenate a String and a Substring where 6.4 does. The new\nconcatenations are now explicit String(...).","author":"Dhruv Sharma","date":"2026-10-24T18:12:41Z"},{"sha":"464e646","msg":"Add a Hindi-English benchmark, and read a second language when unsure\n\nbench/hindi: 18 everyday sentences in Devanagari, Devanagari mixed with\nEnglish words, and Hinglish, rendered at two sizes. Vision's detection\nreads Devanagari and Hinglish exactly but drops Devanagari from lines\nthat are mostly English words (10% errors); a fixed Hindi setting reads\nthose but writes Hinglish in Devanagari (77%","author":"Dhruv Sharma","date":"2026-10-24T18:11:03Z"},{"sha":"3a73c8b","msg":"Add opt-in capture history\n\nOff by default. When on, the last 20 captures are kept newest first in\n~/Library/Application Support/Squint/history.json (permissions 0600),\nand the menu's History copies one again. Clear History deletes them, and\nturning history off deletes them too, so off means nothing is kept.","author":"Dhruv Sharma","date":"2026-10-24T18:06:34Z"},{"sha":"3b0d061","msg":"Run a main run loop in the command-line tool\n\nA long squint eval hung inside Vision: the recognizer waited on Vision,\nwhose worker waited on work that never ran, while the main thread was\nparked in dispatchMain(), which runs no run loop. The app (NSApplication)\nand the test runner (CFRunLoopRun) both run one, and neither hung this\nway. The CLI now runs CFRunLoopRun() too. The hang was seen once in","author":"Dhruv Sharma","date":"2026-10-24T18:05:03Z"},{"sha":"2fa01d0","msg":"Add Capture Table\n\nOn macOS 26 or later, Capture Table (menu, or squint://table) reads the\nlargest table in the selection with Vision's document recognition and\ncopies it as Markdown or tab-separated values (Settings > Tables).\nEvaluated first, as the roadmap asked: it read ruled, unruled and\nspreadsheet-style tables exactly, so no custom detector is needed.\n\nThe code is compiled only with the mac","author":"Dhruv Sharma","date":"2026-10-24T18:00:33Z"}]},{"id":1429878734,"name":"AgentRail","description":"Agent workflow engine where the model proposes and Java decides: visual editor, validated tool calls, exact human approvals, audit trail.","language":"Java","stargazers_count":0,"forks_count":0,"size":2259,"created_at":"2026-10-22T14:45:13Z","pushed_at":"2026-10-26T15:18:25Z","archived":false,"default_branch":"main","commits":[{"sha":"05c34b6","msg":"Add MIT License to the project","author":"Dhruv Sharma","date":"2026-10-26T15:18:25Z","add":21,"del":0,"files":["LICENSE"],"nfiles":1},{"sha":"8082d5e","msg":"Reorganize documentation and add a README walkthrough\n\nReplace phase-by-phase engineering notes with a numbered reading order:\nspecification, getting started, user guide, architecture, API\nreference, configuration, security, operations, testing,\ntroubleshooting and demo. Rewrite the README around status, design\ndecisions and their costs, and add CONTRIBUTING.md. Summarize open\ndependency findings ","author":"Dhruv Sharma","date":"2026-10-22T15:19:43Z","add":1189,"del":668,"files":[".gitignore",".run/AgentFlow Gemini.run.xml","CONTRIBUTING.md","README.md","docs/00-specification.md","docs/01-getting-started.md"],"nfiles":32},{"sha":"32959f8","msg":"Rename the product to AgentRail and simplify Console copy\n\nUpdate user-facing names, the page title, CI workflow name and demo\nscripts. Configuration keys, package names and database identifiers\nkeep the agentflow spelling for compatibility.","author":"Dhruv Sharma","date":"2026-10-22T15:19:43Z","add":74,"del":177,"files":[".github/workflows/backend.yml","AGENTS.md","backend/pom.xml","frontend/e2e/pipeline.spec.ts","frontend/index.html","frontend/src/Approvals.tsx"],"nfiles":14},{"sha":"4ce7553","msg":"Add owner-scoped Operations dashboard\n\nExpose GET /api/operations as a read-only aggregate snapshot of the\nowner's runs, pending and overdue approvals, scheduled retries and\nunresolved ticket intents, backed by a new owner/status index. The\nConsole polls it every 15 seconds and marks counts stale on failure.","author":"Dhruv Sharma","date":"2026-10-22T15:19:43Z","add":539,"del":35,"files":["backend/src/main/java/com/agentflow/operations/OperationsController.java","backend/src/main/java/com/agentflow/operations/OperationsService.java","backend/src/main/resources/db/migration/V9__operations_owner_index.sql","backend/src/test/java/com/agentflow/execution/OperationsApiTest.java","backend/src/test/java/com/agentflow/execution/PostgreSqlOperationsIT.java","frontend/e2e/workspace.spec.ts"],"nfiles":11},{"sha":"543242e","msg":"Add Console controls for approved GitHub tickets","author":"Dhruv Sharma","date":"2026-10-10T14:19:12Z"},{"sha":"3655294","msg":"Add approved GitHub ticket dispatch and durable reconciliation","author":"Dhruv Sharma","date":"2026-10-10T14:18:03Z"},{"sha":"63cbfdc","msg":"Apply the Console theme across the AgentFlow workspace","author":"Dhruv Sharma","date":"2026-10-10T13:44:50Z"},{"sha":"0e2671b","msg":"Integrate the shadcn workflow builder with saved AgentFlow graphs","author":"Dhruv Sharma","date":"2026-10-10T13:29:15Z"},{"sha":"6ebaa7b","msg":"Add an accessible animated AgentFlow pipeline preview","author":"Dhruv Sharma","date":"2026-10-10T13:07:19Z"},{"sha":"b674da5","msg":"Document container recovery and automate delivery acceptance\n\nAdd private setup, startup, backup/restore and demo instructions with explicit local-deployment limits. Run the deployed browser and recovery harness in CI and retain recordings/results for seven days. Record verified checks and remaining security follow-up without claiming a hosted CI run or public production deployment.","author":"Dhruv Sharma","date":"2026-10-10T12:39:52Z"},{"sha":"58e55ea","msg":"Deploy the visual workspace with persistent PostgreSQL\n\nServe compiled React and the Java API through one loopback Nginx origin, generate private local credentials, and constrain the runtime containers. Verify frozen approvals through backend replacement, backup restore, full stack recreation and seven deployed browser cases. Retain a synthetic agent demo and document remaining scanner findings wi","author":"Dhruv Sharma","date":"2026-10-10T12:38:51Z"},{"sha":"98ff5d1","msg":"Patch Jackson, Tomcat and PostgreSQL JDBC security fixes\n\nPin compatible maintenance fixes beyond the Boot 3.5.16 baseline. All 161 unit/H2 and 102 PostgreSQL integration tests pass; remaining framework advisories require a separate supported-platform migration.","author":"Dhruv Sharma","date":"2026-10-10T12:38:48Z"}]},{"id":1096175753,"name":"AlertVision-Violence-Detection-System","description":"Real-time violence detection system using a ResNet50 + LSTM pipeline to flag violent activity in video feeds, with a Streamlit UI and automated email alerts.","language":"Jupyter Notebook","stargazers_count":0,"forks_count":0,"size":30,"created_at":"2025-11-14T03:28:01Z","pushed_at":"2026-10-08T11:15:31Z","archived":false,"default_branch":"main","commits":[{"sha":"2feb29e","msg":"Merge pull request #1 from Dhruv-Sharma29/fix/repository-review\n\nAdd reproducible evaluation export and honest model status","author":"Dhruv Sharma","date":"2026-10-08T11:15:31Z","add":108,"del":14,"files":[".github/workflows/ci.yml","README.md","VDS.ipynb","evaluation.py","tests/test_evaluation.py"],"nfiles":5},{"sha":"4fe338b","msg":"Add reproducible evaluation export and honest model status","author":"Dhruv Sharma","date":"2026-10-08T10:45:18Z","add":108,"del":14,"files":[".github/workflows/ci.yml","README.md","VDS.ipynb","evaluation.py","tests/test_evaluation.py"],"nfiles":5},{"sha":"48f2deb","msg":"Add team member","author":"Dhruv Sharma","date":"2026-08-06T15:20:07Z","add":3,"del":3,"files":["README.md"],"nfiles":1},{"sha":"86ec047","msg":"Include LICENSE file with MIT License\n\nAdd MIT License to the project","author":"Dhruv Sharma","date":"2026-07-07T08:31:09Z","add":21,"del":0,"files":["LICENSE"],"nfiles":1},{"sha":"1123f79","msg":"Add README","author":"Dhruv Sharma","date":"2026-07-07T08:29:05Z"},{"sha":"693c514","msg":"Initial commit","author":"Dhruv Sharma","date":"2026-07-07T08:15:35Z"}]},{"id":1374646469,"name":"CodeVerse","description":"CodeVerse \u2014 an interactive 3D developer universe that transforms GitHub repositories into planets, letting you explore, visualize, and discover a developer's coding journey.","language":"TypeScript","stargazers_count":0,"forks_count":0,"size":636,"created_at":"2026-09-17T15:25:47Z","pushed_at":"2026-10-08T11:15:17Z","archived":false,"default_branch":"main","commits":[{"sha":"5cb6457","msg":"Merge pull request #1 from Dhruv-Sharma29/fix/repository-review\n\nPromote viewer to production directory and update build paths","author":"Dhruv Sharma","date":"2026-10-08T11:15:16Z","add":32,"del":20,"files":[".github/workflows/ci.yml",".gitignore","README.md","docs/PLAN.md","viewer/.gitignore","viewer/.oxlintrc.json"],"nfiles":85},{"sha":"45d28fd","msg":"Promote viewer to production directory and update build paths","author":"Dhruv Sharma","date":"2026-10-08T10:45:18Z","add":32,"del":20,"files":[".github/workflows/ci.yml",".gitignore","README.md","docs/PLAN.md","viewer/.gitignore","viewer/.oxlintrc.json"],"nfiles":85},{"sha":"c4487b0","msg":"Load public branch and release moons without a token","author":"Dhruv Sharma","date":"2026-09-23T16:28:38Z","add":81,"del":11,"files":[".env.example","docs/github-proxy.md","spike/viewer/src/github/Explorer.tsx","spike/viewer/src/github/api.ts","spike/viewer/tests/githubMoonFallback.test.mjs"],"nfiles":5},{"sha":"9a151ee","msg":"Show bounded branch and release moons around repositories","author":"Dhruv Sharma","date":"2026-09-23T16:10:19Z","add":98,"del":17,"files":["spike/viewer/src/github/Explorer.tsx","spike/viewer/src/github/explorer.css","spike/viewer/src/github/moons.ts","spike/viewer/src/scene/RepositorySystem.tsx","spike/viewer/tests/moons.test.mjs"],"nfiles":5},{"sha":"4292e77","msg":"Add bounded GitHub proxy for public exploration","author":"Dhruv Sharma","date":"2026-09-23T16:07:53Z"},{"sha":"9035e8e","msg":"feat(viewer): link repository conversations to GitHub","author":"Dhruv Sharma","date":"2026-09-22T08:28:14Z"},{"sha":"8097b8d","msg":"feat(viewer): start universe evolution on profile entry","author":"Dhruv Sharma","date":"2026-09-22T08:07:39Z"},{"sha":"65a197e","msg":"feat(viewer): encode GitHub activity as a living solar system","author":"Dhruv Sharma","date":"2026-09-22T06:05:10Z"},{"sha":"dd274bd","msg":"feat(viewer): make repository systems feel orbital","author":"Dhruv Sharma","date":"2026-09-22T05:38:15Z"},{"sha":"0dfab8c","msg":"fix(viewer): stop /@handle serving HTML for dev modules and built assets\n\nTwo bugs in the /@handle metadata middleware left the dev server blank.\n\nVite serves its own modules under /@ \u2014 /@react-refresh, /@id/\u2026, /@fs/\u2026 \u2014\nand \"react-refresh\" is shaped exactly like a GitHub handle, so the route\nmatched it and returned HTML. The browser rejected the MIME type and the\npage never booted. The route now a","author":"Dhruv Sharma","date":"2026-09-21T09:08:52Z"},{"sha":"830f35b","msg":"feat(viewer): server-render per-handle meta tags for /@handle (Task 1)","author":"Dhruv Sharma","date":"2026-09-20T13:20:49Z"},{"sha":"193d3d6","msg":"feat(viewer): add universe evolution, contributor jumping, discovery categories, and dynamic OG previews","author":"Dhruv Sharma","date":"2026-09-20T12:27:58Z"}]},{"id":1190755486,"name":"DNA-Sequence-Matching-Tool","description":"A bioinformatics-based project that performs DNA sequence matching using algorithmic techniques to find similarities, mismatches, and alignments between genetic sequences. Designed for accuracy, efficiency, and easy understanding.","language":"Java","stargazers_count":0,"forks_count":2,"size":1824,"created_at":"2026-03-24T15:33:30Z","pushed_at":"2026-10-08T11:14:50Z","archived":false,"default_branch":"main","commits":[{"sha":"5b65b29","msg":"Merge pull request #1 from Dhruv-Sharma29/fix/repository-review\n\nFix timing, browser access, and Java build configuration","author":"Dhruv Sharma","date":"2026-10-08T11:14:50Z","add":150,"del":23,"files":["Dockerfile","README.md","build.gradle","docker-compose.yml","frontend/script.js","nginx.conf"],"nfiles":19},{"sha":"e1be90f","msg":"Fix timing, browser access, and Java build configuration","author":"Dhruv Sharma","date":"2026-10-08T10:45:18Z","add":150,"del":23,"files":["Dockerfile","README.md","build.gradle","docker-compose.yml","frontend/script.js","nginx.conf"],"nfiles":19},{"sha":"dd49167","msg":"Optimised script.js","author":"ArnavChauhan07","date":"2026-06-18T09:00:02Z","add":3,"del":5,"files":["frontend/script.js"],"nfiles":1},{"sha":"3833e14","msg":"Initial commit","author":"ArnavChauhan07","date":"2026-06-18T08:42:26Z","add":0,"del":110,"files":["src/main/java/com/example/dna/algorithms/Algorithms.java"],"nfiles":1},{"sha":"eb36441","msg":"update contributors list","author":"Dhruv Sharma","date":"2026-06-17T17:56:09Z"},{"sha":"06a2838","msg":"Add visualization screenshot","author":"Dhruv Sharma","date":"2026-06-16T14:28:20Z"},{"sha":"117d845","msg":"Implement DNA sequence search algorithms and REST API","author":"Dhruv Sharma","date":"2026-06-16T14:24:20Z"},{"sha":"914946e","msg":"Add author links to README section","author":"Dhruv Sharma","date":"2026-06-13T07:37:26Z"},{"sha":"4e0a2a5","msg":"Include Vansh Chowdhury in the authors list","author":"Dhruv Sharma","date":"2026-06-13T07:36:36Z"},{"sha":"d5b3f36","msg":"Add README","author":"Dhruv Sharma","date":"2026-06-09T11:04:41Z"},{"sha":"b687bc3","msg":"Delete Readme.md","author":"Dhruv Sharma","date":"2026-06-09T11:02:45Z"},{"sha":"1a20311","msg":"Add screenshots, README, and frontend files","author":"Dhruv Sharma","date":"2026-06-09T11:01:10Z"}]},{"id":1126625119,"name":"Dhruv-Sharma29","description":null,"language":"Python","stargazers_count":0,"forks_count":0,"size":392,"created_at":"2026-01-02T09:30:09Z","pushed_at":"2026-11-15T04:44:34Z","archived":false,"default_branch":"main","commits":[{"sha":"48f6c26","msg":"Update assets/metrics.isocalendar.svg - [Skip GitHub Action]","author":"github-actions[bot]","date":"2026-11-15T04:44:33Z","add":6,"del":1,"files":["assets/metrics.isocalendar.svg"],"nfiles":1},{"sha":"02322c9","msg":"chore: refresh charts and cards","author":"github-actions[bot]","date":"2026-11-14T10:47:24Z","add":2,"del":2,"files":["assets/card-stats-dark.svg","assets/card-stats-light.svg"],"nfiles":2},{"sha":"a3298ff","msg":"Update assets/metrics.isocalendar.svg - [Skip GitHub Action]","author":"github-actions[bot]","date":"2026-11-14T04:52:45Z","add":6,"del":1,"files":["assets/metrics.isocalendar.svg"],"nfiles":1},{"sha":"4a115fb","msg":"chore: refresh charts and cards","author":"github-actions[bot]","date":"2026-11-13T11:24:22Z","add":2,"del":2,"files":["assets/card-stats-dark.svg","assets/card-stats-light.svg"],"nfiles":2},{"sha":"6aaaf89","msg":"Update assets/metrics.isocalendar.svg - [Skip GitHub Action]","author":"github-actions[bot]","date":"2026-11-13T04:58:58Z"},{"sha":"979f835","msg":"chore: refresh charts and cards","author":"github-actions[bot]","date":"2026-11-12T11:41:47Z"},{"sha":"1cba2cd","msg":"Update assets/metrics.isocalendar.svg - [Skip GitHub Action]","author":"github-actions[bot]","date":"2026-11-12T00:01:34Z"},{"sha":"8d0d945","msg":"chore: refresh charts and cards","author":"github-actions[bot]","date":"2026-11-11T11:21:31Z"},{"sha":"b2f8efc","msg":"Update assets/metrics.isocalendar.svg - [Skip GitHub Action]","author":"github-actions[bot]","date":"2026-11-11T04:38:37Z"},{"sha":"6e40222","msg":"chore: refresh charts and cards","author":"github-actions[bot]","date":"2026-11-10T11:33:43Z"},{"sha":"90708a9","msg":"Update assets/metrics.isocalendar.svg - [Skip GitHub Action]","author":"github-actions[bot]","date":"2026-11-10T01:10:12Z"},{"sha":"4155787","msg":"chore: refresh charts and cards","author":"github-actions[bot]","date":"2026-11-09T11:58:22Z"}]},{"id":1279883145,"name":"FocusGuard","description":"Privacy-first developer productivity tracker for the terminal. Tracks focus, detects procrastination with pattern-based signals (not \"YouTube = bad\"), and coaches you via opt-in local AI. Zero telemetry, encrypted storage, fully auditable.","language":"Python","stargazers_count":0,"forks_count":0,"size":74,"created_at":"2026-06-25T05:03:43Z","pushed_at":"2026-10-08T10:46:16Z","archived":false,"default_branch":"main","commits":[{"sha":"0176c5a","msg":"Add MIT License to the project","author":"Dhruv Sharma","date":"2026-08-29T13:45:13Z","add":21,"del":0,"files":["LICENSE"],"nfiles":1},{"sha":"6d9cf21","msg":"Fix author field and classifier in pyproject.toml","author":"Dhruv Sharma","date":"2026-06-25T06:29:31Z","add":2,"del":2,"files":["pyproject.toml"],"nfiles":1},{"sha":"70d8098","msg":"Initial commit: FocusGuard CLI","author":"Dhruv Sharma","date":"2026-06-25T06:17:45Z","add":6253,"del":0,"files":[".gitignore","README.md","docs/ARCHITECTURE.md","docs/SETUP.md","pyproject.toml","src/focusguard/__init__.py"],"nfiles":56}]}]},{"login":"torvalds","name":"Linus Torvalds","type":"User","followers":332069,"public_repos":12,"repos":[{"id":2325298,"name":"linux","description":"Linux kernel source tree","language":"C","stargazers_count":255738,"forks_count":67395,"size":6470059,"created_at":"2011-09-04T22:48:12Z","pushed_at":"2026-11-14T19:01:00Z","archived":false,"default_branch":"master","commits":[{"sha":"23c6230","msg":"Merge tag 'for-linus-7.4a-rc3-tag' of git://git.kernel.org/pub/scm/linux/kernel/git/xen/tip\n\nPull xen fixes from Juergen Gross:\n \"A bunch of isolated fixes of Xen related drivers\"\n\n* tag 'for-linus-7.4a-rc3-tag' of git://git.kernel.org/pub/scm/linux/kernel/git/xen/tip:\n  Xen/gnttab: improve error handling in gnttab_dma_{alloc,free}_pages()\n  xen: don't allow gnttab_dma_[alloc|free]_pages() in PV g","author":"Linus Torvalds","date":"2026-11-14T18:59:13Z","add":85,"del":26,"files":["drivers/xen/gntdev.c","drivers/xen/grant-table.c","drivers/xen/platform-pci.c","drivers/xen/privcmd.c","drivers/xen/pvcalls-back.c"],"nfiles":5},{"sha":"54975c6","msg":"Merge tag 'hwmon-for-v7.4-rc3' of git://git.kernel.org/pub/scm/linux/kernel/git/groeck/linux-staging\n\nPull hwmon fixes from Guenter Roeck:\n\n - Read tracking-mode voltage fault limits dynamically in the mp2975\n   PMBus driver instead of caching probe-time snapshots, avoiding false\n   over-voltage alarms when CPU voltage changes at runtime.\n\n - Fix SCMI sensor probe by enabling supported sensors via","author":"Linus Torvalds","date":"2026-11-14T18:57:26Z","add":150,"del":128,"files":["drivers/hwmon/aht10.c","drivers/hwmon/gpio-fan.c","drivers/hwmon/max31760.c","drivers/hwmon/nct6775-core.c","drivers/hwmon/pmbus/mp2975.c","drivers/hwmon/scmi-hwmon.c"],"nfiles":7},{"sha":"aacb779","msg":"Merge tag 'ovl-fixes-7.4-rc3' of git://git.kernel.org/pub/scm/linux/kernel/git/overlayfs/vfs\n\nPull overlayfs fixes from Amir Goldstein:\n\n - Fixes for data-only layers (composefs), some for regressions from\n   v6.16, which relaxed the requirements for redirects to data-only\n   layers\n\n - Fix a use-after-free in lookup of a hardlink with a FUSE upper,\n   reported by Sashiko\n\n - Fix a mount failure r","author":"Linus Torvalds","date":"2026-11-14T16:32:19Z","add":270,"del":61,"files":["Documentation/filesystems/overlayfs.rst","fs/overlayfs/dir.c","fs/overlayfs/namei.c","fs/overlayfs/overlayfs.h","fs/overlayfs/ovl_entry.h","fs/overlayfs/params.c"],"nfiles":10},{"sha":"68271fb","msg":"Merge tag 'ntfs-for-7.4-rc3' of git://git.kernel.org/pub/scm/linux/kernel/git/linkinjeon/ntfs\n\nPull ntfs fixes from Namjae Jeon:\n\n - Validate that $INDEX_ALLOCATION is open and non-resident before\n   reading or writing index blocks, preventing NULL pointer dereferences\n   when an earlier index operation has not opened it\n\n - Check that index allocation inodes are non-resident and child VCNs\n   are","author":"Linus Torvalds","date":"2026-11-14T16:27:30Z","add":47,"del":5,"files":["fs/ntfs/dir.c","fs/ntfs/index.c","fs/ntfs/iomap.c","fs/ntfs/named_stream.c"],"nfiles":4},{"sha":"cba8896","msg":"Merge tag 'ksmbd-for-7.4-rc3' of git://git.kernel.org/pub/scm/linux/kernel/git/linkinjeon/smb\n\nPull smb server fixes from Namjae Jeon:\n\n - Evaluate explicit-access requests in DACL order with exact SID\n   matching, and prevent guest and anonymous sessions from matching\n   Authenticated Users\n\n - Apply Unix group and OWNER RIGHTS ACEs, and keep their denials when\n   POSIX ACL fallback determines ac","author":"Linus Torvalds","date":"2026-11-14T16:23:39Z"},{"sha":"860b301","msg":"Merge tag 'keys-v7.4-rc3-2' of git://git.kernel.org/pub/scm/linux/kernel/git/jarkko/linux-tpmdd\n\nPull key fixes from Jarkko Sakkinen:\n\n - Invoke the match callback before the state checks in\n   keyring_search_iterator(), so that a non-matching revoked,\n   expired or invalidated key cannot decide the search result\n\n - Take key->sem for reading around the ->asym_*() method calls\n   in the keyctl pke","author":"Linus Torvalds","date":"2026-11-14T02:14:32Z"},{"sha":"b21c45d","msg":"Merge tag 'drm-fixes-2026-11-14' of https://gitlab.freedesktop.org/drm/kernel\n\nPull drm fixes from Dave Airlie:\n \"Weekly drm fixes, this is a bit bigger as we missed xe last week due\n  to a tree screw up, so it's mostly xe and amdgpu, then the usual\n  scattering of fixes across drivers.\n\n  sched:\n   - Ensure stopped entity cannot be re-added to the run-queue\n\n  bridge:\n   - ssd2825: Fix panel enab","author":"Linus Torvalds","date":"2026-11-14T02:08:25Z"},{"sha":"0716b41","msg":"Merge tag 'watchdog-fixes-for-v7.4-rc3' of git://git.kernel.org/pub/scm/linux/kernel/git/groeck/linux-staging\n\nPull watchdog fixes from Guenter Roeck:\n\n - gunyah_wdt: Re-enable the watchdog on resume\n\n - mediatek: Register reset controller before watchdog device\n\n - meson_gxbb_wdt: fix suspend/resume handling of HW_RUNNING watchdog\n\n - mtk_wdt: Stop a running watchdog over system sleep even if not","author":"Linus Torvalds","date":"2026-11-14T01:53:27Z"},{"sha":"637c451","msg":"Merge tag 'drm-misc-fixes-2026-11-13' of https://gitlab.freedesktop.org/drm/misc/kernel into drm-fixes\n\nShort summary of fixes pull:\n\nbridge:\n- ssd2825: Fix panel enable sequence\n- sii902x: validate I2S data lane values\n\ndisplay:\n- hdmi: Fixes to SCDC\n\ngud:\n- Avoid divide error in gud_stats_debugfs\n\nmeson:\n- load ENCL gamma table while ENCL is disabled\n\nnouveau:\n- disp: Set atomic functions in str","author":"Dave Airlie","date":"2026-11-13T23:48:50Z"},{"sha":"97d73c8","msg":"Merge tag 'arm64-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/arm64/linux\n\nPull arm64 fixes from Catalin Marinas:\n \"Fix hugetlb write fault livelock, permission overlay and GCS state\n  preservation across CPU suspend, cpuidle context tracking during\n  system suspend, GCS mode handling on signal return, AMU counter errata\n  workarounds, kexec loading of images with a non-zero text_offset","author":"Linus Torvalds","date":"2026-11-13T21:44:27Z"},{"sha":"b5c5b67","msg":"hwmon: (aht10) Fix update_interval overflow on 64-bit\n\nOn 64-bit, update_interval writes are clamped to LONG_MAX ms, but\nms_to_ktime() overflows above 9223372036854 ms and the interval wraps.\nLONG_MAX becomes -1 ms, so every read starts a new measurement and\nupdate_interval reads back -1.\n\nClamp to INT_MAX like sht4x, so the limit is the same on all platforms.\n\nFixes: 8c78f0dee437 (\"hwmon: Add AHT","author":"Rupesh Majhi","date":"2026-11-08T17:26:51Z"},{"sha":"68af85b","msg":"hwmon: (scmi) Configure sensors before exposing channels\n\nSCMI hwmon enables sensors with SENSOR_CONFIG_SET, but only after\nregistering the hwmon device and only for temperature sensors. This\nleaves other sensor classes disabled on firmware that defaults sensors\nto off, and exposes temperature channels before they are ready.\n\nConfigure each supported sensor while building the channel list, before\n","author":"Sudeep Holla","date":"2026-11-09T15:19:27Z"}]},{"id":1130786764,"name":"AudioNoise","description":"Random digital audio effects","language":"C","stargazers_count":4533,"forks_count":228,"size":1428,"created_at":"2026-01-09T02:33:29Z","pushed_at":"2026-05-08T17:20:22Z","archived":false,"default_branch":"main","commits":[{"sha":"5556156","msg":"Effect interface update\n\nThis updates the effects to the form my microcontroller project is\ncurrently using:\n\n - move the effects headers into a 'audio' subdirectory\n\n - use a more complete 'struct effect' model with pot descriptors\n\n - updated and extended math helper routines\n\nThis updates a few core effects, brings a few others in from the\nmicrocontroller code (boost / pitch), and removes some ","author":"Linus Torvalds","date":"2026-05-07T16:16:35Z","add":1288,"del":1093,"files":[".gitignore","Makefile","am.h","audio/biquad.h","audio/boost.h","audio/compressor.h"],"nfiles":38},{"sha":"6a6daef","msg":"Add \"chasing tone\" effect\n\nAll great guitarists have at some point wondered \"what would it sound\nlike if I was accompanied by a scurry of insane chipmunks - with tiny\ntiny bagpipes?\"\n\nJimi Hendrix wondered.  The closest he ever came was the Roger Mayer\nOctavia together with the Univox Uni-Vibe, and he turned to drugs to\nfill that empty spot in his soul from never having found that perfect\ntone.\n\nA","author":"Linus Torvalds","date":"2026-02-26T18:49:12Z","add":108,"del":2,"files":["Makefile","convert.c","pll.h"],"nfiles":3},{"sha":"3a6b510","msg":"growlingbass: fix abs() confusion, use fabsf()\n\nI've made the mistake of using abs instead of fabs, here is a quick fix.\n\n[ Updated to fix both places, and also to use 'fabsf()' which is the\n  proper one that avoids double conversions - not relevant on a real\n  computer, but visible on microcontrollers with hardware support only\n  for 32-bit floats  - Linus ]\n\nSigned-off-by: Philippe Strauss <cats","author":"Linus Torvalds","date":"2026-01-25T11:07:56Z","add":6,"del":5,"files":["Makefile","growlingbass.h"],"nfiles":2},{"sha":"4c8b6fa","msg":"warn about implicit floating point to integer conversions\n\nThis got disabled when I had to disable '-Wdouble-promotion' due to it\nbeing practically unavoidable with variadic functions.\n\nBut while '-Wdouble-promotion' wasn't practical, I should have kept\n'-Wfloat-conversion' around.\n\nYes, it requires a few manual casts for out hacky 'pow()' usage that\nI'll need to fix for the actual real-time micro","author":"Linus Torvalds","date":"2026-01-25T17:26:14Z","add":3,"del":3,"files":["Makefile","tube.h","util.h"],"nfiles":3},{"sha":"e559381","msg":"Add 'growlingbass' effect\n\nA growling/purring bass effect with a sign flip one period over two for\nsubharmonic generation and split odd/even order distorsion.\n\nSimpler than what has been discussed on github repos and very effective.\n\nSigned-off-by: Philippe Strauss <catseyechandra@proton.me>\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Philippe Strauss","date":"2026-01-22T18:54:07Z"},{"sha":"f434a0e","msg":"Add random 'tube' model\n\nIt's broken and has only a very fleeting association with anything that\nwould be a tube, but I'm committing it just as an example and 'something\nlike this'.  I'm pretty sure I'm doing very wrong things with the FIR\nfilter, but it works (modulo that random multiplier hack) with at least\none amplifier impulse file (converted to raw format).\n\nAnd when I say \"works\", I mean \"m","author":"Linus Torvalds","date":"2026-01-22T19:33:07Z"},{"sha":"ea71138","msg":"convert: add somewhat realtime control interface\n\nThis is pretty raw and stupid, but I wanted to try changing the\nconversion parameters on the fly with a \"control file descriptor\".\n\nThis is currently very limited, and doesn't have an interface for\nswitching the effect itself at runtime (like I do on the hardware:\nlong-press the foot-switch for one second), but at least allows for\nsending \"pot comm","author":"Linus Torvalds","date":"2026-01-18T03:18:26Z"},{"sha":"4cfbb04","msg":"convert: start parsing arguments more flexibly\n\nIn particular, allow default pot values (all at noon), and specifying\ninput and output files rather than always doing stdin/stdout.\n\nAnd no, this is still not all that smart, but it is at least a tiny bit\nmore flexible than it used to be, and the Makefile has been updated\naccordingly.\n\nAlso, when F_SETPIPE_SZ is available, use it to limit the bufferi","author":"Linus Torvalds","date":"2026-01-17T23:46:30Z"},{"sha":"316f255","msg":"Update effect definition interface\n\nAdd a 'description' callback for printing pot meaning, and pass the pot\nvalues as an array to it and to the init function.\n\nThis makes the interface a bit cleaner, but also means that we can now\nuse the same structure as the RP2354A hardware does: call the '->init'\nfunction multiple times as the pots may change during playback.\n\nThe pots don't actually change du","author":"Linus Torvalds","date":"2026-01-17T22:55:42Z"},{"sha":"1d00ac1","msg":"Refactor visualize.py to use native sample units and improve slider\n\nDynamically visualize the X axis in different modes, making the raw\nsample data the core internal data.  This is similar to how we format\nthe Y axis.\n\n - Switch internal logic (view updates, data loading, panning) from\n   seconds to sample indices (integers) to match the underlying data\n   structure\n\n - Add 'Samples' vs 'Time' X-","author":"Linus Torvalds","date":"2026-01-17T21:12:54Z"},{"sha":"ed2e0c1","msg":"Optimize visualize.py for large datasets\n\nSpeed up plotting (courtesy of antigravity) to the point where you can\nreasonably zoom out to fairly long audio files:\n\n - Implement downsampling based on MAX_PLOT_POINTS to avoid\n   over-plotting massive datasets\n\n - Pre-allocate time axis and index buffers to eliminate transient\n   float allocations during zoom/scroll operations\n\n - Use in-place numpy op","author":"Linus Torvalds","date":"2026-01-17T19:16:14Z"},{"sha":"33b66fa","msg":"tests: clean up naming and update gitignore file\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Linus Torvalds","date":"2026-01-17T19:11:15Z"}]},{"id":1058343058,"name":"GuitarPedal","description":"Linus learns analog circuits","language":"C","stargazers_count":2498,"forks_count":135,"size":19391,"created_at":"2025-09-17T01:01:29Z","pushed_at":"2026-11-06T00:21:49Z","archived":false,"default_branch":"main","commits":[{"sha":"1d2d4f0","msg":"rp2354: be more careful about the copper pour under the inductor\n\nI noticed this because I was reading the details on the inductor,\nbecause the Abracon polarized inductor that is suggested is out of stock\nat jlcpcb right now.  So I was looking up details in order to find\nalternatives, and the RP2354 datasheet does say that I should avoid\ncopper under the inductor to avoid eddy currents elsewhere.\n","author":"Linus Torvalds","date":"2026-11-05T19:53:06Z","add":567,"del":566,"files":["Hardware/pedal/pedal.kicad_pcb","Hardware/pedal/pedal.kicad_prl","Hardware/pedal/pedal.kicad_pro"],"nfiles":3},{"sha":"7c8b2aa","msg":"Let's try to finish the \"aux pedal\"\n\nThis is a first attempt at the interface box: in addition to a rotary\nencoder it adds a analog potentiometer (presumed use as a volume knob,\nalthough it will obviously be up to the pedal programming what it will\nbe used for) and two stomp switches.\n\nIt has three LED's - a central status LED (global errors and presumably\nrotary state changes), and two LED's next","author":"Linus Torvalds","date":"2026-11-04T21:00:49Z","add":21469,"del":17305,"files":["Hardware/parts.txt","Hardware/pedal/midi.kicad_sch","Hardware/pedal/pedal.kicad_pcb","Hardware/pedal/pedal.kicad_prl","Hardware/pedal/pedal.kicad_pro","Hardware/pedal/pedal.kicad_sch"],"nfiles":9},{"sha":"87afa10","msg":"Improve 3D model for Daier stomp switch, add -4 version\n\nThe PBS-24B-2 solder lugs aren't just bare boxes, they have rounder\nbottoms and a hole in them.\n\nAnd add a PBS-24B-4 version which has the solder lugs coming out the\nside.  I'm considering using that for a low-profile control box, with\nthe stomp switch connecting to a cutout in the board. Maybe.\n\nSigned-off-by: Linus Torvalds <torvalds@linux","author":"Linus Torvalds","date":"2026-11-04T03:31:16Z","add":15240,"del":3167,"files":["Hardware/Models/PBS-24B-2.py","Hardware/Models/PBS-24B-4.py","Hardware/symbols/Daier PBS-24B-4.kicad_mod","Hardware/symbols/PBS-24B-2.step","Hardware/symbols/PBS-24B-4.step"],"nfiles":5},{"sha":"dcd9c41","msg":"Start re-doing the 'pedal' part without any actual audio processing\n\nThe 'minimal' board is what I think is the right way to go, and works\nvery well.  Being able to use WebMIDI over BLE just means that it's a\nlot more convenient to use from a phone or a computer.\n\nBut as an actual *pedal* that minimal board isn't great.  It\nintentionally has no actual physical controls, and since it's USB-C only\ni","author":"Linus Torvalds","date":"2026-10-15T18:06:01Z","add":14181,"del":44698,"files":["Hardware/pedal/pedal.kicad_pcb","Hardware/pedal/pedal.kicad_prl","Hardware/pedal/pedal.kicad_pro","Hardware/pedal/pedal.kicad_sch","Hardware/pedal/rp2354.kicad_sch","Hardware/pedal/tac5242.kicad_sch"],"nfiles":6},{"sha":"ab3b774","msg":"Cache the last few schema replies in WebMIDI\n\nThe WebMIDI app works quite well over BLE, but the initial handshake\nasking for the pedal schema JSON file is not exactly blazingly fast over\nBLE.  Everything else is quite small by comparison, but the schema that\ndescribes every effect and every pot is about 41kB in size right now.\n\nBut since it seldom changes, it's easy to cache: as part of the initi","author":"Linus Torvalds","date":"2026-10-05T22:42:06Z"},{"sha":"9efeecb","msg":"WebMIDI: cache the effect schema, keyed by the hash the pedal reports\n\nEvery connect downloads the full schema, so connecting over Bluetooth\ntakes several seconds before the app shows anything.\n\nAsk for the identity reply first, and request the schema only when its\nhash is not one already received.  Keep the last four schemas in\nlocalStorage.  Firmware that reports no hash, or an identity reply th","author":"Linus Torvalds","date":"2026-10-05T22:22:51Z"},{"sha":"c28800e","msg":"Report a hash of the effect schema in the identity reply\n\nThe web app asks for the whole schema on every connect, and over\nBluetooth those 41 kB take several seconds.\n\nHash the schema JSON at build time and put the hash in the identity\nreply, so an app that already holds a copy with that hash need not ask\nfor it.  gen_effects.py writes it into midi_schema.h, and into\neffects.js beside the demo ped","author":"Linus Torvalds","date":"2026-10-05T22:22:46Z"},{"sha":"16bc75b","msg":"Document and set up some external tool infrastructure\n\nThe README already documented some of the more obvious tool dependencies\nfor building and using the pedal firmware, but we've grown a few more\ndependencies over time, and some of them aren't all that obvious.\n\nFor example, the rp2354 firmware can now write the nRF54 RRAM image on\nits own and no external tools are needed - but if you want to do","author":"Linus Torvalds","date":"2026-10-05T21:57:14Z"},{"sha":"de40520","msg":"Set up saner picotool integration\n\nThe pico-sdk picotool situation is pretty annoying: it will happily\nbuild its own picotool version but when it does that it intentionally\nbuilds it without USB support so the end result is largely useless\nexcept for the very limited use-cases that the pico-sdk itself uses it\nfor.\n\nSo then you have to build your own version of picotool to get the true\nfull functio","author":"Linus Torvalds","date":"2026-10-05T20:59:21Z"},{"sha":"34b4332","msg":"Drop a reference to 'make enclosure' from a .gitignore comment\n\nThere is no such target.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Linus Torvalds","date":"2026-10-05T17:04:27Z"},{"sha":"9bcd31d","msg":"Validation: run visualize.py with python3\n\nNot every distribution has a plain 'python' command.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Linus Torvalds","date":"2026-10-05T17:04:27Z"},{"sha":"197468e","msg":"Document what has to be installed to build and test\n\nThe README listed some of the build tools and none of the rest: the\nhost compiler picotool needs, the radio's Zephyr build for the ble\nboard, the udev rule that lets picotool and probe-rs open the pedal,\nthe kernel option behind its debug console, what 'make check' and the\nbench scripts import, and the Chrome flag Bluetooth MIDI needs on\nLinux. ","author":"Linus Torvalds","date":"2026-10-05T17:04:27Z"}]},{"id":117900805,"name":"uemacs","description":"Random version of microemacs with my private modificatons","language":"C","stargazers_count":2200,"forks_count":326,"size":758,"created_at":"2018-01-17T22:32:21Z","pushed_at":"2026-08-06T18:30:25Z","archived":false,"default_branch":"master","commits":[{"sha":"325a8e9","msg":"Update the main branch with all the recent cleanup work\n\nI had made all my local hack-job cleanups on a 'hunspell' branch in\norder to not annoy any strange people who use this uemacs project with\nmy random changes for my own use that had removed real features I didn't\nuse.\n\nBut then I decided to do some new cleanups using smarter tooling, and\nthat then evolved into bringing in all the old features","author":"Linus Torvalds","date":"2026-08-06T18:11:15Z","add":5159,"del":10066,"files":[".gitignore","LICENSE","Makefile","README.md","UTF-8-demo.txt","ansi.c"],"nfiles":53},{"sha":"630c025","msg":"Rebuild when the build flags change, not just when a file does\n\nmake decides what is out of date by comparing timestamps, and a flag is\nnot a file.  Install hunspell on a machine that did not have it, run\nmake, and it says \"'em' is up to date\" over objects compiled without\n-DHUNSPELL - the editor you get is the one you were trying to stop\nhaving.  The same trap arrived from the other side in commi","author":"Linus Torvalds","date":"2026-08-06T17:49:10Z","add":16,"del":1,"files":[".gitignore","Makefile"],"nfiles":2},{"sha":"c64ee3c","msg":"Make the spell checking optional\n\nhunspell is the only library this editor needs that is not the terminal\nitself, and it is wanted for one thing: deciding whether to embolden a\nword.  Somebody packaging this has to pull in hunspell and its\ndictionaries whether or not the people installing it will ever turn\nspell mode on, which Ulrich M\u00fcller reasonably called unfortunate.\n\nBuild with HUNSPELL=0 and","author":"Linus Torvalds","date":"2026-08-06T17:25:43Z","add":40,"del":2,"files":["Makefile","spell.c"],"nfiles":2},{"sha":"dae72d5","msg":"Move the spell checking into its own file\n\nmain.c is where the editor starts up, parses its arguments and runs the\ncommand loop.  It was also where the list of languages lived, and the\nsearch for a dictionary directory, and the personal word list, and the\nonly #include <hunspell.h> in the tree - a hundred and ten lines that\nhave nothing to do with starting an editor and were only there because\ntha","author":"Linus Torvalds","date":"2026-08-06T17:20:32Z","add":132,"del":114,"files":["Makefile","efunc.h","main.c","spell.c"],"nfiles":4},{"sha":"38e919a","msg":"Makefile: Respect the user's CFLAGS\n\nSplit CFLAGS, so that the flags for optimisation/warnings can be\noverridden by the user. This is required for Gentoo packaging.\n\nSigned-off-by: Ulrich M\u00fcller <ulm@gentoo.org>\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Ulrich M\u00fcller","date":"2026-08-06T09:47:06Z"},{"sha":"e70caaa","msg":"main.c: Fix typo in comment\n\nSigned-off-by: Ulrich M\u00fcller <ulm@gentoo.org>\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Ulrich M\u00fcller","date":"2026-08-06T09:47:05Z"},{"sha":"51745a3","msg":"More cleanups - and feature restoral - with Opus\n\nThis continues the big cleanups from yesterday, but most notably also\ntries to reach back feature parity with the original branch now that the\ncode is readably written.  So the multi-window handling is back: not\nbecause I use it, but because I know other people do (why?), which is\nwhy the main branch has stayed at the old state for this whole time.","author":"Linus Torvalds","date":"2026-08-05T00:36:10Z"},{"sha":"ea15f1e","msg":"Accept both the American and the British spelling\n\nThe dictionary was one hardcoded /usr/share/hunspell/en_US pair, so\n\"colour\", \"organise\" and \"centre\" came up as errors for anybody working\nwith people on the other side of the Atlantic.  Check against a list of\nlanguages instead - en_US and en_GB - and call a word spelled correctly\nif any of them says so.  Another language is a line in that list.","author":"Linus Torvalds","date":"2026-08-04T22:46:43Z"},{"sha":"149b1d3","msg":"Call the local dictionary's argument filename again\n\nCommit bb4d7d5 (\"Mark the bindable commands, and name them after\nthemselves\") renamed filename() - the C-x N command - to\ncmd_change_file_name, and local_dictionary() in main.c had a parameter\nof the same name.  So it has been reading\n\n\tstatic void local_dictionary(Hunhandle *handle,\n\t\t\t\t     const char *cmd_change_file_name)\n\nwhich describes a ","author":"Linus Torvalds","date":"2026-08-04T22:32:13Z"},{"sha":"6b39259","msg":"Give ASAVE the bit that add-mode actually sets\n\nadjustmode() turns a mode name into a bit by its index in modename[],\nwhere ASAVE is seventh and so sets 0x0080.  MDASAVE said 0x0800, so\ncurbp->b_mode & MDASAVE was never true and the auto-save block in\nexecute() had not run in a very long time.  add-mode asave put Asave on\nthe mode line - modeline() indexes by the same 1 << i - and then nothing\nwha","author":"Linus Torvalds","date":"2026-08-04T22:21:02Z"},{"sha":"b7488e0","msg":"Count the modes there are, rather than one more\n\nNUMMODES said 10 while modename[] and mode2name[] held nine, and\nmodecode[] held ten letters with Y for crYpt still in seventh place.  So\nthe mode letters were shifted: add-mode asave showed Y, add-mode utf-8\nshowed A, and a tenth column was printed for a mode that does not exist.\n\nThat is not only cosmetic.  adjustmode() in random.c runs\n\n\tfor (i =","author":"Linus Torvalds","date":"2026-08-04T22:17:53Z"},{"sha":"8da26d8","msg":"Call the mode name buffer mode_name, not execute_numbered_macro\n\nCommit 3fb62f8 (\"Name the numbered macro runner and the cursor\nplacement\") renamed cbuf to execute_numbered_macro with a global\nsubstitution, and adjustmode() in random.c had a local char buffer of\nthe same name - the one add-mode reads the mode name into.  So it came\nout declaring \"char execute_numbered_macro[NPAT]\" and comparing it","author":"Linus Torvalds","date":"2026-08-04T22:03:14Z"}]},{"id":86106493,"name":"test-tlb","description":"Stupid memory latency and TLB tester","language":"C","stargazers_count":1085,"forks_count":224,"size":19,"created_at":"2017-03-24T20:06:37Z","pushed_at":"2024-08-19T21:13:36Z","archived":false,"default_branch":"master","commits":[{"sha":"14321e3","msg":"README: minor typos fix\n\nVerified with GNU Aspell spell checker.\n\nSigned-off-by: Christopher Diaz Riveros <chrisadr@gentoo.org>\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Christopher Diaz Riveros","date":"2018-02-10T13:15:24Z","add":2,"del":2,"files":["README"],"nfiles":1},{"sha":"16e929a","msg":"Improve on the timing logic a bit more\n\nTime the warmup run to make a better estimate of how long to run the\nreal runs.  We want to balance getting timely results with still\nactually having the time to actually traverse the full list a few times.\n\nThis basically aims for the real run to traverse the list at least five\ntimes, but to also run for at least a fifth of a second.  Because five\nis obviou","author":"Linus Torvalds","date":"2017-03-27T19:00:27Z","add":33,"del":11,"files":["Makefile","test-tlb.c"],"nfiles":2},{"sha":"4210d1c","msg":"Improve on map re-allocation strategy\n\nDon't bother reallocating hugepage mappings, the cache associativity\nissues are hopefully not all that noticeable with big pages to begin\nwith, and with fewer big pages to go around it's likely less effective\nto try to change the mapping anyway.\n\nFor the regular page case, force any remapping to over-map the old\nmapping, which will free the old pages.  That m","author":"Linus Torvalds","date":"2017-03-27T18:38:02Z","add":20,"del":4,"files":["test-tlb.c"],"nfiles":1},{"sha":"4ac62b9","msg":"Try to increase result stability by running multiple rounds\n\nThis runs things five times, randomizing the list in between each run,\nand then picks the minimum cycle time of the five.  That makes the\nresults more stable.\n\nThere's a few downsides to this:\n\n (a) to avoid taking five times as long, each run only runs for half a\n     second. Which might not actually be enough to go around for big\n     ","author":"Linus Torvalds","date":"2017-03-27T00:51:13Z","add":43,"del":11,"files":["test-tlb.c"],"nfiles":1},{"sha":"d352c0d","msg":"Add README and LICENSE.txt file\n\n... and a .gitignore file.\n\nAll prepping for putting it on github or something\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Linus Torvalds","date":"2017-03-24T20:04:03Z"},{"sha":"784130f","msg":"Allow odd stride values\n\nThey are actually quite useful for testing unaligned behavior: does it\nslow down every access, or does it slow down only some accesses?\n\nFor example, on my i7-6700K, I get\n\n\t[torvalds@i7 test-tlb]$ ./test-tlb 16k 12\n\t  1.29ns (~5.0 cycles)\n\n\t[torvalds@i7 test-tlb]$ ./test-tlb 16k 11\n\t  1.36ns (~5.3 cycles)\n\nwhich means that the unaligned load case is actually very low in p","author":"Linus Torvalds","date":"2017-03-24T19:32:52Z"},{"sha":"cedcf70","msg":"Work even in the presense of transparent hugepage  \"always\".\n\nChristian Borntraeger tested on an s390, and had transparent hugepages\nset to \"always\", which meant that the small-page case never triggered at\nall.\n\nSo when not testing the hugepage case, explicitly do a\n\n\tmadvise(MADV_NOHUGEPAGE)\n\non the memory allocation.\n\nReported-by: Christian Borntraeger <christian@borntraeger.net>\nSigned-off-by: ","author":"Linus Torvalds","date":"2017-03-23T18:27:05Z"},{"sha":"3a301fe","msg":"Use gettimeofday for start/end\n\nIn case your \"alarm(1)\" isn't entirely precise.","author":"Linus Torvalds","date":"2017-03-22T17:32:19Z"},{"sha":"fba5906","msg":"Improve the tester some more, remove the old TLB-only code","author":"Linus Torvalds","date":"2017-03-21T23:58:39Z"},{"sha":"cea0221","msg":"Try to create test of truly random list walker\n\n.. with hugetlb and without.\n\nIt may be broken.","author":"Linus Torvalds","date":"2017-03-21T22:16:31Z"},{"sha":"bf9779c","msg":"Very hacky TLB timing tester","author":"Linus Torvalds","date":"2017-03-17T20:17:03Z"}]},{"id":113099837,"name":"pesconvert","description":"Brother PES file converter","language":"C","stargazers_count":593,"forks_count":76,"size":17,"created_at":"2017-12-04T21:58:56Z","pushed_at":"2022-12-22T10:46:37Z","archived":false,"default_branch":"master","commits":[{"sha":"d6d7001","msg":"cairo, svg: ignore empty blocks\n\nFixes crash bug found with the afl fuzzer.\n\nSigned-off-by: Max Kellermann <max.kellermann@gmail.com>","author":"Max Kellermann","date":"2017-12-04T09:49:04Z","add":6,"del":0,"files":["cairo.c","svg.c"],"nfiles":2},{"sha":"e8950f1","msg":"cairo,svg: convert \"while\" to \"for\" (code simplification)\n\nSigned-off-by: Max Kellermann <max.kellermann@gmail.com>","author":"Max Kellermann","date":"2017-12-04T09:47:10Z","add":2,"del":10,"files":["cairo.c","svg.c"],"nfiles":2},{"sha":"d714693","msg":"pes: check the color index, fail if out of range\n\nFixes crash when there are more than 256 blocks.\n\nSigned-off-by: Max Kellermann <max.kellermann@gmail.com>","author":"Max Kellermann","date":"2017-12-04T09:34:05Z","add":7,"del":1,"files":["pes.c"],"nfiles":1},{"sha":"2465e52","msg":"pes: new_block() fails if undefined color is referenced\n\nFixes crash when the file's color table is too short.\n\nSigned-off-by: Max Kellermann <max.kellermann@gmail.com>","author":"Max Kellermann","date":"2017-12-04T07:33:47Z","add":6,"del":1,"files":["pes.c"],"nfiles":1},{"sha":"bcc7211","msg":"pes: add missing new_block() error check\n\nSigned-off-by: Max Kellermann <max.kellermann@gmail.com>","author":"Max Kellermann","date":"2017-12-03T22:18:11Z"},{"sha":"4f36a5c","msg":"Mark the \"big y displacement\" case as a jumpstitch too\n\nAnother case pointed out by Trever and missed in his first patch.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Linus Torvalds","date":"2012-01-19T20:40:37Z"},{"sha":"c3ab5a5","msg":"Fix jumpstitch output\n\nI noticed that your thumbnailer shows jump stitches yielding some ugly\nthread lines in some cases.\n\nI have attached a patch which solves this problem. Feel free to use it,\nmodify it, whatever.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Trever L. Adams","date":"2012-01-19T07:14:20Z"},{"sha":"b762109","msg":"Simplify and fix block allocation\n\nThis was just totally broken.  Since we used to re-alloc the pes blocks,\nwe cannot maintain a list of them: the pointers change.\n\nSo stop realloc'ing the blocks, and instead just realloc the stitch\nlist.  And simplify the list handling while at it.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Linus Torvalds","date":"2011-12-02T21:01:19Z"},{"sha":"89ff2f5","msg":"Add thumbnailer entry for gnome3\n\ngnome3 changed the rules for how thumbnailer applications work.  For the\nbetter, but without any real documentation.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Linus Torvalds","date":"2011-12-02T18:09:14Z"},{"sha":"34823ef","msg":"pesconvert: Fixed row init range in output_png().\n\nThis prevents a segfault for small embroidery patterns or large\noutput dimensions.\n\nEven though output_png() is dead code, there is a slight chance,\nthat someone lacks libcairo-dev while being offline. ;-)\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Torsten Scheck","date":"2010-03-22T09:28:49Z"},{"sha":"180dd57","msg":"Add a 'density' argument for thread thickness\n\nI like the default thin thread effect, but using a density of 2.5 or so\nseems to be a bit more realistic on my test-case.  Which may be more\nabout the test-case than anything else, but whatever.\n\nSo with this, you can do something like\n\n\tpesconvert -d 2.5 -s 512 Jan_heartsdelight.pes s512.png\n\nto generate a 512-pixel sized version of the Brother examp","author":"Linus Torvalds","date":"2010-01-14T02:01:44Z"},{"sha":"6e7a7fc","msg":"Fix some trivial scaling problems\n\nI used to scale everything to be square.  That was fine for testing, but\nnot so great for actual use.  This makes it all look better when the\ninput isn't square.  It also scales the width of the line properly.\n\nAnd in honor of this actually being useful (it's installed on Tove's\nmachine now), let's sign off on it all.\n\nSigned-off-by: Linus Torvalds <torvalds@linu","author":"Linus Torvalds","date":"2010-01-13T21:27:34Z"}]},{"id":940929652,"name":"1590A","description":"Random odd guitar pedal design in kicad","language":"OpenSCAD","stargazers_count":583,"forks_count":22,"size":10882,"created_at":"2025-03-01T04:36:29Z","pushed_at":"2025-09-19T02:54:14Z","archived":true,"default_branch":"main","commits":[{"sha":"57ea740","msg":"Merge branch 'archive-note' of https://github.com/GNUfault/1590A\n\n* 'archive-note' of https://github.com/GNUfault/1590A:\n  Add archive message","author":"Linus Torvalds","date":"2025-09-19T02:53:53Z","add":3,"del":0,"files":["README.md"],"nfiles":1},{"sha":"a3a39a8","msg":"Update very incomplete STM32 board\n\nI'm committing this partial work just to have the history, and because I\nmight use this as a starting point if I take up the mixed-mode thing in\nthe new GuitarPedal project.\n\nIt's almost certainly not worth saving, but you never know...\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Linus Torvalds","date":"2025-09-19T02:47:09Z","add":7719,"del":1828,"files":["Effect/STM32/STM32.kicad_pcb","Effect/STM32/STM32.kicad_pro","Effect/STM32/STM32.kicad_sch","Effect/STM32/pcm3060.kicad_sch"],"nfiles":4},{"sha":"953bc61","msg":"Add archive message\n\nAdd archive message \n\nSigned-off-by: GNUfault <blumatrikz@gmail.com>","author":"GNUfault","date":"2025-09-18T23:30:45Z","add":3,"del":0,"files":["README.md"],"nfiles":1},{"sha":"eb0d867","msg":"Add aggressive low-pass filter to the Daisy Seed base board output\n\nThis is from me looking at the HF noise from the Daisy Seed on the\noscilloscope, and then checking what the Hothouse padal looks like.\n\nThe Hothouse actually looks really clean - kudos to Ricky Sheaves.  The\nreason seems to be a rather aggressive low-pass filter with the 3dB\npoint at 22kHz.  That will attenuate some of the audio b","author":"Linus Torvalds","date":"2025-09-09T20:57:18Z","add":1023,"del":153,"files":["Base/DaisySeed/DaisySeed.kicad_pcb","Base/DaisySeed/DaisySeed.kicad_sch","Base/DaisySeed/DaisySeed.wbk","Base/DaisySeed/sim.kicad_sch"],"nfiles":4},{"sha":"5c6c230","msg":"Add very incomplete and broken stm32 board\n\nThe potential plan is to maybe try to actually recreate a subset of what\nthe Daisy Seed does, and have it populated at jlcpcb.\n\nBecause I'm not excited about hand-soldering the kinds of components\nthis will need (although so far I've picked stuff that should be doable,\nso maybe I change my mind and just go for a stencil).\n\nThis is probably all kinds of b","author":"Linus Torvalds","date":"2025-09-09T20:00:45Z"},{"sha":"8e248bd","msg":"Fix pcb layerselection on Daisy Seed board\n\nI have no idea what happened, but I think this got corrupted as part of\nthe KiCad 9.0 downgrade.  Or me just fat-finger things randomly.\n\nRegardless, this really confused me when generating some rather invalid\ngerbers. It's hopefully right now.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Linus Torvalds","date":"2025-09-08T15:41:47Z"},{"sha":"95ff521","msg":"Try attaching the Daisy Seed directly on the base board\n\nOk, so to fit this thing, I needed to play some games, and also get rid\nof the third potentiometer.\n\nSo now it only has two pots, and the Daisy Seed needs to be the\nunsoldered kind, where you solder low-profile pin headers to the \"wrong\"\nside of the board.\n\nIOW, the Daisy Seed gets mounted upside down on the top of the base\nboard, and then i","author":"Linus Torvalds","date":"2025-09-07T20:58:46Z"},{"sha":"76e6091","msg":"Add input signal re-biasing to the Daisy Seed after all\n\nYes, the Daisy Seed ends up AC-coupling the input, and will re-bias it\nto the mid-point of the analog voltage range for the audio codec.\n\nBut thinking some more about it, I started worrying about the capacitor\nused. In particular, it might very well be a low-voltage one, and the\ndual JFET input will have a buffered output voltage in the 5V+ ","author":"Linus Torvalds","date":"2025-09-04T19:19:09Z"},{"sha":"f2c7e65","msg":"Finish down-converting a couple of the old boards to KiCad 9.0\n\nThis just does the \"load into kicad, fix up, save\" dance for the plain\nbase board.  Also do the Octaver and compressor effects boards to check.\n\nThis finishes the conversion back to KiCad 9.0.\n\nI think I'll just leave the other boards alone: I think I'm done with\nthem anyway, and we'll just leave them in that zombie state for\nposterit","author":"Linus Torvalds","date":"2025-09-04T18:21:50Z"},{"sha":"9d07a70","msg":"Scripted down-conversion of the rest of the files to kicad 9.0 format\n\nThis just does the minimal conversion to make kicad-9 almost happy with\nthe down-conversion.  It was done with this very hacky script:\n\n  files=$(git grep -l '\"9.99\"')\n  sed -i 's/(version [0-9]*)/(version 20231212)/' $files\n  sed -i 's/(generator_version \"9.99\")/(generator_version \"9.0\")/' $files\n  sed -i 's/(power global)/(po","author":"Linus Torvalds","date":"2025-09-04T18:20:32Z"},{"sha":"09dfed0","msg":"Downgrade Daisy Seed boards to kicad v9.0\n\nSince I don't do audio signal simulation with the Daisy Seed boards,\nlet's try to downcovert to the standard kicad version to make it easier\nto use without having to have a self-compiled version.\n\nKicad doesn't make this particularly easy, I'm afraid.  Let's hope this\ndidn't do anything bad.  It still simulates, and looks superficially ok.\n\nSigned-off-by:","author":"Linus Torvalds","date":"2025-09-04T04:01:20Z"},{"sha":"2e5d557","msg":"Create a pedal design based on the Electrosmith Daisy Seed platform\n\nThis tries to make the pedal actually useful by making the audio side\nuse the Daisy Seed from Electrosmith [1]\n\nI've had the board for the last six months, but up until now didn't feel\nready to use it.\n\nI even built the Hothouse pedal kit around it, and exchanged some emails\nwith both Andrew Ikenberry (Electrosmith) and Ricky She","author":"Linus Torvalds","date":"2025-09-03T20:30:54Z"}]},{"id":1137038093,"name":"HunspellColorize","description":"Wrapper around 'less' to colorize spelling mistakes using Hunspell","language":"C","stargazers_count":402,"forks_count":21,"size":15,"created_at":"2026-01-18T19:57:03Z","pushed_at":"2026-01-19T20:23:09Z","archived":false,"default_branch":"main","commits":[{"sha":"87c358b","msg":"Add local dictionaries if they exist\n\nThis is very simplistic - as is the whole project - but it adds a local\ndictionary file from the current working directory and from the home\ndirectory.\n\nGood enough for some testing, at least.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Linus Torvalds","date":"2026-01-19T20:19:39Z","add":16,"del":0,"files":["huncolor.c"],"nfiles":1},{"sha":"fcf2283","msg":"Use pkg-config to find hunspell instead of hardcoding it\n\nAlso add -Wall, and fix a compiler warning that showed up as a result.\n\nIt's all just slightly less hacky this way.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>","author":"Linus Torvalds","date":"2026-01-19T17:08:48Z","add":10,"del":2,"files":["Makefile","huncolor.c"],"nfiles":2},{"sha":"0d99d1c","msg":"Update README about colorization..\n\nI fixed the most obvious interaction with the ANSI color sequences that\ncome from git colorizing its output, and this actually works\nsurprisingly well.  I've been using this _while_ looking at doing the\nhunspell thing in uemacs, and I don't actually hate it.\n\nYes, it ends up bold-facing various random variable names and other\nthings that aren't proper words, but","author":"Linus Torvalds","date":"2026-01-19T00:04:37Z","add":1,"del":6,"files":["README.md"],"nfiles":1},{"sha":"d2f2439","msg":"Stop being quite so lazy about line lengths and UTF-8\n\nThis deals with line lengths by ignoring the issue and just using a\nstate machine on raw buffers.\n\nIt also deals with UTF-8 content using exactly the same \"ignore it\" way:\njust blithely assume that any non-US-ASCII characters are just letters\nin other alphabets.\n\nBecause ignorance is bliss, and that makes it do the right thing for\nFinnish and ","author":"Linus Torvalds","date":"2026-01-18T21:55:16Z","add":132,"del":59,"files":["huncolor.c"],"nfiles":1},{"sha":"bc93b50","msg":"Do a really simple colorizing pager\n\nThis *must* exist somewhere, but google failed me and couldn't find it.\n\nI want a simple pager that shows me my typos in commit messages etc.  I\nreally should just integrate this into my editor instead, since that's\nthe real problem here (and my fingers refuse to learn new things:\nbelieve me, I've tried), but I decided that the first step would be to\njust do a ","author":"Linus Torvalds","date":"2026-01-18T19:53:56Z"}]}]},{"login":"vercel","name":"Vercel","type":"Organization","followers":32147,"public_repos":244,"repos":[{"id":70107786,"name":"next.js","description":"The React Framework","language":"JavaScript","stargazers_count":143525,"forks_count":32804,"size":2635475,"created_at":"2016-10-05T23:32:51Z","pushed_at":"2026-11-15T10:51:54Z","archived":false,"default_branch":"canary","commits":[{"sha":"c71d522","msg":"turbo-persistence: cover block lengths in CRCs (#100322)\n\n## Summary\n\nStacked on #100313.\n\nThe 8-byte headers of SST blocks and blob files store\n`[uncompressed_length][crc32]`, but the CRC only covered the payload. A\ncorrupted length therefore passed the checksum check and could:\n\n- make a reader allocate a decompression buffer of up to 4 GB;\n- flip whether a block is treated as compressed (`0` me","author":"Tobias Koppers","date":"2026-11-15T01:57:17Z","add":377,"del":35,"files":["turbopack/crates/turbo-persistence/README.md","turbopack/crates/turbo-persistence/src/bin/sst_inspect.rs","turbopack/crates/turbo-persistence/src/compression.rs","turbopack/crates/turbo-persistence/src/db.rs","turbopack/crates/turbo-persistence/src/static_sorted_file.rs","turbopack/crates/turbo-persistence/src/static_sorted_file_builder.rs"],"nfiles":8},{"sha":"d2b64bf","msg":"turbo-persistence: keep used keys across intermediate merges (#101796)\n\n### What?\n\nturbo-persistence: keep the used keys (the keys read since the previous\ncommit) alive across intermediate merges, so that a later bottom merge\nstill writes those keys into hot SST files.\n\n### Why?\n\nA bottom merge splits its output into hot and cold files using the union\nof the \"used key hashes\" AMQFs of all meta fil","author":"Tobias Koppers","date":"2026-11-15T01:18:57Z","add":167,"del":6,"files":["turbopack/crates/turbo-persistence/README.md","turbopack/crates/turbo-persistence/src/db.rs","turbopack/crates/turbo-persistence/src/tests.rs"],"nfiles":3},{"sha":"ce93327","msg":"Simplify the code gen that adds deployment ids conditionally (#101785)\n\n* Avoid touching the global multiple times\n* Avoid rewriting the same chunks array multiple times (the arrays are\ninterned, so we intern the rewritten arrays as well)\n* Move the logic into the iffe","author":"Luke Sandberg","date":"2026-11-15T01:05:06Z","add":20,"del":20,"files":["crates/next-core/src/next_manifests/client_reference_manifest.rs"],"nfiles":1},{"sha":"b530e71","msg":"v16.5.0-canary.51","author":"next-js-bot[bot]","date":"2026-11-14T23:18:00Z","add":21,"del":21,"files":["packages/create-next-app/package.json","packages/devlow-bench/package.json","packages/eslint-config-next/package.json","packages/eslint-plugin-internal/package.json","packages/eslint-plugin-next/package.json","packages/font/package.json"],"nfiles":21},{"sha":"8d1f4ed","msg":"turbo-tasks-backend: release the owner task before the reader side of keyed refinement (#101732)\n\n## What?\n\nRelease the keyed cell owner's task lock before updating the reader side\nof a provisional dependency refinement. This is a minimal port onto\ncanary's flat `EdgeSet` storage from #101489. It remains based directly\non `canary`; #101734 builds on it. #101736 is now independent.\n\n## Why?\n\nMany r","author":"Tobias Koppers","date":"2026-11-14T12:19:18Z"},{"sha":"d7a2320","msg":"v16.5.0-canary.50","author":"next-js-bot[bot]","date":"2026-11-14T08:10:04Z"},{"sha":"cbd8159","msg":"Enable turbopackMinifyBeforeChunking by default on canary releases (#101113)\n\nEnable `experimental.turbopackMinifyBeforeChunking` by default on canary\nreleases (when `isStableBuild()` is false, the same rule `turbopackGc`\nuses). An explicit value in `next.config` still wins.\n\nPer-item minification and the minified-size chunking defaults from\n#101010 measured as a cold-build CPU win on a large app ","author":"Luke Sandberg","date":"2026-11-14T02:27:43Z"},{"sha":"7d19c34","msg":"Turbopack: write smaller/faster client reference manifests (#101312)\n\n## Summary\n\nTurbopack's `*_client-reference-manifest.js` files repeat the same chunk\nlists for every client reference: each `clientModules`,\n`ssrModuleMapping`, and `rscModuleMapping` entry of a page lists all the\nchunks of its chunk group, so a manifest is mostly copies of a handful\nof lists. On a large app the manifests totale","author":"Luke Sandberg","date":"2026-11-14T01:28:25Z"},{"sha":"df7104d","msg":"docs: place shell param-order rule with build-time shells (#101680)\n\n## Summary\n\n- ISR with Cache Components guide: moves the rule that shells leave\nparams open only from the end of the route out of \"What the upgrade\nproduces\" and into \"At build time\", where it describes which shells\nexist. Under the upgrade section it read as a limit on the upgrade\nitself, which confused a reader in\nhttps://githu","author":"Joseph","date":"2026-11-14T01:28:05Z"},{"sha":"8478b34","msg":"Generate managed agent instructions on next dev and respect opt-outs (#101746)\n\n## Summary\n\nCreate and refresh the managed documentation pointer in `AGENTS.md`\nwhenever `next dev` runs, so projects are ready before their first\ncoding-agent session. `agentRules: false` removes only the managed rules\nblock and preserves other content.\n\n`next dev` also manages upgrade instructions\n(`experimental.agen","author":"Aurora Scharff","date":"2026-11-14T01:19:05Z"},{"sha":"2471a50","msg":"fix(next/image): check the LCP element loading state (#101737)\n\n## Summary\n\nFix the development LCP warning asking for `loading=\"eager\"` when the\npainted image is already eager, preloaded, or prioritized and a lazy\nduplicate shares its resolved URL. A genuinely lazy LCP image also keeps\nits warning when an eager duplicate shares the URL.\n\n- Update `packages/next/src/shared/lib/get-img-props.ts` to","author":"Aurora Scharff","date":"2026-11-14T01:06:30Z"},{"sha":"cb2ec79","msg":"Run render error reporting outside the work-unit scope (#101597)\n\n## Summary\n\nWith Cache Components and Partial Prefetching, timestamp reads in\n`onRequestError` can interrupt staged rendering and produce a secondary\nprerender diagnostic from the reporter. Run error reporting outside the\nwork-unit scope so reporters can read time and randomness, including in\nasync continuations.\n\n- Update both shar","author":"Aurora Scharff","date":"2026-11-14T00:42:54Z"}]},{"id":62367558,"name":"hyper","description":"A terminal built on web technologies","language":"TypeScript","stargazers_count":44753,"forks_count":3571,"size":23464,"created_at":"2016-07-01T06:01:21Z","pushed_at":"2026-11-04T19:31:46Z","archived":true,"default_branch":"canary","commits":[{"sha":"890a332","msg":"fix: validate ssh:// URLs before building the ssh command (#8217)\n\nHyper registers itself as the handler for the ssh:// protocol when\ndefaultSSHApp is enabled, which is the default. The URL handed over by\nthe OS was passed through parse-url and forwarded to the renderer, which\nbuilt a command by concatenating the parsed protocol, user, resource and\nport, then wrote that string plus a newline into ","author":"Steven","date":"2026-11-04T19:17:12Z","add":218,"del":9,"files":["app/index.ts","app/utils/ssh-url.ts","lib/actions/ui.ts","test/unit/ssh-url.test.ts","typings/common.d.ts"],"nfiles":5},{"sha":"30ec0a2","msg":"Delete .github/workflows/e2e_comment.yml (#8207)\n\nCo-authored-by: vercel[bot] <35613825+vercel[bot]@users.noreply.github.com>\nCo-authored-by: Steven <229881+styfle@users.noreply.github.com>","author":"Steven","date":"2026-08-21T20:44:38Z","add":0,"del":63,"files":[".github/workflows/e2e_comment.yml"],"nfiles":1},{"sha":"da0c401","msg":"chore: switch package management to pnpm (#8184)\n\n* Switch package management to pnpm\n\nCo-authored-by: Steven <styfle@users.noreply.github.com>\n\n* Fix pnpm install and build workflow\n\n* Move pnpm build approvals to workspace config\n\n---------\n\nCo-authored-by: Cursor Agent <cursoragent@cursor.com>","author":"Steven","date":"2026-05-21T17:28:40Z","add":11574,"del":10080,"files":[".github/workflows/nodejs.yml",".gitignore",".husky/pre-push",".npmrc",".yarnrc","PLUGINS.md"],"nfiles":20},{"sha":"2a7bb18","msg":"Bump @types/react from 18.2.75 to 18.2.79\n\nBumps [@types/react](https://github.com/DefinitelyTyped/DefinitelyTyped/tree/HEAD/types/react) from 18.2.75 to 18.2.79.\n- [Release notes](https://github.com/DefinitelyTyped/DefinitelyTyped/releases)\n- [Commits](https://github.com/DefinitelyTyped/DefinitelyTyped/commits/HEAD/types/react)\n\n---\nupdated-dependencies:\n- dependency-name: \"@types/react\"\n  depend","author":"dependabot[bot]","date":"2024-04-18T04:38:00Z","add":5,"del":5,"files":["package.json","yarn.lock"],"nfiles":2},{"sha":"f39b228","msg":"Bump @types/node from 18.19.30 to 18.19.31\n\nBumps [@types/node](https://github.com/DefinitelyTyped/DefinitelyTyped/tree/HEAD/types/node) from 18.19.30 to 18.19.31.\n- [Release notes](https://github.com/DefinitelyTyped/DefinitelyTyped/releases)\n- [Commits](https://github.com/DefinitelyTyped/DefinitelyTyped/commits/HEAD/types/node)\n\n---\nupdated-dependencies:\n- dependency-name: \"@types/node\"\n  depende","author":"dependabot[bot]","date":"2024-04-18T04:36:54Z"},{"sha":"57c95b4","msg":"Bump inquirer from 9.2.17 to 9.2.18\n\nBumps [inquirer](https://github.com/SBoudrias/Inquirer.js) from 9.2.17 to 9.2.18.\n- [Release notes](https://github.com/SBoudrias/Inquirer.js/releases)\n- [Commits](https://github.com/SBoudrias/Inquirer.js/compare/inquirer@9.2.17...inquirer@9.2.18)\n\n---\nupdated-dependencies:\n- dependency-name: inquirer\n  dependency-type: direct:development\n  update-type: version-","author":"dependabot[bot]","date":"2024-04-15T11:14:56Z"},{"sha":"cb7664f","msg":"Bump playwright from 1.43.0 to 1.43.1\n\nBumps [playwright](https://github.com/microsoft/playwright) from 1.43.0 to 1.43.1.\n- [Release notes](https://github.com/microsoft/playwright/releases)\n- [Commits](https://github.com/microsoft/playwright/compare/v1.43.0...v1.43.1)\n\n---\nupdated-dependencies:\n- dependency-name: playwright\n  dependency-type: direct:development\n  update-type: version-update:semver","author":"dependabot[bot]","date":"2024-04-15T11:12:14Z"},{"sha":"617bea1","msg":"Bump electron-mksnapshot from 29.2.0 to 29.3.0\n\nBumps [electron-mksnapshot](https://github.com/electron/mksnapshot) from 29.2.0 to 29.3.0.\n- [Release notes](https://github.com/electron/mksnapshot/releases)\n- [Commits](https://github.com/electron/mksnapshot/compare/v29.2.0...v29.3.0)\n\n---\nupdated-dependencies:\n- dependency-name: electron-mksnapshot\n  dependency-type: direct:development\n  update-typ","author":"dependabot[bot]","date":"2024-04-15T11:10:51Z"},{"sha":"5e08cec","msg":"Bump css-loader from 7.0.0 to 7.1.1\n\nBumps [css-loader](https://github.com/webpack-contrib/css-loader) from 7.0.0 to 7.1.1.\n- [Release notes](https://github.com/webpack-contrib/css-loader/releases)\n- [Changelog](https://github.com/webpack-contrib/css-loader/blob/master/CHANGELOG.md)\n- [Commits](https://github.com/webpack-contrib/css-loader/compare/v7.0.0...v7.1.1)\n\n---\nupdated-dependencies:\n- depe","author":"dependabot[bot]","date":"2024-04-15T11:11:48Z"},{"sha":"65db608","msg":"Bump typescript from 5.4.4 to 5.4.5\n\nBumps [typescript](https://github.com/Microsoft/TypeScript) from 5.4.4 to 5.4.5.\n- [Release notes](https://github.com/Microsoft/TypeScript/releases)\n- [Changelog](https://github.com/microsoft/TypeScript/blob/main/azure-pipelines.release.yml)\n- [Commits](https://github.com/Microsoft/TypeScript/compare/v5.4.4...v5.4.5)\n\n---\nupdated-dependencies:\n- dependency-name","author":"dependabot[bot]","date":"2024-04-15T11:12:34Z"},{"sha":"86385a9","msg":"Bump eslint-plugin-jsonc from 2.15.0 to 2.15.1\n\nBumps [eslint-plugin-jsonc](https://github.com/ota-meshi/eslint-plugin-jsonc) from 2.15.0 to 2.15.1.\n- [Release notes](https://github.com/ota-meshi/eslint-plugin-jsonc/releases)\n- [Changelog](https://github.com/ota-meshi/eslint-plugin-jsonc/blob/master/CHANGELOG.md)\n- [Commits](https://github.com/ota-meshi/eslint-plugin-jsonc/compare/v2.15.0...v2.15.","author":"dependabot[bot]","date":"2024-04-15T11:14:13Z"},{"sha":"5c79fb9","msg":"Bump @types/react-dom from 18.2.24 to 18.2.25\n\nBumps [@types/react-dom](https://github.com/DefinitelyTyped/DefinitelyTyped/tree/HEAD/types/react-dom) from 18.2.24 to 18.2.25.\n- [Release notes](https://github.com/DefinitelyTyped/DefinitelyTyped/releases)\n- [Commits](https://github.com/DefinitelyTyped/DefinitelyTyped/commits/HEAD/types/react-dom)\n\n---\nupdated-dependencies:\n- dependency-name: \"@types","author":"dependabot[bot]","date":"2024-04-15T11:11:04Z"}]},{"id":218115303,"name":"swr","description":"React Hooks for Data Fetching","language":"TypeScript","stargazers_count":32490,"forks_count":1406,"size":8334,"created_at":"2019-10-28T18:16:01Z","pushed_at":"2026-10-16T17:57:58Z","archived":false,"default_branch":"main","commits":[{"sha":"8148ef0","msg":"fix(mutation): type optimisticData with the displayedData parameter (#4318)\n\n## Summary\n\n`SWRMutationConfiguration.optimisticData` types its callback as\n`(currentData?: SWRData) => SWRData`, but the option is forwarded to the\ncore `mutate`, which calls it with **two** arguments:\n\n\nhttps://github.com/vercel/swr/blob/main/src/_internal/utils/mutate.ts#L144-L146\n\n```ts\noptimisticData = isFunction(opt","author":"iroiro147","date":"2026-10-16T17:57:57Z","add":35,"del":1,"files":["src/mutation/types.ts","test/type/mutation.ts"],"nfiles":2},{"sha":"a6e2a52","msg":"chore: remove unused CodeSandbox CI setup (#4364)\n\nRemove the unused CodeSandbox CI configuration and its `csb:install` /\n`csb:build` package scripts, since we no longer actively use the\nintegration.\n\nCloses #4233.","author":"Jiachi Liu","date":"2026-10-16T17:39:48Z","add":0,"del":8,"files":[".codesandbox/ci.json","package.json"],"nfiles":2},{"sha":"9ed1240","msg":"2.6.0-beta.0 (#4338)","author":"Jiachi Liu","date":"2026-09-22T11:52:52Z","add":1,"del":1,"files":["package.json"],"nfiles":1},{"sha":"21e826a","msg":"Add cache tag revalidation support (#4336)\n\nThis adds an option to the config for `useSWR()` so that `tags` can be\npassed. These tags make it easier to invalidate a batch of keys based\noff of a single, low-entropy string (e.g. `projects/prj_fdjklsfdjslk`)\ninstead of needing to know every permutation of key to invalidate (e.g.\n`/api/v1/projects?id=prj_fdjklsfdjslk`,\n`/api/v2/projects?id=prj_fdjklsf","author":"Ian Jones","date":"2026-09-22T11:32:33Z","add":500,"del":17,"files":["src/_internal/index.ts","src/_internal/types.ts","src/_internal/utils/cache.ts","src/_internal/utils/config-context.ts","src/_internal/utils/config.ts","src/index/index.ts"],"nfiles":11},{"sha":"57a71f7","msg":"Chore: Fix X handle link (#4334)","author":"Shu Ding","date":"2026-09-14T09:04:17Z"},{"sha":"01cb488","msg":"[ci] add prevent deployment config (#4326)","author":"Jiachi Liu","date":"2026-09-02T18:01:19Z"},{"sha":"7173e55","msg":"chore: bump version to 2.5.1 (#4315)","author":"Jiachi Liu","date":"2026-08-12T13:48:23Z"},{"sha":"9e8b1c9","msg":"fix: clean up completed subscription state (#4310)\n\nCloses #4261\n\n## Summary\n\n- Remove the final subscriber's stale ref-count and disposer entries\nfrom the cache-bound Maps.\n- Add a regression test covering deduplication, disposal, and a fresh\nremount.\n\n## Verification\n\nlocal verification not run; relying on upstream CI\n\nThe worktree has no installed `node_modules`, so the repository's Jest\ncomman","author":"iroiro147","date":"2026-08-12T13:06:50Z"},{"sha":"a33fba7","msg":"fix: revalidate suspense cacheData on remount (#4312)\n\n## Problem\n\nWhen `suspense: true` is set and `cacheData` is present for the key,\ncurrent implementation does not revalidate on unmount/remount even when\n`revalidateIfStale: true` is set, preventing automatic client-side mount\nrevalidation indefinitely when both options are used.\n\nThis PR restores the normal `revalidateOnMount` / `revalidateIfS","author":"javascripter","date":"2026-08-10T15:24:05Z"},{"sha":"ad7b276","msg":"fix: hydrate cacheData for hooks without a fetcher (#4293)\n\n## Summary\n\nHydrate request-scoped `cacheData` into SWR's cache for `useSWR(key,\nnull)` without treating hydration as revalidation.\n\n- Support plain, promised, and rejected `cacheData` values.\n- Keep each key one-shot per request-scoped `cacheData` object.\n- Share consumption state across fetcher, fetcherless, and Suspense\npaths.\n- Avoid ","author":"YongSeok Jang (\uc7a5\uc6a9\uc11d)","date":"2026-08-07T00:32:49Z"},{"sha":"ace8c0f","msg":"chore: remove deprecated eslint config files (#4308)\n\nThe repository has migrated from ESLint to oxlint (see commit c822a5d).\nThese .eslintrc files are no longer needed.\n\nRemoved:\n\nexamples/.eslintrc (empty placeholder)\ntest/type/.eslintrc (orphaned, extends non-existent root config)","author":"Abhiram V","date":"2026-08-03T15:05:35Z"},{"sha":"8b9bb97","msg":"2.5.0 (#4309)","author":"Jiachi Liu","date":"2026-08-03T13:18:48Z"}]},{"id":413918947,"name":"turborepo","description":"The build system for coding agents.","language":"Rust","stargazers_count":31345,"forks_count":2491,"size":851085,"created_at":"2021-10-05T17:37:11Z","pushed_at":"2026-11-15T03:57:10Z","archived":false,"default_branch":"main","commits":[{"sha":"ef00d80","msg":"chore: Release Turborepo 2.11.12-canary.3 (#15028)\n\n## Release v2.11.12-canary.3\n\nVersioned docs: https://v2-11-12-canary-3.turborepo.dev\n\n### Changes\n\n- chore: Release Turborepo 2.11.12-canary.2 (#15023) (`b7571c4`)\n- chore(deps): Update dependency @vercel/geistdocs to v2.15.3 (#15020)\n(`0e337da`)\n- fix: Bound directory links in manual input hashing (#15027)\n(`6656f93`)\n\nCo-authored-by: github-ac","author":"github-actions[bot]","date":"2026-11-14T05:23:48Z","add":16,"del":16,"files":["packages/create-turbo/package.json","packages/eslint-config-turbo/package.json","packages/eslint-plugin-turbo/package.json","packages/turbo-codemod/package.json","packages/turbo-gen/package.json","packages/turbo-ignore/package.json"],"nfiles":10},{"sha":"6656f93","msg":"fix: Bound directory links in manual input hashing (#15027)\n\n### Description\n\nFixes #15025.\n\n#14964 bounded how input hashing follows directory links, but only the\nglobwalk walks got the bounded mode. The two `ignore::WalkBuilder` walks\nin `get_input_file_hashes_without_git` still call `follow_links(true)`.\nWhen a task's `inputs` has `$TURBO_DEFAULT$` plus any other pattern, the\nfirst of those wal","author":"Anthony Shew","date":"2026-11-14T04:41:32Z","add":254,"del":10,"files":["crates/turborepo-scm/src/manual.rs"],"nfiles":1},{"sha":"0e337da","msg":"chore(deps): Update dependency @vercel/geistdocs to v2.15.3 (#15020)\n\nThis PR contains the following updates:\n\n| Package | Type | Update | Change |\n|---|---|---|---|\n| [@vercel/geistdocs](https://redirect.github.com/vercel/geistdocs)\n([source](https://redirect.github.com/vercel/geistdocs/tree/HEAD/packages/geistdocs))\n| dependencies | patch | [`2.15.2` \u2192\n`2.15.3`](https://renovatebot.com/diffs/npm","author":"vercel-gh-bot-4[bot]","date":"2026-11-14T04:06:37Z","add":6,"del":6,"files":["apps/docs/package.json","pnpm-lock.yaml"],"nfiles":2},{"sha":"b7571c4","msg":"chore: Release Turborepo 2.11.12-canary.2 (#15023)\n\n## Release v2.11.12-canary.2\n\nVersioned docs: https://v2-11-12-canary-2.turborepo.dev\n\n### Changes\n\n- chore: Release Turborepo 2.11.12-canary.1 (#15012) (`be50eb2`)\n- chore(deps): Update dependency @vercel/geistdocs to v2.15.2 (#15013)\n(`6f2caa7`)\n- fix: Install adapter-vercel in with-svelte example (#15019)\n(`dd35b16`)\n- feat: Add `turborepo@add","author":"github-actions[bot]","date":"2026-11-13T16:08:35Z","add":16,"del":16,"files":["packages/create-turbo/package.json","packages/eslint-config-turbo/package.json","packages/eslint-plugin-turbo/package.json","packages/turbo-codemod/package.json","packages/turbo-gen/package.json","packages/turbo-ignore/package.json"],"nfiles":10},{"sha":"805ec38","msg":"feat: Run turbo setup dependency installs in parallel (#15017)\n\n`turbo setup` now starts every toolchain's dependency installer at the\nsame time. A repository with pnpm, uv, cargo, and Go waits for the\nslowest install instead of the sum of all of them. Stacked on #15016,\nwhich makes the console safe for concurrent installers.\n\n- Every installer runs to completion, so one failure no longer stops th","author":"Anthony Shew","date":"2026-11-13T15:44:20Z"},{"sha":"c249aba","msg":"refactor: Make turbo setup's installer output safe for concurrent installers (#15016)\n\nThis prepares `turbo setup`'s console for dependency installers that run\nat the same time, which #15017 turns on. Installers still run one at a\ntime here, and terminal and CI output stays the same.\n\n- `Console` can now be shared across threads. Stdout sits behind a\n`Mutex`, and every running installer shares one","author":"Anthony Shew","date":"2026-11-13T15:29:37Z"},{"sha":"6ce940b","msg":"feat: Add `--verbose` to turbo setup (#15015)\n\n`turbo setup --verbose` streams each dependency installer's output live,\nprefixed by the program name, instead of showing a spinner. Without the\nflag, a terminal still gets the spinner, and the installer output\nappears only when an install fails.\n\n- `--verbose` selects the same streaming mode that CI and a non-terminal\nstderr already use. Global `-v` ","author":"Anthony Shew","date":"2026-11-13T15:05:08Z"},{"sha":"621eafe","msg":"feat: Add `turborepo@add` skill (#15014)\n\n## Summary\n- Add `vercel/turborepo@add`, a skill for adding Turborepo to an\nexisting repository in any language toolchain that Turborepo supports.\n- Scope the skill to selected root or workspace package tasks rather\nthan converting every repository workflow to Turborepo.\n- Document guardrails for preserving existing task commands, toolchains,\nworkspace lay","author":"Cody Wong","date":"2026-11-12T23:01:44Z"},{"sha":"dd35b16","msg":"fix: Install adapter-vercel in with-svelte example (#15019)\n\n### Description\n\nVercel deployments of the `with-svelte` example fail after `vite build`\nfinishes. `@sveltejs/adapter-auto` detects Vercel and runs `pnpm add -D\n@sveltejs/adapter-vercel@6` during the build. That install fails with\n`ERR_PNPM_UNEXPECTED_STORE` because the installed `node_modules` link to\na different pnpm store than the one","author":"Anthony Shew","date":"2026-11-12T21:54:00Z"},{"sha":"6f2caa7","msg":"chore(deps): Update dependency @vercel/geistdocs to v2.15.2 (#15013)\n\nThis PR contains the following updates:\n\n| Package | Type | Update | Change |\n|---|---|---|---|\n| [@vercel/geistdocs](https://redirect.github.com/vercel/geistdocs)\n([source](https://redirect.github.com/vercel/geistdocs/tree/HEAD/packages/geistdocs))\n| dependencies | patch | [`2.15.1` \u2192\n`2.15.2`](https://renovatebot.com/diffs/npm","author":"vercel-gh-bot-4[bot]","date":"2026-11-12T19:20:26Z"},{"sha":"be50eb2","msg":"chore: Release Turborepo 2.11.12-canary.1 (#15012)\n\n## Release v2.11.12-canary.1\n\nVersioned docs: https://v2-11-12-canary-1.turborepo.dev\n\n### Changes\n\n- chore: Release Turborepo 2.11.11-canary.2 (#14962) (`17691ac`)\n- fix: Stop input hashing from following symlinks out of the repository\n(#14964) (`e9d0b1b`)\n- fix(cli): Record correct telemetry command name for turbo ls (#14968)\n(`9fe4916`)\n- fix:","author":"github-actions[bot]","date":"2026-11-12T17:52:46Z"},{"sha":"73b26e6","msg":"fix: Scope lockfile changes in task-level affected detection (#14963)\n\n## Problem\n\nWith task-level affected detection\n(`futureFlags.affectedUsingTaskInputs` or\n`futureFlags.filterUsingTasks`), any change to the package manager\nlockfile selected every task. `is_global_change` in\n`crates/turborepo-task-filter/src/task_change_detector.rs` treated the\nlockfile as a global file, so `affected_task_ids_w","author":"Chad Hietala","date":"2026-11-12T17:20:46Z"}]},{"id":644461337,"name":"ai","description":"The AI Toolkit for TypeScript. From the creators of Next.js, the AI SDK is a free open-source library for building AI-powered applications and agents ","language":"TypeScript","stargazers_count":27972,"forks_count":5622,"size":476058,"created_at":"2023-05-23T15:04:08Z","pushed_at":"2026-11-15T07:33:44Z","archived":false,"default_branch":"main","commits":[{"sha":"8ba3940","msg":"test(mcp): increase timeout for Windows npx spawn tests (#25062)\n\n## Background\n\nThe `Test MCP (Windows)` CI job failed on `main` with:\n\n```\nFAIL src/tool/mcp-stdio/create-child-process.test.ts > createChildProcess > should spawn npx on Windows\nError: Test timed out in 5000ms.\n```\n\nFailed job:\nhttps://github.com/vercel/ai/actions/runs/43629025636/job/132551571763\n\nThis is a flake, not a regression","author":"Gregor Martynus","date":"2026-11-14T19:12:49Z","add":5,"del":0,"files":["packages/mcp/src/tool/mcp-stdio/create-child-process.test.ts"],"nfiles":1},{"sha":"718824c","msg":"fix(ai): validate JSON values in UI message metadata in a single pass (#25046)\n\n## Background\n\n`validateUIMessages`, `safeValidateUIMessages`, and the agent UI stream\nhelpers (`createAgentUIStream`, `createAgentUIStreamResponse`,\n`pipeAgentUIStreamToResponse`) validate caller-provided UI messages.\nAccepting a message with deeply nested but valid JSON in recognized\nmetadata (`providerMetadata`, `ca","author":"Gregor Martynus","date":"2026-11-14T18:52:39Z","add":812,"del":118,"files":[".changeset/quiet-records-walk.md","packages/ai/scripts/check-bundle-size.ts","packages/ai/src/agent/create-agent-ui-stream-response.test.ts","packages/ai/src/types/citation.ts","packages/ai/src/ui/validate-ui-messages.test.ts","packages/ai/src/ui/validate-ui-messages.ts"],"nfiles":8},{"sha":"0e8e054","msg":"Version Packages (#25034)\n\nThis PR was opened by the [Changesets\nrelease](https://github.com/changesets/action) GitHub action. When\nyou're ready to do a release, you can merge this and the packages will\nbe published to npm automatically. If you're not ready to do a release\nyet, that's fine, whenever you add more changesets to main, this PR will\nbe updated.\n\n\n# Releases\n## ai@7.0.173\n\n### Patch Cha","author":"github-actions[bot]","date":"2026-11-13T22:28:29Z","add":623,"del":203,"files":[".changeset/calm-owls-revert.md",".changeset/derive-provider-model-ids-from-catalogs.md",".changeset/fresh-google-interactions-reasoning.md",".changeset/heygen-decision-model.md",".changeset/jjyyt-xbnrf-cksdc.md",".changeset/quiet-counters-approve.md"],"nfiles":150},{"sha":"3c09e00","msg":"fix(ai): preserve tool inputs during approval validation (#25040)\n\n## Background\n\nApproval continuation could alter tool inputs and message history during\nrevalidation.\n\n## Summary\n\n- Preserve the approved input and isolate validation and refinement from\nthe original data.\n- Add regression coverage for generate/stream continuation and custom\nvalidators.\n- Include a patch changeset.\n\nValidation: fo","author":"Aayush Kapoor","date":"2026-11-13T22:15:09Z","add":203,"del":21,"files":[".changeset/quiet-counters-approve.md","packages/ai/src/generate-text/tool-approval-follow-up.test.ts","packages/ai/src/generate-text/validate-tool-approvals.test.ts","packages/ai/src/generate-text/validate-tool-approvals.ts"],"nfiles":4},{"sha":"8c5d534","msg":"fix(tests): update outdated test expectations (#25045)\n\n## Background\n\nFour tests added in #24906 expected outdated validation-error paths. The\nexisting validator correctly includes the missing type field and nested\nsteering-part location. This is a test expectation mismatch, not a\nruntime regression.\n\n## Summary\n\nUpdate the four assertions to expect the precise error paths. No\nproduction code or ","author":"Aayush Kapoor","date":"2026-11-13T21:52:20Z"},{"sha":"9baa2d0","msg":"chore(provider/gateway): update gateway model settings files (#25031)\n\nAutomated update of the gateway model settings files.\n\nRegenerated from the upstream gateway model list by\n[`update-model-settings.yml`](https://github.com/vercel/ai/blob/main/.github/workflows/update-model-settings.yml)\n([this run](https://github.com/vercel/ai/actions/runs/43460241620)).\nMerging this PR is what surfaces newly-","author":"github-actions[bot]","date":"2026-11-13T21:28:56Z"},{"sha":"2559173","msg":"feat(workflow): support toolApproval in WorkflowAgent (#25011)\n\n## Background\n\n`ToolLoopAgent` takes a `toolApproval` configuration: a function for all\ntool calls, or one entry per tool, that returns `'not-applicable'`,\n`'user-approval'`, `'approved'` or `'denied'`. `WorkflowAgent` only\nsupported `needsApproval` on the tool. TypeScript rejected\n`toolApproval`, and when it was passed anyway it was ","author":"Gregor Martynus","date":"2026-11-13T21:24:46Z"},{"sha":"7ce7ffc","msg":"fix(workflow): log provider warnings in WorkflowAgent (#25015)\n\n## Background\n\n`ToolLoopAgent` logs provider warnings, for example an unsupported\nsetting, through the AI SDK warning logger. `WorkflowAgent` logged\nnothing. The warnings were only available as `warnings` on each step, so\na setting that the provider ignored went unnoticed.\n\n## Summary\n\n- The durable generate and stream steps call `log","author":"Gregor Martynus","date":"2026-11-13T21:17:42Z"},{"sha":"585caa7","msg":"feat(heygen): add decision models (#25037)\n\n## Background\n\nHeyGen released [HeyGen\nDecision](https://developers.heygen.com/docs/models/heygen-decision), a\ndecision API (`POST /v3/models/decisions`) that answers named yes/no\n(`noul`), choice, and score questions about text, images, and video with\nprobabilities. Its request and answer shapes closely match the existing\nexperimental decision models (P","author":"Zachary","date":"2026-11-13T21:03:34Z"},{"sha":"a3c6e3f","msg":"fix(ai): prevent repeated UI validation error amplification (#24906)\n\n## Background\n\nRepeated malformed UI message parts cause Core validation to accumulate\nthe full part-union error tree for every part before agent execution. A\n7,550-byte input on current `main` produced a 53,898,977-byte exception.\n\n## Summary\n\nStop structural validation at the first invalid element in message,\npart, and steerin","author":"Gregor Martynus","date":"2026-11-13T20:58:07Z"},{"sha":"c8fb453","msg":"docs(google): update Gemini Flash references to gemini-4-hydrogen (#25025)\n\n## Background\n\nUpdates Gemini Flash references in AI SDK documentation and runnable\nexamples to `gemini-4-hydrogen`.\n\n## Summary\n\n- Updated provider docs\n(`content/providers/01-ai-sdk-providers/{index,00-ai-gateway,15-google,16-google-vertex}.mdx`,\n`content/providers/02-ai-sdk-harnesses/05-deepagents.mdx`) and added\n`gemin","author":"Mark McDonald","date":"2026-11-13T20:34:04Z"},{"sha":"7aae3c3","msg":"docs: simplify ADR format and templates (#25036)\n\n## Background\n\nThe tool-error ADR from #24980 used the extensive MADR template,\nincluding implementation and verification details. The [follow-up\ndiscussion](https://vercel.slack.com/archives/C050WU03V3N/p1794507950779149?thread_ts=1794507126.136719&cid=C050WU03V3N)\nagreed to simplify ADRs around the decision and its rationale.\n\n## Summary\n\n[new AD","author":"Gregor Martynus","date":"2026-11-13T19:41:31Z"}]},{"id":642917329,"name":"chatbot","description":"A full-featured, hackable Next.js AI chatbot built by Vercel","language":"TypeScript","stargazers_count":21053,"forks_count":6776,"size":6375,"created_at":"2023-05-19T16:36:23Z","pushed_at":"2026-11-03T18:02:17Z","archived":false,"default_branch":"main","commits":[{"sha":"a8989b5","msg":"upgrade to pnpm 12 to fix cache (#1564)","author":"Nick Oates","date":"2026-11-03T18:02:13Z","add":172,"del":40,"files":[".github/workflows/lint.yml",".github/workflows/playwright.yml","package.json","pnpm-lock.yaml","pnpm-workspace.yaml"],"nfiles":5},{"sha":"31b5487","msg":"fix: include base path in botId path (#1563)","author":"Nick Oates","date":"2026-11-03T17:30:19Z","add":1,"del":1,"files":["instrumentation-client.ts"],"nfiles":1},{"sha":"8603c8e","msg":"Check document ownership before returning suggestions (#1562)","author":"Nick Oates","date":"2026-11-03T01:01:27Z","add":12,"del":1,"files":["artifacts/actions.ts"],"nfiles":1},{"sha":"8d7ac18","msg":"fix: keep title generation behind chat API controls (#1561)","author":"Gregor Martynus","date":"2026-11-03T00:29:52Z","add":29,"del":25,"files":["app/(chat)/actions.ts","app/(chat)/api/chat/route.ts","lib/ai/generate-title.ts"],"nfiles":3},{"sha":"e1e1075","msg":"Verify message belongs to the chat before voting (#1560)","author":"Nick Oates","date":"2026-11-02T23:56:34Z"},{"sha":"c2f8235","msg":"Check Bot ID result (#1529)","author":"Nick Oates","date":"2026-07-08T21:55:00Z"},{"sha":"d7cec6d","msg":"Model selector tweaks (#1527)","author":"Nick Oates","date":"2026-07-08T18:14:34Z"},{"sha":"6593009","msg":"Update Playwright tests (#1528)","author":"Nick Oates","date":"2026-07-08T18:14:18Z"},{"sha":"75722ab","msg":"Precommit hook (#1525)","author":"Nick Oates","date":"2026-07-07T23:39:26Z"},{"sha":"cd6e577","msg":"Fix formatting for real this time (#1524)","author":"Nick Oates","date":"2026-07-07T22:04:56Z"},{"sha":"e42d3ef","msg":"Warn when model health is degraded (#1523)","author":"Nick Oates","date":"2026-07-07T21:18:45Z"},{"sha":"90d51b6","msg":"Update lint tooling (#1522)","author":"Nick Oates","date":"2026-07-07T18:53:57Z"}]},{"id":67753070,"name":"vercel","description":"Develop. Preview. Ship.","language":"TypeScript","stargazers_count":16600,"forks_count":3916,"size":263386,"created_at":"2016-09-09T01:12:08Z","pushed_at":"2026-11-15T03:54:25Z","archived":false,"default_branch":"main","commits":[{"sha":"155eacf","msg":"Move ci-cd code owners to adlc team (#17823)\n\nMoves code owners from the CI/CD GitHub teams to the ADLC teams that\nreplace them. The new teams have the same members, and the old teams\nwill be deleted.\n\n| Old team | New team |\n| --- | --- |\n| `@vercel/ci-cd` | `@vercel/adlc` |\n| `@vercel/ci-cd-pipelines` | `@vercel/adlc-control-plane` |\n| `@vercel/ci-cd-agent` | `@vercel/adlc-engine` |\n\nThis PR onl","author":"Mehul Kar","date":"2026-11-12T22:18:18Z","add":58,"del":58,"files":[".github/CODEOWNERS",".vercel.approvers"],"nfiles":2},{"sha":"84878e5","msg":"chore: sync from internal (21610535bccb) (#17741)\n\n## Summary\n\nOne-off full-tree sync of **vercel/vercel-internal** `main` onto public\n**vercel/vercel**.\n\n| | SHA |\n| --- | --- |\n| Internal `main` | `21610535bccb3c000b9a361fb07bc24856481ab3`\n(2026-10-27) |\n| Public `main` base | `c628be7835e03a965b93e9cf9e2bd5ac2acbf5eb` (last\npublic sync PR #17595 from internal `1df8ab80f226`) |\n| Squash commit o","author":"Jeff See","date":"2026-10-27T21:07:19Z","add":359897,"del":72818,"files":[".changeset/0000-query-engine-traces.md",".changeset/alerts-rules-v3.md",".changeset/bright-metrics-switch.md",".changeset/clean-prebuilt-e2e-links.md",".changeset/cli-command-failure.md",".changeset/cli-command-startup.md"],"nfiles":300},{"sha":"c628be7","msg":"chore: sync from internal (1df8ab80f226) [skip ci] (#17595)\n\n## Summary\n- First source-available sync from `vercel/vercel-internal@1df8ab80f226`\n(2026-09-08) onto public `vercel/vercel`.\n- One squashed commit. Public `.github` is left untouched (release/CI\nstay frozen). Internal PR-binaries API glue (`api/pr-binaries-token.ts`,\n`api/prune-pr-binaries.ts`, and the `/pr-binaries` rewrite) is not\ninc","author":"Jeff See","date":"2026-09-08T18:09:19Z","add":150096,"del":24082,"files":[".changeset/0000-query-engine-traces.md",".changeset/active-production-logs.md",".changeset/alert-rules-schema-help.md",".changeset/alerts-rules-v3.md",".changeset/bright-metrics-switch.md",".changeset/chamisa-cuesta-root-directory.md"],"nfiles":300},{"sha":"e06cc64","msg":"[skills] Add vercel comments to the CLI skill (#17522)\n\n## Summary\n- Skills-only sync from `vercel/vercel-internal` so\n[skills.sh/vercel/vercel/vercel-cli](https://www.skills.sh/vercel/vercel/vercel-cli)\ncan pick up `vercel comments`.\n- Adds `skills/vercel-cli/references/comments.md` and routes it from\n`SKILL.md`.\n- Source:\n[vercel-internal#528](https://github.com/vercel/vercel-internal/pull/528).","author":"Jeff See","date":"2026-08-19T23:02:24Z","add":53,"del":1,"files":["skills/vercel-cli/SKILL.md","skills/vercel-cli/references/comments.md"],"nfiles":2},{"sha":"17d9eba","msg":"[cli] Send gitMetadata.rootDirectory on deploy (#17344)\n\n## Summary\n- Add `gitMetadata.rootDirectory`: path of the deployed project\ndirectory relative to the detected git repository root (`\"\"` at repo\nroot)\n- Resolve `.git/config` from the git toplevel so subdirectory deploys\nstill attach `remoteUrl`\n- Keep this separate from the project `rootDirectory` setting and from\nuser `--meta`\n\n## Test plan","author":"Jeff See","date":"2026-08-03T19:32:53Z"},{"sha":"08a2618","msg":"[python] Improve bytecode knapsack selection with static analysis (#17333)\n\n## Summary\n\n`lambdaKnapsack` picked bytecode by `.pyc` size descending, which\nmaximized bytes\nplaced rather than compile time avoided. Functions near the 225MB lambda\nlimit\nshipped bytecode that was never imported, falling far short of the\nspeedup we get\nwith full bytecode coverage.\n\n## How it works\n\nSelection is now per f","author":"Greg Schofield","date":"2026-08-03T19:17:29Z"},{"sha":"c04d60d","msg":"[vercel/connex] Configure webhook events on connector create (#17343)\n\n## Why/Summary\n\n- Let managed connector creators choose webhook events with repeatable\n`--trigger-event` flags.\n- Forward selected events through the existing generic managed-create\nAPI contract.\n- No provider event catalog is duplicated in the CLI; Connect remains\nresponsible for validation.\n\n## Validation\n\n- Focused command t","author":"OwenKephart","date":"2026-08-03T18:55:07Z"},{"sha":"3586b18","msg":"[backends] Align TypeScript typecheck behavior with @vercel/node (#17334)\n\nPart of the backends parity work (follows #17283, #17284, #17286).\n\nMirrors the `@vercel/node` builder's typecheck behavior\n(`packages/node/src/typescript.ts`, a ts-node fork) so projects moving\nfrom the framework wrapper builders (`@vercel/express` et al.) to\n`@vercel/backends` see the same typecheck results, including\nhis","author":"Jeff See","date":"2026-08-03T18:24:18Z"},{"sha":"7a82287","msg":"[ci] Upgrade Turborepo to 2.10.8 (#17360)\n\n## Summary\n\n- Upgrade the repository Turborepo dependency to 2.10.8.\n- Keep the pull request and nightly workflow `turbo` CLI pins aligned.\n- Enable later stacked changes to combine `--affected` with package\nfilters.\n\n## Verification\n\n- Ran `pnpm install --frozen-lockfile --offline`.\n- Confirmed the local `turbo` CLI reports version 2.10.8.\n- Passed the r","author":"Anthony Shew","date":"2026-08-03T18:13:06Z"},{"sha":"5ec7cae","msg":"Add alert rule schema help and update scope defaults (#17311)\n\n## Summary\n- add `vc alerts rules schema` references and examples for usage\nanomaly, error anomaly, and custom alert rules\n- enrich `vc alerts rules add --help` with built-in and custom JSON\nbodies, and reuse metrics schema formatting for custom metric discovery\n- use an explicit `--project` as the built-in rule target when the JSON\nbo","author":"Julia Shi","date":"2026-08-03T13:18:14Z"},{"sha":"7d57d1f","msg":"[flags] Add flags unarchive command (#17332)\n\nAdd a `vercel flags unarchive` command for unarchiving feature flags","author":"Chris","date":"2026-08-03T13:07:23Z"},{"sha":"e40fa39","msg":"[cli] Resolve active production deployment for logs (#17357)\n\n## Summary\n\n- resolve the active production deployment through the\nproduction-deployment endpoint when following production logs\n- preserve the fallback to the current user latest READY deployment when\nno active production deployment exists\n- keep explicit branch and preview selection on deployment-list\nfiltering\n- add a separate patch ","author":"Erg\u00fcn Erdo\u011fmu\u015f","date":"2026-08-03T12:18:10Z"}]},{"id":307520777,"name":"commerce","description":"Next.js Commerce","language":"TypeScript","stargazers_count":14309,"forks_count":5450,"size":11178,"created_at":"2020-10-26T22:30:00Z","pushed_at":"2026-10-19T17:00:06Z","archived":true,"default_branch":"main","commits":[{"sha":"f7521d5","msg":"docs(readme): add archive notice (#1541)","author":"Will Sather","date":"2026-10-19T17:00:02Z","add":4,"del":6,"files":["README.md"],"nfiles":1},{"sha":"3761e52","msg":"Use the Shopify integration in this template (#1531)","author":"Joe Sadowski","date":"2026-06-10T20:55:29Z","add":1,"del":1,"files":["README.md"],"nfiles":1},{"sha":"1df2cf6","msg":"fix: suspense and revalidate issues from updating next.js (#1514)\n\n* fix: product provider without suspense\n\nProductProvider was using useSearchParams without a Suspense. But since it wraps the complete page it'd break the fallback shell, so I got rid of it and just access the search params directly within each component. That way you keep individual suspenses. I had to run prettier so changes are","author":"Boris Besemer","date":"2026-01-07T12:38:47Z","add":1658,"del":1256,"files":["app/[page]/layout.tsx","app/[page]/opengraph-image.tsx","app/[page]/page.tsx","app/api/revalidate/route.ts","app/error.tsx","app/globals.css"],"nfiles":67},{"sha":"65ba0fb","msg":"Fix React Server Components CVE vulnerabilities (#1511)\n\nUpdated dependencies to fix Next.js and React CVE vulnerabilities.\n\nThe fix-react2shell-next tool automatically updated the following packages to their secure versions:\n- next\n- react-server-dom-webpack\n- react-server-dom-parcel  \n- react-server-dom-turbopack\n\nAll package.json files have been scanned and vulnerable versions have been patched","author":"vercel[bot]","date":"2025-12-15T22:10:12Z","add":13,"del":13,"files":["package.json","pnpm-lock.yaml"],"nfiles":2},{"sha":"5542649","msg":"Fix React Server Components CVE vulnerabilities (#1510)\n\nUpdated dependencies to fix Next.js and React CVE vulnerabilities.\n\nThe fix-react2shell-next tool automatically updated the following packages to their secure versions:\n- next\n- react-server-dom-webpack\n- react-server-dom-parcel  \n- react-server-dom-turbopack\n\nAll package.json files have been scanned and vulnerable versions have been patched","author":"vercel[bot]","date":"2025-12-11T21:46:24Z"},{"sha":"a74047a","msg":"chore: upgrade Next.js to 15.6.0-canary.58 (CVE-2025-55182) (#1507)\n\n* chore: upgrade Next.js to 15.6.0-canary.58 (CVE-2025-55182)\n\n* chore: upgrade Next.js to 15.6.0-canary.58 (CVE-2025-55182)","author":"Chris Tate","date":"2025-12-06T14:00:08Z"},{"sha":"fa13069","msg":"Merge branch 'main' of github.com:vercel/commerce","author":"Lee Robinson","date":"2025-03-19T18:20:51Z"},{"sha":"ef2883a","msg":"Update deps.","author":"Lee Robinson","date":"2025-03-19T18:20:40Z"},{"sha":"28f9a64","msg":"Update Wix fork repository (#1439)","author":"Netanel Gilad","date":"2025-02-24T18:30:29Z"},{"sha":"9f4fdbb","msg":"Merge branch 'main' of github.com:vercel/commerce","author":"Lee Robinson","date":"2025-02-21T18:39:39Z"},{"sha":"63725d8","msg":"Update deps","author":"Lee Robinson","date":"2025-02-21T18:39:31Z"},{"sha":"6946bf7","msg":"Fix production base url (#1429)","author":"John Stringer","date":"2025-02-10T04:08:56Z"}]}]}]}</script>
+<script>
+"use strict";
+const DATA = JSON.parse(document.getElementById("data").textContent);
+const $ = s => document.querySelector(s);
+const TAU = Math.PI * 2;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("cvo:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("cvo:" + k, JSON.stringify(v)); } catch {} },
+};
+function el(tag, props = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) k in n ? (n[k] = v) : n.setAttribute(k, v);
+  for (const k of kids) if (k != null) n.append(k);
+  return n;
+}
+const firstLine = m => (m || "").split("\n")[0].trim();
+const clip = (s, n) => s.length > n ? s.slice(0, n - 1) + "…" : s;
+const fmtN = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : String(n);
+const fmtDate = d => d ? new Date(d).toLocaleDateString("en", { year: "numeric", month: "short", day: "numeric" }) : "unknown";
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+/* ---- Visual encoding, ported from viewer/src/github/planetStyle.ts ---- */
+function seedFor(text) { let h = 2166136261; for (const ch of text) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; }
+const PALETTES = {
+  TypeScript: ["#102c58", "#438bae", "#87e4f3", 0], JavaScript: ["#402222", "#c99857", "#ffe0a0", 1],
+  Python: ["#142e29", "#67967d", "#b8ead6", 0], Rust: ["#431815", "#ba6841", "#f7b07c", 2],
+  Go: ["#183444", "#71b7c1", "#baf8f9", 1], C: ["#282634", "#8e8595", "#cbd7ef", 2],
+  "C++": ["#291d3a", "#8e79ae", "#e2c5ff", 2], Java: ["#451c17", "#b97145", "#ffd49e", 1],
+  HTML: ["#411b25", "#ba646b", "#ffc5ba", 2], CSS: ["#27204d", "#a282cd", "#d5c1ff", 1],
+  Shell: ["#2f2940", "#8f8ca4", "#d7cdef", 2], Swift: ["#46261d", "#cd9160", "#ffe0b0", 1],
+  "Jupyter Notebook": ["#402c17", "#c08d40", "#ffe9bd", 0],
+};
+const PKEYS = Object.keys(PALETTES);
+function activity(pushed) {
+  const age = (Date.parse(DATA.snapshot) - Date.parse(pushed)) / 864e5;
+  return !Number.isFinite(age) ? .18 : age <= 30 ? 1 : age <= 90 ? .68 : age <= 365 ? .38 : .14;
+}
+function importance(r) {
+  const s = Math.log10(Math.max(0, r.stargazers_count) + 1), f = Math.log10(Math.max(0, r.forks_count) + 1);
+  return Math.min(1, s / 5 * .5 + f / 4 * .2 + activity(r.pushed_at) * .3);
+}
+function planetStyle(r) {
+  const seed = seedFor(`${r.id}/${r.name}`);
+  const [dark, land, glow, kind] = PALETTES[r.language] ?? PALETTES[PKEYS[Math.floor(seedFor(r.language ?? "Mixed") * PKEYS.length)]];
+  return { dark, land, glow, kind, seed, rings: kind === 1 || seed > .77, imp: importance(r) };
+}
+
+/* ---- Canvas + input ---- */
+const cv = $("#c"), hud = $("#hud2d"), ctx = hud.getContext("2d");
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight;
+  hud.width = W * DPR; hud.height = H * DPR;
+  if (gl) { gl.setPixelRatio(DPR); gl.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix(); }
+}
+const keys = new Set();
+const pointer = { on: false, x: 0, y: 0 };
+addEventListener("keydown", e => { keys.add(e.key.toLowerCase()); onKey(e); });
+addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
+addEventListener("blur", () => { keys.clear(); pointer.on = false; });
+cv.addEventListener("pointerdown", e => { pointer.on = true; pointer.x = e.clientX; pointer.y = e.clientY; cv.setPointerCapture(e.pointerId); audio(); });
+cv.addEventListener("pointermove", e => { pointer.x = e.clientX; pointer.y = e.clientY; });
+cv.addEventListener("pointerup", () => pointer.on = false);
+cv.addEventListener("pointercancel", () => pointer.on = false);
+let camDist = 560;
+cv.addEventListener("wheel", e => { camDist = Math.max(260, Math.min(1200, camDist * (1 + Math.sign(e.deltaY) * .1))); e.preventDefault(); }, { passive: false });
+
+/* ---- Sound (starts on first interaction) ---- */
+let AC = null, muted = store.get("muted", false);
+function audio() { if (!AC) try { AC = new AudioContext(); } catch {} }
+function blip(freq, dur = .08, type = "sine", vol = .06, slide = 0) {
+  if (muted || !AC) return;
+  const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
+  o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(freq * slide, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(g).connect(AC.destination); o.start(t); o.stop(t + dur);
+}
+const sfx = {
+  scan: () => blip(880, .07, "triangle"), signal: () => { blip(520, .12, "sine", .07, 1.6); setTimeout(() => blip(780, .12), 90); },
+  right: () => { blip(660, .1, "triangle"); setTimeout(() => blip(990, .14, "triangle"), 100); },
+  wrong: () => blip(200, .25, "sawtooth", .05, .6), hit: () => blip(120, .3, "square", .06, .4),
+  visit: () => blip(440, .2, "sine", .05, 1.5), mission: () => [523, 659, 784].forEach((f, i) => setTimeout(() => blip(f, .14, "triangle"), i * 90)),
+};
+
+/* ---- Three.js scene (game plane x,y maps to world x,z) ---- */
+let gl = null;
+try { gl = new THREE.WebGLRenderer({ canvas: cv, antialias: true }); } catch { gl = null; }
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#070b1f");
+const camera = new THREE.PerspectiveCamera(50, 1, 1, 14000);
+scene.add(new THREE.AmbientLight(0x7080b8, .7));
+const sunLight = new THREE.PointLight(0xffe2b0, 3.2, 0, 0);
+scene.add(sunLight);
+const ray = new THREE.Raycaster(), groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), tmpV = new THREE.Vector3();
+resize(); addEventListener("resize", resize);
+
+function rng(seed) { let a = Math.floor(seed * 4294967296) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function canvasTex(w, h, paint) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h; paint(c.getContext("2d"), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+// Procedural surface, same families as the viewer: 0 terrain, 1 gas bands, 2 rocky/cratered.
+function planetTexture(st) {
+  return canvasTex(512, 256, (g, w, h) => {
+    const r = rng(st.seed);
+    g.fillStyle = st.dark; g.fillRect(0, 0, w, h);
+    if (st.kind === 1) {
+      for (let y = 0; y < h; y += 4 + r() * 14) { g.fillStyle = r() < .5 ? st.land : st.glow; g.globalAlpha = .25 + r() * .5; g.fillRect(0, y, w, 3 + r() * 12); }
+    } else {
+      for (let i = 0; i < (st.kind === 0 ? 26 : 60); i++) {
+        const x = r() * w, y = h * .15 + r() * h * .7, rad = (st.kind === 0 ? 14 : 4) + r() * (st.kind === 0 ? 40 : 14);
+        g.fillStyle = st.kind === 0 ? st.land : (r() < .5 ? st.land : st.dark); g.globalAlpha = .55 + r() * .4;
+        for (const dx of [-w, 0, w]) { g.beginPath(); g.ellipse(x + dx, y, rad * 1.6, rad, 0, 0, TAU); g.fill(); }
+        if (st.kind === 2) { g.strokeStyle = st.glow; g.globalAlpha = .25; g.lineWidth = 1.5; g.beginPath(); g.ellipse(x, y, rad * 1.6, rad, 0, 0, TAU); g.stroke(); }
+      }
+      if (st.kind === 0) { g.fillStyle = "#ffffff"; g.globalAlpha = .55; g.fillRect(0, 0, w, h * .07); g.fillRect(0, h * .93, w, h * .07); }
+    }
+    g.globalAlpha = 1;
+  });
+}
+const glowTex = canvasTex(128, 128, (g, w) => {
+  const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
+  gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(.25, "rgba(255,255,255,.45)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = gr; g.fillRect(0, 0, w, w);
+});
+function glowSprite(color, size, opacity = 1) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false }));
+  s.scale.set(size, size, 1); return s;
+}
+function textSprite(text, color, px = 30) {
+  const font = `600 ${px}px "JetBrains Mono", monospace`;
+  const m = document.createElement("canvas").getContext("2d"); m.font = font;
+  const w = Math.ceil(m.measureText(text).width) + 16, h = px + 14;
+  const tex = canvasTex(w, h, g => { g.font = font; g.fillStyle = color; g.textBaseline = "middle"; g.shadowColor = "rgba(0,0,0,.9)"; g.shadowBlur = 6; g.fillText(text, 8, h / 2); });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  s.scale.set(w * .5, h * .5, 1); s.renderOrder = 5; return s;
+}
+function orbitLine(radius, color, opacity, dashed = false) {
+  const pts = Array.from({ length: 160 }, (_, i) => new THREE.Vector3(Math.cos(i / 160 * TAU) * radius, 0, Math.sin(i / 160 * TAU) * radius));
+  const mat = dashed ? new THREE.LineDashedMaterial({ color, transparent: true, opacity, dashSize: 14, gapSize: 18 }) : new THREE.LineBasicMaterial({ color, transparent: true, opacity });
+  const l = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), mat); if (dashed) l.computeLineDistances(); return l;
+}
+
+// Distant stars ride with the camera so space feels endless.
+const starfield = (() => {
+  const n = 1800, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const u = Math.random() * 2 - 1, t = Math.random() * TAU, s = Math.sqrt(1 - u * u); pos.set([s * Math.cos(t) * 9000, u * 9000, s * Math.sin(t) * 9000], i * 3); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({ color: 0xd2dcff, size: 1.6, sizeAttenuation: false }));
+})();
+scene.add(starfield);
+
+const particles = (() => {
+  const max = 500, g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(max * 3), 3));
+  g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(max * 3), 3));
+  const p = new THREE.Points(g, new THREE.PointsMaterial({ size: 5, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  p.frustumCulled = false; p.max = max; scene.add(p); return p;
+})();
+
+const shipMesh = (() => {
+  const grp = new THREE.Group(), body = new THREE.Group();
+  const hull = new THREE.Mesh(new THREE.ConeGeometry(7, 26, 4).rotateZ(-Math.PI / 2).rotateX(Math.PI / 4),
+    new THREE.MeshStandardMaterial({ color: 0xe9ecff, emissive: 0x2a6f88, emissiveIntensity: .6, flatShading: true, roughness: .4 }));
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(8, 1.5, 24), new THREE.MeshStandardMaterial({ color: 0x74e2ff, emissive: 0x74e2ff, emissiveIntensity: .5 }));
+  wing.position.x = -6;
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(4, 16, 8).rotateZ(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffb547, transparent: true, opacity: .9, blending: THREE.AdditiveBlending }));
+  flame.position.x = -20;
+  body.add(hull, wing, flame); grp.add(body, glowSprite(0x74e2ff, 50, .35));
+  grp.userData = { body, flame }; grp.visible = false; grp.scale.setScalar(1.4); scene.add(grp); return grp;
+})();
+
+let world = null, builtFor = null;
+function disposeTree(o) { o.traverse(n => { n.geometry?.dispose(); [].concat(n.material || []).forEach(m => { m.map?.dispose(); m.dispose(); }); }); }
+function buildScene() {
+  if (world) { scene.remove(world); disposeTree(world); }
+  world = new THREE.Group(); builtFor = G.planets;
+  // the account's star
+  const star = new THREE.Group();
+  star.add(new THREE.Mesh(new THREE.SphereGeometry(48, 48, 24), new THREE.MeshBasicMaterial({ color: 0xfff3d6 })));
+  star.add(glowSprite(0xffb050, 420, .9), glowSprite(0xffe0a0, 170, .8));
+  const sl = textSprite(G.sys.login, "#ffe9c4", 34); sl.position.y = 80; star.add(sl);
+  world.add(star);
+  world.add(orbitLine(G.edge, 0xff6f7f, .25, true));
+  const satGeo = new THREE.SphereGeometry(1, 10, 8), satMat = new THREE.MeshBasicMaterial({ color: 0xa9b4e0 }), sigMat = new THREE.MeshBasicMaterial({ color: 0xffb547 });
+  for (const p of G.planets) {
+    const st = p.st;
+    p.orbitLine = orbitLine(p.orbit, 0x7a8ce0, .18); world.add(p.orbitLine);
+    const g = new THREE.Group();
+    p.ball = new THREE.Mesh(new THREE.SphereGeometry(p.R, 48, 24), new THREE.MeshStandardMaterial({ map: planetTexture(st), roughness: .85, metalness: 0, emissive: new THREE.Color(st.glow), emissiveIntensity: .06 }));
+    p.ball.rotation.z = (st.seed - .5) * .6;
+    const atm = new THREE.Mesh(new THREE.SphereGeometry(p.R * 1.14, 32, 16), new THREE.MeshBasicMaterial({ color: st.glow, transparent: true, opacity: .14 + .2 * activity(p.repo.pushed_at), side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+    g.add(p.ball, atm);
+    if (st.rings) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(p.R * 1.45, p.R * 2.1, 64), new THREE.MeshBasicMaterial({ color: st.glow, transparent: true, opacity: .35, side: THREE.DoubleSide, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2 + .45; ring.rotation.y = (st.seed - .5) * .8; g.add(ring);
+    }
+    p.label = textSprite(p.repo.name, "#c7cdf0"); p.label.position.y = p.R + 26; g.add(p.label);
+    p.group = g; world.add(g);
+    p.tilt = (st.seed - .5) * .5;
+    for (const s of p.sats) {
+      s.mesh = new THREE.Mesh(satGeo, s.signal ? sigMat : satMat); s.mesh.scale.setScalar(s.signal ? 4.5 : 3);
+      if (s.signal) { s.halo = glowSprite(0xffb547, 30, .7); s.mesh.add(s.halo); s.halo.scale.set(30 / 4.5, 30 / 4.5, 1); }
+      world.add(s.mesh);
+    }
+  }
+  for (const r of G.rocks) {
+    const geo = new THREE.IcosahedronGeometry(1, 0), pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) tmpV.fromBufferAttribute(pos, i).multiplyScalar(.75 + Math.random() * .45), pos.setXYZ(i, tmpV.x, tmpV.y, tmpV.z);
+    geo.computeVertexNormals();
+    r.mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x3a1622, emissive: 0xff6f7f, emissiveIntensity: .18, flatShading: true }));
+    r.mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xff6f7f, transparent: true, opacity: .8 })));
+    world.add(r.mesh);
+  }
+  scene.add(world);
+}
+function pointerWorld() {
+  ray.setFromCamera({ x: pointer.x / W * 2 - 1, y: -(pointer.y / H) * 2 + 1 }, camera);
+  const hit = ray.ray.intersectPlane(groundPlane, tmpV);
+  return hit ? { x: hit.x, y: hit.z } : null;
+}
+
+/* ---- Game state ---- */
+let G = null;          // current run
+let mode = "menu";     // menu | play | decode | paused | over
+let sample = null;     // Claude, when the viewer allows it
+
+function buildSystem(sys) {
+  const repos = sys.repos.filter(r => r.commits.length);
+  const planets = repos.map((r, i) => {
+    const st = planetStyle(r), R = 20 + st.imp * 30;
+    return {
+      repo: r, st, R, orbit: 320 + i * 200 + st.seed * 40, ang: st.seed * TAU,
+      speed: (.018 + .05 / (i + 1)) * (st.seed > .5 ? 1 : -1), x: 0, y: 0, visited: false, spin: 0,
+      sats: r.commits.map((c, j, all) => ({ c, a: j / all.length * TAU, r: R + 24 + (j % 3) * 13, signal: !!c.files, done: false })),
+    };
+  });
+  const edge = (planets.at(-1)?.orbit ?? 600) + 260;
+  const rocks = Array.from({ length: 6 + planets.length }, () => spawnRock(edge));
+  return { sys, planets, edge, rocks };
+}
+function spawnRock(edge) {
+  const a = Math.random() * TAU, d = 260 + Math.random() * (edge - 300), sp = 18 + Math.random() * 34, va = Math.random() * TAU;
+  const r = 9 + Math.random() * 11;
+  return { x: Math.cos(a) * d, y: Math.sin(a) * d, vx: Math.cos(va) * sp, vy: Math.sin(va) * sp, r, rot: 0, vr: (Math.random() - .5) * 1.5,
+    shape: Array.from({ length: 8 }, (_, i) => r * (.7 + Math.random() * .4)) };
+}
+
+function makeMissions(sys, planets) {
+  const repos = planets.map(p => p.repo), ms = [];
+  const brightest = [...planets].sort((a, b) => b.repo.stargazers_count - a.repo.stargazers_count)[0];
+  ms.push({ text: `Reach ${brightest.repo.name}, the most-starred world`, kind: "visit", target: brightest });
+  const oldest = [...planets].sort((a, b) => Date.parse(a.repo.created_at) - Date.parse(b.repo.created_at)).find(p => p !== brightest);
+  if (oldest) ms.push({ text: `Find the oldest other world (created ${oldest.repo.created_at.slice(0, 4)})`, kind: "visit", target: oldest });
+  const langs = {}; repos.forEach(r => r.language && (langs[r.language] = (langs[r.language] || 0) + r.commits.length));
+  const lang = Object.entries(langs).sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (lang) ms.push({ text: `Scan 5 commits from ${lang} worlds`, kind: "scanLang", lang, need: 5, n: 0 });
+  ms.push({ text: "Decode 3 signals correctly", kind: "decode", need: 3, n: 0 });
+  const authors = {}; repos.forEach(r => r.commits.forEach(c => authors[c.author] = (authors[c.author] || 0) + 1));
+  const rare = Object.entries(authors).filter(([a]) => a && a !== "?").sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]));
+  const pick = rare[Math.floor(rare.length / 2)]?.[0];
+  if (pick) ms.push({ text: `Scan a commit written by ${pick}`, kind: "author", author: pick });
+  return ms;
+}
+
+function startRun(sys) {
+  const world = buildSystem(sys);
+  G = { ...world, ship: { x: 0, y: -150, vx: 0, vy: 0, a: -Math.PI / 2, thrust: false }, cam: { x: 0, y: -150 },
+    score: 0, combo: 1, shields: 3, inv: 0, scanned: 0, decoded: 0, tried: 0, log: [], particles: [], shake: 0, near: null, t: 0, charted: false };
+  G.missions = makeMissions(sys, G.planets);
+  $("#sysLabel").textContent = `Missions · ${sys.login}`;
+  ["#menu", "#over", "#paused"].forEach(s => $(s).hidden = true);
+  ["#stats", "#controls"].forEach(s => $(s).hidden = false);
+  $("#touchHint").hidden = !matchMedia("(pointer: coarse)").matches;
+  renderMissions(); renderHud(); renderLog();
+  mode = "play";
+}
+
+/* ---- Update ---- */
+function step(dt) {
+  G.t += dt;
+  for (const p of G.planets) {
+    p.ang += p.speed * dt * (mode === "menu" ? 3 : 1); p.spin += dt * .3;
+    p.x = Math.cos(p.ang) * p.orbit; p.y = Math.sin(p.ang) * p.orbit;
+    for (const s of p.sats) s.a += dt * (.55 + 8 / s.r);
+  }
+  for (const r of G.rocks) {
+    r.x += r.vx * dt; r.y += r.vy * dt; r.rot += r.vr * dt;
+    const d = Math.hypot(r.x, r.y);
+    if (d > G.edge || d < 200) { r.vx *= -1; r.vy *= -1; r.x += r.vx * dt * 2; r.y += r.vy * dt * 2; }
+  }
+  for (const pt of G.particles) { pt.x += pt.vx * dt; pt.y += pt.vy * dt; pt.life -= dt; }
+  G.particles = G.particles.filter(p => p.life > 0);
+  if (mode !== "play") return;
+
+  const s = G.ship;
+  let turn = 0, thrust = 0;
+  if (keys.has("arrowleft") || keys.has("a")) turn -= 1;
+  if (keys.has("arrowright") || keys.has("d")) turn += 1;
+  if (keys.has("arrowup") || keys.has("w")) thrust = 1;
+  if (keys.has("arrowdown") || keys.has("s")) { s.vx *= 1 - 3 * dt; s.vy *= 1 - 3 * dt; }
+  if (pointer.on) {
+    const wp = pointerWorld() ?? { x: s.x, y: s.y }, wx = wp.x, wy = wp.y;
+    let diff = Math.atan2(wy - s.y, wx - s.x) - s.a;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    turn = Math.max(-1, Math.min(1, diff * 3));
+    if (Math.abs(diff) < 1.3 && Math.hypot(wx - s.x, wy - s.y) > 30) thrust = 1;
+  }
+  s.a += turn * 3.8 * dt; s.turn = turn;
+  s.thrust = thrust > 0;
+  if (thrust) {
+    s.vx += Math.cos(s.a) * 430 * dt; s.vy += Math.sin(s.a) * 430 * dt;
+    if (Math.random() < .7) G.particles.push({ x: s.x - Math.cos(s.a) * 12, y: s.y - Math.sin(s.a) * 12, vx: -Math.cos(s.a) * 120 + (Math.random() - .5) * 40 + s.vx * .5, vy: -Math.sin(s.a) * 120 + (Math.random() - .5) * 40 + s.vy * .5, life: .35, max: .35, c: "#ffb547" });
+  }
+  const sp = Math.hypot(s.vx, s.vy); if (sp > 520) { s.vx *= 520 / sp; s.vy *= 520 / sp; }
+  s.vx *= 1 - .7 * dt; s.vy *= 1 - .7 * dt;
+  s.x += s.vx * dt; s.y += s.vy * dt;
+  const d0 = Math.hypot(s.x, s.y);
+  if (d0 > G.edge) { s.vx -= s.x / d0 * 600 * dt; s.vy -= s.y / d0 * 600 * dt; }
+  G.inv = Math.max(0, G.inv - dt);
+  G.shake = Math.max(0, G.shake - dt * 3);
+
+  // The star: hot, solid.
+  if (d0 < 70) { bounce(s, 0, 0, 70); damage("Too close to the star"); }
+
+  G.near = null;
+  for (const p of G.planets) {
+    const d = Math.hypot(s.x - p.x, s.y - p.y);
+    if (d < p.R + 8) bounce(s, p.x, p.y, p.R + 8);
+    if (d < p.R + 80) {
+      G.near = p;
+      if (!p.visited) { p.visited = true; addScore(50); toast(`Arrived at ${p.repo.name}`); sfx.visit(); progress("visit", p); }
+    }
+    for (const sat of p.sats) {
+      if (sat.done) continue;
+      const sx = p.x + Math.cos(sat.a) * sat.r, sy = p.y + Math.sin(sat.a) * sat.r;
+      if (Math.hypot(s.x - sx, s.y - sy) < 16) scan(p, sat, sx, sy);
+      if (mode !== "play") return;
+    }
+  }
+  for (const r of G.rocks) {
+    if (Math.hypot(s.x - r.x, s.y - r.y) < r.r + 9 && G.inv <= 0) {
+      bounce(s, r.x, r.y, r.r + 10); damage("Merge conflict hit");
+      burst(r.x, r.y, "#ff6f7f", 14); Object.assign(r, spawnRock(G.edge));
+    }
+  }
+  renderPlanetCard();
+}
+function bounce(s, cx, cy, minD) {
+  const dx = s.x - cx, dy = s.y - cy, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
+  s.x = cx + nx * minD; s.y = cy + ny * minD;
+  const vn = s.vx * nx + s.vy * ny; if (vn < 0) { s.vx -= 1.6 * vn * nx; s.vy -= 1.6 * vn * ny; }
+}
+function damage(why) {
+  if (G.inv > 0) return;
+  G.shields--; G.inv = 1.5; G.combo = 1; G.shake = reduceMotion ? 0 : 1; sfx.hit();
+  toast(`${why}. Shields ${Math.max(0, G.shields)}/3`, "bad"); renderHud();
+  if (G.shields <= 0) gameOver();
+}
+function burst(x, y, c, n = 10) { for (let i = 0; i < n; i++) { const a = Math.random() * TAU, v = 40 + Math.random() * 120; G.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: .6, max: .6, c }); } }
+function addScore(n) { G.score += n; renderHud(); }
+
+function scan(p, sat, x, y) {
+  sat.done = true; G.scanned++;
+  G.log.unshift({ p, c: sat.c });
+  progress("scan", p, sat.c);
+  if (sat.signal) { sfx.signal(); burst(x, y, "#ffb547", 16); openDecode(p, sat.c); }
+  else { sfx.scan(); burst(x, y, "#74e2ff", 8); addScore(20 * G.combo); toast(`Scanned ${sat.c.sha}: ${clip(firstLine(sat.c.msg), 64)}`); }
+  renderLog();
+}
+
+/* ---- Missions ---- */
+function progress(kind, p, c) {
+  for (const m of G.missions) {
+    if (m.done) continue;
+    if (kind === "visit" && m.kind === "visit" && m.target === p) m.done = true;
+    if (kind === "scan" && m.kind === "scanLang" && p.repo.language === m.lang && ++m.n >= m.need) m.done = true;
+    if (kind === "scan" && m.kind === "author" && c.author === m.author) m.done = true;
+    if (kind === "decode" && m.kind === "decode" && ++m.n >= m.need) m.done = true;
+    if (m.done) { addScore(250); toast(`Mission complete: ${m.text}`, "good"); sfx.mission(); }
+  }
+  if (!G.charted && G.missions.every(m => m.done)) {
+    G.charted = true; addScore(1000);
+    setTimeout(() => toast(`${G.sys.login} system charted. +1000`, "good"), 600);
+  }
+  renderMissions();
+}
+function renderMissions() {
+  $("#missionList").replaceChildren(...G.missions.map(m =>
+    el("li", { className: m.done ? "done" : "" }, m.text + (m.need && !m.done ? ` (${m.n}/${m.need})` : ""))));
+}
+
+/* ---- Decode: questions built from the snapshot ---- */
+function openDecode(p, c) {
+  const all = G.planets.flatMap(q => q.repo.commits.map(x => ({ q, x })));
+  const line = firstLine(c.msg);
+  const others = shuffle(all.filter(o => o.x !== c && firstLine(o.x.msg) && firstLine(o.x.msg) !== line));
+  const distinct = []; for (const o of others) if (!distinct.some(d => firstLine(d.x.msg) === firstLine(o.x.msg))) distinct.push(o);
+  let q;
+  if (c.files && distinct.length >= 2 && Math.random() < .6) {
+    q = { title: "Which commit message produced this change?", kind: "msg",
+      options: shuffle([{ t: line, ok: true }, ...distinct.slice(0, 2).map(o => ({ t: firstLine(o.x.msg) }))]),
+      signal: [el("div", {}, el("span", { className: "add" }, `+${c.add}`), "  ", el("span", { className: "del" }, `−${c.del}`), `  across ${c.nfiles} file${c.nfiles === 1 ? "" : "s"}`),
+        el("ul", {}, ...c.files.map(f => el("li", {}, f))), c.nfiles > c.files.length ? el("div", { className: "label" }, `and ${c.nfiles - c.files.length} more`) : null] };
+  } else {
+    const wrong = shuffle(G.planets.filter(o => o !== p)).slice(0, 2);
+    q = { title: "Which world sent this signal?", kind: "repo",
+      options: shuffle([{ t: p.repo.name, ok: true }, ...wrong.map(o => ({ t: o.repo.name }))]),
+      signal: [el("div", {}, `“${clip(line, 160)}”`), el("div", { className: "label" }, `${c.author} · ${fmtDate(c.date)}`)] };
+  }
+  q.c = c; q.p = p; G.q = q;
+  $("#decodeTitle").textContent = q.title;
+  $("#decodeKicker").textContent = `Signal decode · combo ×${G.combo}`;
+  $("#decodeSignal").replaceChildren(...q.signal.filter(Boolean));
+  $("#answers").replaceChildren(...q.options.map((o, i) => {
+    const b = el("button", { className: "answer" }, el("kbd", {}, String(i + 1)), el("span", {}, clip(o.t, 140)));
+    b.onclick = () => answer(i); return b;
+  }));
+  $("#reveal").hidden = true; $("#decodeNext").hidden = true;
+  $("#decode").hidden = false; mode = "decode";
+  $("#answers button").focus();
+}
+function answer(i) {
+  const q = G.q; if (!q || q.answered) return;
+  q.answered = true; G.tried++;
+  const btns = [...$("#answers").children];
+  btns.forEach((b, j) => { b.disabled = true; if (q.options[j].ok) b.classList.add("right"); });
+  const ok = q.options[i].ok;
+  let gain = 0, restored = false;
+  if (ok) {
+    gain = 150 * G.combo; addScore(gain); G.decoded++; G.combo = Math.min(5, G.combo + 1);
+    if (G.shields < 3) { G.shields++; restored = true; }
+    sfx.right(); progress("decode");
+  } else { btns[i].classList.add("wrong"); G.combo = 1; sfx.wrong(); }
+  const c = q.c;
+  $("#reveal").textContent = `${ok ? `Correct, +${gain}${restored ? ", shield restored" : ""}` : "Not this time"}. ${q.p.repo.name} @ ${c.sha} by ${c.author}, ${fmtDate(c.date)}: “${clip(firstLine(c.msg), 120)}”`;
+  $("#reveal").hidden = false; $("#decodeNext").hidden = false; $("#decodeNext").focus();
+  renderHud();
+}
+function closeDecode() { $("#decode").hidden = true; G.q = null; mode = "play"; }
+$("#decodeNext").onclick = closeDecode;
+
+/* ---- HUD, planet card, toasts ---- */
+function renderHud() {
+  $("#score").textContent = G.score.toLocaleString();
+  $("#combo").textContent = G.combo > 1 ? `combo ×${G.combo}` : "";
+  $("#shields").replaceChildren(...[0, 1, 2].map(i => el("i", { className: i < G.shields ? "" : "off" })));
+  $("#shields").setAttribute("aria-label", `Shields ${G.shields} of 3`);
+}
+let cardFor = null;
+function renderPlanetCard() {
+  const p = G.near, card = $("#planetCard");
+  if (p === cardFor) return; cardFor = p;
+  card.hidden = !p; if (!p) return;
+  const r = p.repo, left = p.sats.filter(s => !s.done).length;
+  card.replaceChildren(
+    el("h3", {}, r.name, el("span", { className: "label" }, r.language || "mixed")),
+    r.description ? el("p", {}, clip(r.description, 160)) : null,
+    el("div", { className: "facts" },
+      ...[["★", fmtN(r.stargazers_count)], ["forks", fmtN(r.forks_count)], ["born", r.created_at.slice(0, 10)], ["pushed", r.pushed_at.slice(0, 10)], ["satellites left", left]]
+        .map(([k, v]) => el("span", {}, el("em", {}, k), String(v)))),
+    el("a", { href: `https://github.com/${G.sys.login}/${r.name}`, target: "_blank", rel: "noopener" }, "Open on GitHub"));
+}
+function toast(text, kind = "") {
+  const t = el("div", { className: "toast " + kind }, text);
+  $("#toasts").prepend(t);
+  while ($("#toasts").children.length > 3) $("#toasts").lastChild.remove();
+  setTimeout(() => t.remove(), 3200);
+}
+
+/* ---- Logbook + Oracle ---- */
+function renderLog() {
+  $("#logCount").textContent = G.log.length;
+  const list = $("#logList");
+  if (!G.log.length) { list.replaceChildren(el("p", { className: "empty" }, "Fly through a satellite to scan its commit. Scanned commits collect here with links to GitHub.")); return; }
+  list.replaceChildren(...G.log.map(({ p, c }) => {
+    const out = el("div", { className: "oracle", hidden: true });
+    const btn = sample ? el("button", { className: "oracle-btn" }, "Ask the Oracle") : null;
+    if (btn) btn.onclick = () => askOracle(p, c, btn, out);
+    return el("div", { className: "entry" },
+      el("div", { className: "meta" }, el("strong", {}, p.repo.name),
+        el("a", { href: `https://github.com/${G.sys.login}/${p.repo.name}/commit/${c.sha}`, target: "_blank", rel: "noopener", className: "mono" }, c.sha),
+        el("span", {}, c.author), el("span", {}, fmtDate(c.date)),
+        c.files ? el("span", {}, `+${c.add} −${c.del} · ${c.nfiles} files`) : null),
+      el("details", {}, el("summary", {}, clip(firstLine(c.msg), 120)), el("pre", {}, c.msg + (c.files ? "\n\nFiles: " + c.files.join(", ") : ""))),
+      btn, out);
+  }));
+}
+async function askOracle(p, c, btn, out) {
+  btn.disabled = true; btn.textContent = "Asking…"; out.hidden = false; out.textContent = "Thinking…";
+  const r = p.repo;
+  const prompt = `You are the Oracle in CodeVerse, a game about reading Git history. Explain this commit to a student in at most 4 short sentences: what changed, and why it might matter for the project. You only have the message, stats and file names below, not the diff, so say "likely" for anything inferred and do not invent details.
+
+Repository: ${G.sys.login}/${r.name} (${r.language || "mixed"}) — ${r.description || "no description"}
+Commit ${c.sha} by ${c.author} on ${c.date}
+Message:
+${c.msg}
+${c.files ? `Stats: +${c.add} −${c.del} across ${c.nfiles} files. First files: ${c.files.join(", ")}` : "No file details in the snapshot."}`;
+  try {
+    const res = await sample(prompt, { modelTier: "quick", onText: ({ text }) => out.textContent = text });
+    out.textContent = res.text;
+    btn.remove();
+  } catch (e) {
+    if (e?.code === "not_granted") { sample = null; renderLog(); return; }
+    out.textContent = e?.code === "rate_limited" ? "The Oracle is busy. Try again in a minute." : "The Oracle could not answer this time.";
+    btn.disabled = false; btn.textContent = "Ask the Oracle";
+  }
+}
+function openLog() { $("#log").hidden = false; if (mode === "play") pause(true, false); $("#logClose").focus(); }
+function closeLog() { $("#log").hidden = true; if (mode === "paused" && $("#paused").hidden) mode = "play"; }
+$("#logBtn").onclick = () => $("#log").hidden ? openLog() : closeLog();
+$("#logClose").onclick = closeLog;
+$("#overLogBtn").onclick = openLog;
+
+/* ---- Menus ---- */
+function pause(on, showCard = true) {
+  if (on && mode === "play") { mode = "paused"; $("#paused").hidden = !showCard; if (showCard) $("#resumeBtn").focus(); }
+  else if (!on && mode === "paused") { mode = "play"; $("#paused").hidden = true; }
+}
+function gameOver() {
+  mode = "over";
+  const best = store.get("best", {}), prev = best[G.sys.login] || 0;
+  if (G.score > prev) { best[G.sys.login] = G.score; store.set("best", best); }
+  $("#overTitle").textContent = G.score > prev ? `New best for ${G.sys.login}: ${G.score.toLocaleString()}` : `Score ${G.score.toLocaleString()} (best ${prev.toLocaleString()})`;
+  const visited = G.planets.filter(p => p.visited).length;
+  $("#overFacts").replaceChildren(...[["worlds visited", `${visited}/${G.planets.length}`], ["commits scanned", G.scanned], ["signals decoded", `${G.decoded}/${G.tried}`], ["missions", `${G.missions.filter(m => m.done).length}/${G.missions.length}`]]
+    .map(([k, v]) => el("span", {}, el("em", {}, k), String(v))));
+  $("#over").hidden = false; $("#againBtn").focus();
+}
+function toMenu() {
+  mode = "menu"; ["#over", "#paused", "#decode", "#log", "#stats", "#controls", "#planetCard", "#touchHint"].forEach(s => $(s).hidden = true);
+  cardFor = null; renderMenu(); $("#menu").hidden = false;
+}
+function renderMenu() {
+  const best = store.get("best", {});
+  $("#snapLabel").textContent = `GitHub snapshot · ${fmtDate(DATA.snapshot)}`;
+  $("#systems").replaceChildren(...DATA.systems.map(sys => {
+    const stars = sys.repos.reduce((n, r) => n + r.stargazers_count, 0);
+    const b = el("button", { className: "sys" }, el("strong", {}, sys.login),
+      el("span", { className: "mono" }, `${sys.type === "Organization" ? "org" : "user"} · ${sys.repos.length} worlds · ★ ${fmtN(stars)}`),
+      el("span", { className: "mono best" }, best[sys.login] ? `best ${best[sys.login].toLocaleString()}` : "uncharted"));
+    b.onclick = () => { audio(); startRun(sys); };
+    b.onmouseenter = b.onfocus = () => { if (mode === "menu" && G?.sys !== sys) attract(sys); };
+    return b;
+  }));
+}
+function attract(sys) { const w = buildSystem(sys); G = { ...w, ship: null, cam: { x: 0, y: 0 }, particles: [], shake: 0, t: 0 }; }
+$("#resumeBtn").onclick = () => pause(false);
+$("#pauseBtn").onclick = () => pause(mode === "play");
+$("#quitBtn").onclick = $("#overQuitBtn").onclick = toMenu;
+$("#againBtn").onclick = () => startRun(G.sys);
+$("#missionsBtn").onclick = () => $("#missions").classList.toggle("open");
+function setSound() { $("#soundBtn").setAttribute("aria-pressed", String(!muted)); $("#soundBtn").textContent = muted ? "Muted" : "Sound"; }
+$("#soundBtn").onclick = () => { muted = !muted; store.set("muted", muted); audio(); setSound(); };
+setSound();
+function onKey(e) {
+  audio();
+  const k = e.key.toLowerCase();
+  if (mode === "decode") {
+    if (["1", "2", "3"].includes(k) && !G.q?.answered) { answer(+k - 1); e.preventDefault(); }
+    else if (k === "enter" && G.q?.answered) { closeDecode(); e.preventDefault(); }
+    return;
+  }
+  if (k === "escape" && !$("#log").hidden) { closeLog(); return; }
+  if ((k === "p" || k === "escape") && (mode === "play" || mode === "paused")) pause(mode === "play");
+  if (k === "l" && mode !== "menu") $("#log").hidden ? openLog() : closeLog();
+  if (mode === "play" && k.startsWith("arrow")) e.preventDefault();
+}
+
+/* ---- Render ---- */
+const camPos = new THREE.Vector3(0, 900, 900), camLook = new THREE.Vector3();
+function draw(dt) {
+  if (G.planets !== builtFor) buildScene();
+  // sync world objects from game state
+  for (const p of G.planets) {
+    p.group.position.set(p.x, 0, p.y); p.ball.rotation.y = p.spin * 2;
+    p.label.material.color.set(p.visited ? "#ffb547" : "#ffffff");
+    p.orbitLine.material.color.set(p.visited ? 0xffb547 : 0x7a8ce0);
+    for (const s of p.sats) {
+      s.mesh.visible = !s.done;
+      s.mesh.position.set(p.x + Math.cos(s.a) * s.r, Math.sin(s.a) * s.r * p.tilt, p.y + Math.sin(s.a) * s.r);
+      if (s.halo && !reduceMotion) s.halo.material.opacity = .45 + Math.sin(G.t * 5 + s.a) * .3;
+    }
+  }
+  for (const r of G.rocks) { r.mesh.position.set(r.x, 0, r.y); r.mesh.scale.setScalar(r.r); r.mesh.rotation.set(r.rot, r.rot * .7, 0); }
+  const posA = particles.geometry.attributes.position, colA = particles.geometry.attributes.color, col = new THREE.Color();
+  const n = Math.min(G.particles.length, particles.max);
+  for (let i = 0; i < n; i++) {
+    const pt = G.particles[i], f = Math.max(0, pt.life / pt.max);
+    posA.setXYZ(i, pt.x, 4, pt.y); col.set(pt.c).multiplyScalar(f); colA.setXYZ(i, col.r, col.g, col.b);
+  }
+  particles.geometry.setDrawRange(0, n); posA.needsUpdate = colA.needsUpdate = true;
+
+  const s = G.ship;
+  shipMesh.visible = !!s && mode !== "over" && !(G.inv > 0 && Math.floor(G.t * 12) % 2);
+  if (s) {
+    shipMesh.position.set(s.x, 6, s.y); shipMesh.rotation.y = -s.a;
+    const { body, flame } = shipMesh.userData;
+    body.rotation.x += ((s.turn || 0) * -.6 - body.rotation.x) * .15;
+    flame.visible = s.thrust; flame.scale.x = .8 + Math.random() * .5;
+  }
+  // camera: chase from above-behind while flying, slow orbit over the system in the menu
+  const portrait = Math.max(1, (H / W) * .9);
+  if (s) {
+    const d = camDist * portrait;
+    camLook.lerp(tmpV.set(s.x, 0, s.y), .15);
+    camPos.lerp(new THREE.Vector3(s.x - Math.cos(s.a) * d * .15, d * .95, s.y - Math.sin(s.a) * d * .15 + d * .55), Math.min(1, dt * 4));
+  } else {
+    const a = reduceMotion ? .6 : G.t * .04, d = G.edge * 1.25 * portrait;
+    camPos.set(Math.cos(a) * d * .7, d * .75, Math.sin(a) * d * .7); camLook.set(0, 0, 0);
+  }
+  camera.position.copy(camPos);
+  if (G.shake) camera.position.add(tmpV.set((Math.random() - .5) * 14 * G.shake, 0, (Math.random() - .5) * 14 * G.shake));
+  camera.lookAt(camLook);
+  starfield.position.copy(camera.position);
+  gl.render(scene, camera);
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
+  if (s) drawPointers();
+}
+function drawPointers() {
+  // Edge arrows for off-screen mission targets and unvisited worlds.
+  const targets = new Set(G.missions.filter(m => !m.done && m.target).map(m => m.target));
+  for (const p of G.planets) {
+    if (p.visited && !targets.has(p)) continue;
+    tmpV.set(p.x, 0, p.y).project(camera);
+    let dx = tmpV.x * W / 2, dy = -tmpV.y * H / 2;
+    if (tmpV.z > 1) { dx = -dx; dy = -dy; }
+    else if (Math.abs(dx) < W / 2 - 20 && Math.abs(dy) < H / 2 - 20) continue;
+    const a = Math.atan2(dy, dx), m = 28;
+    const k = Math.min((W / 2 - m) / Math.abs(Math.cos(a) || 1e-6), (H / 2 - m) / Math.abs(Math.sin(a) || 1e-6));
+    const x = W / 2 + Math.cos(a) * k, y = H / 2 + Math.sin(a) * k, hot = targets.has(p);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    ctx.fillStyle = hot ? "#ffb547" : p.st.glow + "aa";
+    ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -6); ctx.lineTo(-6, 6); ctx.fill(); ctx.restore();
+    if (hot) { ctx.fillStyle = "#ffb547"; ctx.font = "11px 'JetBrains Mono', monospace"; ctx.textAlign = "center"; ctx.fillText(clip(p.repo.name, 18), Math.min(W - 70, Math.max(70, x)), y + (y > H / 2 ? -14 : 20)); }
+  }
+}
+
+/* ---- Loop ---- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (G) { step(dt); draw(dt); }
+  requestAnimationFrame(frame);
+}
+attract(DATA.systems[0]); renderMenu();
+if (gl) requestAnimationFrame(frame);
+else { $("#systems").replaceChildren(el("p", { className: "lede" }, "This browser could not start WebGL, which the 3D view needs. Try a current Chrome, Edge, Firefox or Safari with hardware acceleration on.")); }
+(async () => { try { sample = await window.claude?.use?.("sample") ?? null; if (G?.log) renderLog(); } catch { sample = null; } })();
+</script>
