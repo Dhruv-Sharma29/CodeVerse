@@ -1,6 +1,7 @@
 // Orbit game simulation: plain mutable state stepped once per frame, outside React.
 // The game plays on the x/z plane; the renderer adds height and effects.
 import { planetStyle, seedFor } from "../github/planetStyle.ts";
+import { HOLD, STORM, stormMeteors, stormPhase, type Meteor, type StormPhase } from "./events.ts";
 import type { GitCommit, Repository } from "../github/api";
 
 export interface Universe { room: string; title: string; subtitle: string; owner: string | null; repos: Repository[] }
@@ -76,7 +77,7 @@ export interface Input { move: { x: number; z: number }; aim: { x: number; z: nu
 export type SimEvent =
   | { type: "commit"; planet: Planet; commit: GitCommit }
   | { type: "kill"; kind: Alien["kind"]; points: number }
-  | { type: "hurt" } | { type: "dead"; by?: number } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean }
+  | { type: "hurt" } | { type: "dead"; by?: number } | { type: "storm"; phase: StormPhase } | { type: "meteor" } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean }
   | { type: "load"; planet: Planet } | { type: "shot"; x: number; z: number; a: number }
   | { type: "nova"; x: number; z: number } | { type: "grab" } | { type: "fling" } | { type: "boom"; x: number; z: number };
 
@@ -104,6 +105,13 @@ export function createSim(universe: Universe) {
     /** Dogfights are always on: every pilot can damage every other pilot. */
     pvpKills: 0, emote: "", emoteUntil: 0,
     pings: [] as Ping[],
+    /** This client's relay id (set by the UI), used for the bounty. */
+    myId: -1,
+    meteors: [] as Meteor[], meteorsGone: new Set<number>(), stormPhase: stormPhase(Date.now()),
+    /** Hold the gate: "holding" alone in the ring, "contested" with company, or null. */
+    holding: null as null | "holding" | "contested", holdAcc: 0,
+    /** Pilot id carrying the bounty (set by the UI from everyone's scores), or null. */
+    bountyId: null as number | null,
     grab: null as null | { planet?: Planet; alien?: Alien },
     score: 0, charge: 0, wave: 0, waveTimer: 4, kills: 0, deaths: 0, commits: 0, shake: 0, portalCool: 2.5, nextAlien: 1,
     near: null as Planet | null,
@@ -215,6 +223,9 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   if (epoch !== sim.portal.epoch && sim.portalCool < 1e8) { sim.portal = gateSpot(sim.universe.room, sim.edge, epoch); ev.push({ type: "gate" }); }
   sim.comet = cometAt(sim.universe.room, sim.edge, Date.now());
   if (sim.pings.length) sim.pings = sim.pings.filter(p => p.until > sim.t);
+  const now = Date.now(), phase = stormPhase(now);
+  if (phase !== sim.stormPhase) { sim.stormPhase = phase; ev.push({ type: "storm", phase }); if (phase === "calm") sim.meteorsGone.clear(); }
+  sim.meteors = stormMeteors(sim.universe.room, sim.edge, now).filter(m => !sim.meteorsGone.has(m.id));
   if (Math.random() < .6 && sim.particles.length < 1300) { // sparkle trail
     const c = sim.comet;
     sim.particles.push({ x: c.x + (Math.random() - .5) * 2, y: 1.5, z: c.z + (Math.random() - .5) * 2, vx: -c.vx * .4 + (Math.random() - .5) * 2, vy: (Math.random() - .5) * 2, vz: -c.vz * .4 + (Math.random() - .5) * 2, life: 1.4, max: 1.4, r: .75, g: .95, b: 1 });
@@ -355,7 +366,19 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
       explode(sim, sim.comet.x, sim.comet.z, "#e8fbff", 60, 14); ev.push({ type: "comet" });
     }
     if (dist(s, sim.portal) < sim.portal.r && sim.portalCool <= 0) { sim.portalCool = 1e9; s.vx = s.vz = 0; ev.push({ type: "portal" }); }
+    // Hold the gate: score while alone in the ring around it; any other live pilot inside contests it.
+    const dg = dist(s, sim.portal);
+    if (dg < HOLD.r && dg > sim.portal.r) {
+      const contested = [...sim.remotes.values()].some(r => r.hp > 0 && dist(r, sim.portal) < HOLD.r);
+      sim.holding = contested ? "contested" : "holding";
+      if (!contested) { sim.holdAcc += HOLD.rate * dt; const whole = Math.floor(sim.holdAcc); sim.holdAcc -= whole; sim.score += whole; }
+    } else sim.holding = null;
+    // Meteors: a hit costs hull and destroys the meteor (for this pilot).
+    for (const m of sim.meteors) if (dist(s, m) < STORM.r + 1.4) {
+      sim.meteorsGone.add(m.id); explode(sim, m.x, m.z, "#ff9a3c", 30, 9); hurt(sim, STORM.damage, ev);
+    }
   }
+  if (!alive) sim.holding = null;
 
   // ---- gravity grab
   if (sim.grab && (!input.grab || !alive)) {
@@ -476,6 +499,8 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
       b.life = 0; explode(sim, b.x, b.z, "#ff6f7f", 6, 3); hurt(sim, PVP.bullet * (b.dmg ?? 1), ev, b.owner); continue;
     }
     if (b.from === "me") {
+      const m = sim.meteors.find(m => !sim.meteorsGone.has(m.id) && dist(b, m) < STORM.r + .6);
+      if (m) { b.life = 0; sim.meteorsGone.add(m.id); sim.score += STORM.points; explode(sim, m.x, m.z, "#ff9a3c", 24, 7); ev.push({ type: "meteor" }); continue; }
       // My shots stop on other pilots' ships (the damage happens on their side).
       let hitShip = false;
       for (const r of sim.remotes.values()) if (r.hp > 0 && pvpWith(sim, r.id) && dist(b, r) < 1.8) {

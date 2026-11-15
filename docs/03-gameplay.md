@@ -123,6 +123,18 @@ shared; aliens are separate for each pilot.
 - **Any window size.** The game fills the window or the screen and re-lays-out on resize; short
   screens (phones in landscape, small laptop windows) get a compact HUD.
 
+## World events
+
+All four are worked out from the universe name and the clock, so every pilot sees the same thing
+with no server state.
+
+| Event | When | What it does |
+|---|---|---|
+| **☄ Meteor storm** | 40 s every 10 minutes (at :00, :10, :20… past the hour), announced 10 s before | Meteors cross the whole map on seeded paths. A hit costs 20 hull; shooting one gives +50. |
+| **🎯 Bounty** | Whenever two or more pilots are in a universe | The clear top scorer (at least 1,000) carries the bounty: 🎯 on their name tag and the pilots board. Shooting them down pays +500 on top of the usual +300. |
+| **🏁 Hold the gate** | Always | A gold ring of radius 22 around the hyperjump gate. Alone inside it you score +15 per second; any other live pilot inside makes it contested and nobody scores. |
+| **📅 Daily challenge** | Each UTC day | A well-known GitHub account and a goal (collect commits or shoot down aliens) picked from the date, the same for everyone. The lobby offers it, the HUD tracks progress from when you arrive, and finishing pays +1,000 once per day. |
+
 ## The creator's comet
 
 One comet crosses every universe. Each two-minute window it enters past the rim at a random angle

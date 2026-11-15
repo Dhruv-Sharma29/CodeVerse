@@ -226,7 +226,6 @@
 .orbit-emotes { display: flex; flex-wrap: wrap; gap: 6px; }
 .orbit-emotes button { background: rgba(255,255,255,.06); border: 1px solid var(--o-line); border-radius: 999px; padding: 5px 10px; font-size: 12px; }
 .orbit-emotes button:hover { border-color: var(--o-gold); }
-.orbit-pvp-note { margin: 0; max-width: 460px; font-size: 12px; color: #ffb3bd; }
 .orbit-invited { margin: -4px 0 0; font-size: 13px; color: var(--o-gold); animation: orbit-in .6s .5s both; }
 .orbit-invited b { color: var(--o-ink); }
 .orbit-ping { font-family: var(--o-mono); font-size: 11px; font-weight: 700; white-space: nowrap; padding: 3px 9px; border-radius: 999px; color: #fff; background: rgba(8, 11, 24, .85); border: 1px solid; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
@@ -275,3 +274,12 @@
 .orbit-crew span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .orbit-crew i { font-style: normal; color: var(--o-gold); }
 @media (max-width: 760px) { .orbit-dock { top: auto; bottom: calc(var(--o-gb) + 8px); max-height: 52dvh; } }
+/* world events */
+.orbit-status { position: absolute; left: var(--o-gl); top: calc(var(--o-gt) + 112px); z-index: 6; display: grid; gap: 5px; justify-items: start; pointer-events: none; }
+.orbit-status span { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--o-panel); border: 1px solid var(--o-line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.orbit-status .good { color: var(--o-good); border-color: rgba(125,255,180,.4); }
+.orbit-status .warn { color: #ffb37a; border-color: rgba(255,154,60,.45); }
+.orbit-daily { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 10px; max-width: 460px; font-size: 12px; color: var(--o-muted); }
+.orbit-daily b { color: var(--o-ink); font-weight: 600; }
+.orbit-daily i { font-style: normal; color: var(--o-good); }
+@media (max-width: 760px) { .orbit-status { top: calc(var(--o-gt) + 96px); } }

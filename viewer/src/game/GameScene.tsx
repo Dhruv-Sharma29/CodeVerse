@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { Sun, World } from "../scene/World";
 import { seedFor } from "../github/planetStyle";
 import { PORTAL_R, SUN_R, novaRadius, type HullId, type Input, type Planet, type Sim } from "./sim";
+import { HOLD, STORM } from "./events";
 
 /** Mutable bridge between the React shell and the render loop (never triggers React renders). */
 export interface Control {
@@ -160,6 +161,7 @@ function Portal({ sim }: { sim: Sim }) {
   return <group ref={root}>
     {/* Dedicated gate: light pillar visible from far away + docking ring on the plane. */}
     <mesh position={[0, 40, 0]}><cylinderGeometry args={[.9, 2.4, 80, 24, 1, true]} /><meshBasicMaterial color="#9b6dff" {...additive} opacity={.22} side={THREE.DoubleSide} /></mesh>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, .08, 0]}><ringGeometry args={[HOLD.r - .5, HOLD.r, 96]} /><meshBasicMaterial color="#ffcf6e" {...additive} opacity={.28} side={THREE.DoubleSide} /></mesh>
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, .1, 0]}><ringGeometry args={[PORTAL_R + 4, PORTAL_R + 4.8, 64]} /><meshBasicMaterial color="#b18cff" {...additive} opacity={.55} side={THREE.DoubleSide} /></mesh>
     <group position={[0, 2.2, 0]} rotation={[-1.05, 0, 0]}>
     <group ref={ring}>
@@ -281,19 +283,42 @@ function showEmote(el: HTMLElement | null, text: string | undefined, until: numb
 }
 
 function RemoteShip({ sim, peer }: { sim: Sim; peer: Peer }) {
-  const g = useRef<THREE.Group>(null), bubble = useRef<HTMLSpanElement>(null);
+  const g = useRef<THREE.Group>(null), bubble = useRef<HTMLSpanElement>(null), tag = useRef<HTMLSpanElement>(null);
   useFrame(() => {
     const r = sim.remotes.get(peer.id); if (!g.current || !r) return;
     g.current.visible = r.hp > 0;
     g.current.position.set(r.x, 1.2, r.z); g.current.rotation.y = -r.a;
     showEmote(bubble.current, r.emote, r.emoteUntil);
+    if (tag.current) { const label = sim.bountyId === peer.id ? `🎯 ${peer.name}` : peer.name; if (tag.current.textContent !== label) tag.current.textContent = label; }
   });
   return <group ref={g}><ShipModel color={peer.color} hull={peer.hull} />
     <Html center position={[0, 3.4, 0]} zIndexRange={[6, 0]} pointerEvents="none"><div className="orbit-shiplabel">
       <span ref={bubble} className="orbit-emote" style={{ display: "none" }} />
-      <span className="orbit-tag rival" style={{ borderColor: peer.color }}>{peer.name}</span>
+      <span ref={tag} className="orbit-tag rival" style={{ borderColor: peer.color }}>{peer.name}</span>
     </div></Html>
   </group>;
+}
+
+/** Meteor storm: glowing rocks with a fiery trail along their flight. */
+const METEOR_POOL = 80;
+function Meteors({ sim }: { sim: Sim }) {
+  const rocks = useRef<THREE.InstancedMesh>(null), trails = useRef<THREE.InstancedMesh>(null);
+  useFrame(({ clock }) => {
+    let n = 0;
+    for (const m of sim.meteors) {
+      if (n >= METEOR_POOL) break;
+      const yaw = -Math.atan2(m.vz, m.vx);
+      tmp.position.set(m.x, 1.6, m.z); tmp.rotation.set(clock.elapsedTime * 2 + m.id, clock.elapsedTime + m.id, 0); tmp.scale.setScalar(STORM.r * .9); tmp.updateMatrix();
+      rocks.current?.setMatrixAt(n, tmp.matrix);
+      tmp.position.set(m.x - Math.cos(-yaw) * 6, 1.6, m.z - Math.sin(-yaw) * 6); tmp.rotation.set(0, yaw, Math.PI / 2); tmp.scale.set(1, 1, 1); tmp.updateMatrix();
+      trails.current?.setMatrixAt(n++, tmp.matrix);
+    }
+    for (const r of [rocks, trails]) if (r.current) { r.current.count = n; r.current.instanceMatrix.needsUpdate = true; }
+  });
+  return <>
+    <instancedMesh ref={rocks} args={[undefined, undefined, METEOR_POOL]} frustumCulled={false}><dodecahedronGeometry args={[1, 0]} /><meshStandardMaterial color="#5a2a10" emissive="#ff7a1a" emissiveIntensity={1.4} flatShading toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={trails} args={[undefined, undefined, METEOR_POOL]} frustumCulled={false}><coneGeometry args={[1.6, 12, 10, 1, true]} /><meshBasicMaterial color="#ffb547" {...additive} opacity={.35} side={THREE.DoubleSide} /></instancedMesh>
+  </>;
 }
 
 /** Ping markers: a light beam, a pulsing ring and a label, drawn from a fixed pool. */
@@ -482,6 +507,7 @@ export const GameScene = memo(function GameScene({ ctl, peers, color, hull }: { 
     <Portal sim={sim} />
     <Comet sim={sim} />
     <Pings sim={sim} />
+    <Meteors sim={sim} />
     <LocalShip ctl={ctl} color={color} hull={hull} />
     {peers.map(p => <RemoteShip key={p.id} sim={sim} peer={p} />)}
     <Aliens sim={sim} />

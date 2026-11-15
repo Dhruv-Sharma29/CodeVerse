@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { commitUrl, errorMessage, fetchCommits, fetchContributors, fetchReadme, repoUrl, type Contributor, type GitCommit } from "../github/api";
 import { readmeExcerpt } from "./readme";
+import { BOUNTY, DAILY_REWARD, STORM, bountyHolder, dailyChallenge } from "./events";
 import { GameScene, ShipPreview, type Control, type Peer } from "./GameScene";
 import { connectNet, type NetMessage, type NetStatus } from "./net";
 import { ALIENS, EMOTES, HULLS, PING, PVP, SPAWN, addPing, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
@@ -42,7 +43,7 @@ const sfx = {
 };
 
 interface Toast { id: number; text: string; kind: "" | "good" | "bad" }
-interface Hud { score: number; hp: number; charge: number; wave: number; aliens: number; kills: number; dead: boolean; near: Planet | null; grabbing: boolean; comet: boolean; gate: { a: number; d: number }; boss: { hp: number; max: number } | null; board: BoardRow[] }
+interface Hud { score: number; hp: number; charge: number; wave: number; aliens: number; kills: number; dead: boolean; near: Planet | null; grabbing: boolean; comet: boolean; gate: { a: number; d: number }; boss: { hp: number; max: number } | null; board: BoardRow[]; holding: null | "holding" | "contested"; bounty: number | null; storm: string; meteors: number; daily: { done: number; n: number; text: string; complete: boolean } | null }
 interface BoardRow { id: number; name: string; color: string; hull: HullId; score: number; kills: number; me: boolean }
 
 export default function OrbitGame({ onExit }: { onExit: () => void }) {
@@ -81,6 +82,8 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const [sheet, setSheet] = useState(false);
   const [board, setBoard] = useState(false);
   const myId = useRef(-1);
+  const today = useMemo(() => dailyChallenge(new Date()), []);
+  const dailyBase = useRef<{ room: string; commits: number; kills: number } | null>(null);
   const [dock, setDock] = useState<{ planet: Planet; readme: string | null; contributors: Contributor[] | null; error: string } | null>(null);
 
   const toast = useCallback((text: string, kind: Toast["kind"] = "") => {
@@ -103,6 +106,11 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       if (e.type === "shot") { sfx.shot(); net.current?.send({ t: "shot", x: e.x, z: e.z, a: e.a, d: HULLS[sim.ship.hull].dmg }); }
       else if (e.type === "pvpHit") tone(1900, .05, "square", .03, .6);
       else if (e.type === "kill") { sfx.kill(); if (e.kind === "mothership") toast(`Mothership destroyed! +${e.points}`, "good"); }
+      else if (e.type === "storm") {
+        if (e.phase === "warning") { sfx.wave(); toast("☄ Meteor storm in 10 seconds. Shoot or dodge the meteors!", "bad"); }
+        else if (e.phase === "active") toast(`☄ Meteor storm! +${STORM.points} per meteor shot, ${STORM.damage} hull per hit`, "bad");
+        else toast("The meteor storm has passed.", "good");
+      } else if (e.type === "meteor") tone(520, .12, "triangle", .04, .5);
       else if (e.type === "hurt") { sfx.hurt(); pulse("hurt"); }
       else if (e.type === "dead") {
         net.current?.send({ t: "boom", x: sim.ship.x, z: sim.ship.z });
@@ -164,7 +172,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       const sim = ctl.current?.sim; if (!sim) return;
       const id = Number(m.id);
       if (m.t === "welcome") {
-        sim.remotes.clear(); myId.current = Number(m.id);
+        sim.remotes.clear(); myId.current = Number(m.id); sim.myId = myId.current;
         const list = (m.peers as (Peer & { state?: { x: number; z: number; a: number; s?: number; k?: number } | null })[]);
         for (const p of list) sim.remotes.set(p.id, { ...p, hull: isHull(p.hull) ? p.hull : "dart", x: p.state?.x ?? SPAWN.x, z: p.state?.z ?? SPAWN.z, a: p.state?.a ?? 0, vx: 0, vz: 0, hp: 100, tx: p.state?.x ?? SPAWN.x, tz: p.state?.z ?? SPAWN.z, seen: sim.t, score: p.state?.s ?? 0, kills: p.state?.k ?? 0 });
         setPeers(list.map(({ id, name, color, hull }) => ({ id, name, color, hull: isHull(hull) ? hull : "dart" })));
@@ -192,9 +200,12 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       else if (m.t === "killed") {
         // Kill feed for everyone; the winner's client credits itself.
         const by = Number(m.by), who = (pid: number) => sim.remotes.get(pid)?.name ?? "A pilot";
-        if (by === myId.current) { sim.pvpKills++; sim.score += PVP.killScore; sfx.kill(); toast(`⚔️ You shot down ${who(id)}! +${PVP.killScore}`, "good"); }
-        else if (id === myId.current) toast(`⚔️ ${who(by)} shot you down`, "bad");
-        else toast(`⚔️ ${who(by)} shot down ${who(id)}`);
+        const bounty = sim.bountyId === id, extra = bounty ? " and claimed the 🎯 bounty" : "";
+        if (by === myId.current) {
+          const pts = PVP.killScore + (bounty ? BOUNTY.bonus : 0);
+          sim.pvpKills++; sim.score += pts; sfx.kill(); toast(`⚔️ You shot down ${who(id)}${extra}! +${pts}`, "good");
+        } else if (id === myId.current) toast(`⚔️ ${who(by)} shot you down${bounty ? " and took your 🎯 bounty" : ""}`, "bad");
+        else toast(`⚔️ ${who(by)} shot down ${who(id)}${extra}`);
       } else if (m.t === "ping") {
         const r = sim.remotes.get(id);
         addPing(sim, Number(m.x), Number(m.z), { owner: id, name: r?.name ?? "A pilot", color: r?.color ?? "#ffffff" }); sfx.ping();
@@ -248,7 +259,17 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       const rows: BoardRow[] = [{ id: myId.current, name, color, hull: s.ship.hull, score: s.score, kills: s.pvpKills, me: true },
         ...[...s.remotes.values()].map(r => ({ id: r.id, name: r.name, color: r.color, hull: r.hull ?? "dart", score: r.score ?? 0, kills: r.kills ?? 0, me: false }))];
       rows.sort((a, b) => b.score - a.score);
-      setHud({ board: rows, boss: boss ? { hp: boss.hp, max: boss.max } : null, score: s.score, hp: s.ship.hp / HULLS[s.ship.hull].hp * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, comet: s.nearComet, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
+      s.bountyId = bountyHolder(rows.filter(r => r.id >= 0 || r.me));
+      // Daily challenge progress, counted from when you arrived in today's universe.
+      let daily: Hud["daily"] = null;
+      if (s.universe.room === today.room) {
+        if (!dailyBase.current || dailyBase.current.room !== s.universe.room) dailyBase.current = { room: s.universe.room, commits: s.commits, kills: s.kills };
+        const doneToday = store.get(`daily:${today.day}`, false);
+        const got = today.goal.kind === "commits" ? s.commits - dailyBase.current.commits : s.kills - dailyBase.current.kills;
+        if (!doneToday && got >= today.goal.n) { store.set(`daily:${today.day}`, true); s.score += DAILY_REWARD; sfx.wave(); toast(`📅 Daily challenge complete! +${DAILY_REWARD}`, "good"); }
+        daily = { done: Math.min(today.goal.n, got), n: today.goal.n, text: today.goal.text, complete: doneToday || got >= today.goal.n };
+      }
+      setHud({ board: rows, holding: s.holding, bounty: s.bountyId, storm: s.stormPhase, meteors: s.meteors.length, daily, boss: boss ? { hp: boss.hp, max: boss.max } : null, score: s.score, hp: s.ship.hp / HULLS[s.ship.hull].hp * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, comet: s.nearComet, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
       drawRadar(radar.current, s);
     }, 100);
     return () => clearInterval(id);
@@ -421,7 +442,12 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
             </button>; })}
           </div>
         </div>
-        <p className="orbit-pvp-note">⚔️ No peace mode: every pilot in a universe can shoot you, and you them. You get a short shield after respawning.</p>
+        <div className="orbit-daily">
+          <span>📅 Today's challenge</span>
+          <b>{today.goal.text} in {today.login}'s universe</b>
+          {store.get(`daily:${today.day}`, false) ? <i>Done today ✓</i>
+            : <button type="button" className="orbit-ghost" disabled={busy} onClick={() => { void launch().then(() => { if (universe?.room !== today.room) void jump(today.login); }); }}>Fly it →</button>}
+        </div>
         <div className="orbit-glass orbit-launch-bar">
           <div className="orbit-swatches" role="radiogroup" aria-label="Ship colour">
             {COLORS.map(c => <button type="button" key={c} role="radio" aria-checked={c === color} aria-label={`Colour ${c}`} className="orbit-swatch" style={{ "--sw": c } as React.CSSProperties} onClick={() => setColor(c)} />)}
@@ -491,6 +517,14 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
 
     <canvas ref={radar} className="orbit-radar" width={160} height={160} aria-hidden="true" />
 
+    {hud && (hud.holding || hud.bounty != null || hud.storm !== "calm" || hud.daily) && <div className="orbit-status" role="status">
+      {hud.storm === "warning" && <span className="warn">☄ Meteor storm incoming</span>}
+      {hud.storm === "active" && <span className="warn">☄ Meteor storm · {hud.meteors} in flight</span>}
+      {hud.holding === "holding" && <span className="good">🏁 Holding the gate · +15/s</span>}
+      {hud.holding === "contested" && <span className="warn">⚔️ Gate contested</span>}
+      {hud.bounty != null && <span>{hud.bounty === myId.current ? "🎯 You carry the bounty" : `🎯 Bounty: ${hud.board.find(r => r.id === hud.bounty)?.name ?? "a pilot"}`}</span>}
+      {hud.daily && <span className={hud.daily.complete ? "good" : ""}>📅 {hud.daily.text}: {hud.daily.done}/{hud.daily.n}{hud.daily.complete ? " ✓" : ""}</span>}
+    </div>}
     {hud?.boss && <div className="orbit-boss" role="status" aria-label={`Mothership ${Math.round(hud.boss.hp / hud.boss.max * 100)} percent`}>
       <span>MOTHERSHIP</span><div><i style={{ width: `${hud.boss.hp / hud.boss.max * 100}%` }} /></div>
     </div>}
@@ -573,7 +607,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       <table>
         <thead><tr><th>Pilot</th><th>Ship</th><th>Score</th><th title="Dogfight wins">⚔️</th></tr></thead>
         <tbody>{hud.board.map(r => <tr key={r.id} className={r.me ? "me" : ""}>
-          <td><i style={{ background: r.color }} />{r.name}{r.me ? " (you)" : ""}</td><td>{HULLS[r.hull].name}</td><td>{r.score.toLocaleString()}</td><td>{r.kills}</td>
+          <td><i style={{ background: r.color }} />{hud.bounty === r.id ? "🎯 " : ""}{r.name}{r.me ? " (you)" : ""}</td><td>{HULLS[r.hull].name}</td><td>{r.score.toLocaleString()}</td><td>{r.kills}</td>
         </tr>)}</tbody>
       </table>
       {hud.board.length === 1 && <p>Nobody else is here yet. Share this page, or check the hyperjump gate for busier universes.</p>}
@@ -666,6 +700,7 @@ function drawRadar(cv: HTMLCanvasElement | null, sim: Sim) {
   };
   dot(0, 0, "#ffcf6e", 5);
   dot(sim.comet.x, sim.comet.z, "#e8fbff", 3.5);
+  for (const m of sim.meteors) dot(m.x, m.z, "#ff9a3c", 1.6);
   // Pings: a ring on the radar (pinned to its edge when out of range) so they are findable.
   for (const p of sim.pings) {
     const dx = (p.x - s.x) * k, dz = (p.z - s.z) * k, l = Math.hypot(dx, dz), m = Math.min(1, (R - 7) / (l || 1));
