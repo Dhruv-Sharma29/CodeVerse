@@ -260,18 +260,37 @@ function LocalShip({ ctl, color, hull }: { ctl: Control; color: string; hull: Hu
   });
   return <group ref={g}><group ref={body}><ShipModel color={color} hull={hull} flame={flame} /></group>
     <mesh ref={shield}><sphereGeometry args={[3.2, 20, 14]} /><meshBasicMaterial color="#74e2ff" {...additive} opacity={.25} /></mesh>
+    <EmoteBubble sim={ctl.sim} />
   </group>;
 }
 
+function EmoteBubble({ sim }: { sim: Sim }) {
+  const el = useRef<HTMLSpanElement>(null);
+  useFrame(() => showEmote(el.current, sim.emote, sim.emoteUntil));
+  return <Html center position={[0, 3.6, 0]} zIndexRange={[6, 0]} pointerEvents="none"><span ref={el} className="orbit-emote" style={{ display: "none" }} /></Html>;
+}
+
+/** Show an emote bubble while it is fresh; updated per frame without React re-renders. */
+function showEmote(el: HTMLElement | null, text: string | undefined, until: number | undefined) {
+  if (!el) return;
+  const on = !!text && (until ?? 0) > performance.now();
+  if (on && el.textContent !== text) el.textContent = text!;
+  el.style.display = on ? "" : "none";
+}
+
 function RemoteShip({ sim, peer }: { sim: Sim; peer: Peer }) {
-  const g = useRef<THREE.Group>(null);
+  const g = useRef<THREE.Group>(null), bubble = useRef<HTMLSpanElement>(null);
   useFrame(() => {
     const r = sim.remotes.get(peer.id); if (!g.current || !r) return;
     g.current.visible = r.hp > 0;
     g.current.position.set(r.x, 1.2, r.z); g.current.rotation.y = -r.a;
+    showEmote(bubble.current, r.emote, r.emoteUntil);
   });
   return <group ref={g}><ShipModel color={peer.color} hull={peer.hull} />
-    <Html center position={[0, 3.4, 0]} zIndexRange={[6, 0]} pointerEvents="none"><span className="orbit-tag" style={{ borderColor: peer.color }}>{peer.name}</span></Html>
+    <Html center position={[0, 3.4, 0]} zIndexRange={[6, 0]} pointerEvents="none"><div className="orbit-shiplabel">
+      <span ref={bubble} className="orbit-emote" style={{ display: "none" }} />
+      <span className="orbit-tag rival" style={{ borderColor: peer.color }}>{peer.name}</span>
+    </div></Html>
   </group>;
 }
 

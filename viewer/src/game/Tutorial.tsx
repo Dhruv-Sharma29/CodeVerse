@@ -38,6 +38,8 @@ export function KeySheet({ touch, onReplay, onClose }: { touch: boolean; onRepla
   return <aside className="orbit-tut sheet" aria-label="Controls">
     <div className="orbit-tut-head"><span className="orbit-eyebrow">CONTROLS · H</span><button type="button" className="orbit-link" onClick={onClose}>Close</button></div>
     {LESSONS.map(l => <div className="orbit-sheet-row" key={l.id}><span>{l.title}</span><Keys keys={touch ? l.touchKeys : l.keys} /></div>)}
+    <div className="orbit-sheet-row"><span>Pilots board</span><Keys keys={["Tab"]} /></div>
+    <div className="orbit-sheet-row"><span>Emotes</span><Keys keys={["1", "–", "6"]} /></div>
     <button type="button" className="orbit-link" onClick={onReplay}>Replay first flight</button>
   </aside>;
 }

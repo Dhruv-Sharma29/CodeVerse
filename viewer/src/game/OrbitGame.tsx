@@ -3,7 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import { commitUrl, errorMessage, fetchCommits, repoUrl, type GitCommit } from "../github/api";
 import { GameScene, ShipPreview, type Control, type Peer } from "./GameScene";
 import { connectNet, type NetMessage, type NetStatus } from "./net";
-import { ALIENS, HULLS, SPAWN, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
+import { ALIENS, EMOTES, HULLS, PVP, SPAWN, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
 import { loadUniverse, ownerOf } from "./universe";
 import { KeySheet, LESSONS, Tutorial, type LessonId } from "./Tutorial";
 import "./game.css";
@@ -38,7 +38,8 @@ const sfx = {
 };
 
 interface Toast { id: number; text: string; kind: "" | "good" | "bad" }
-interface Hud { score: number; hp: number; charge: number; wave: number; aliens: number; kills: number; dead: boolean; near: Planet | null; grabbing: boolean; comet: boolean; gate: { a: number; d: number }; boss: { hp: number; max: number } | null }
+interface Hud { score: number; hp: number; charge: number; wave: number; aliens: number; kills: number; dead: boolean; near: Planet | null; grabbing: boolean; comet: boolean; gate: { a: number; d: number }; boss: { hp: number; max: number } | null; board: BoardRow[] }
+interface BoardRow { id: number; name: string; color: string; hull: HullId; score: number; kills: number; me: boolean }
 
 export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const [phase, setPhase] = useState<"lobby" | "play">("lobby");
@@ -74,6 +75,8 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const [lessons, setLessons] = useState<LessonId[]>(() => store.get<LessonId[]>("tutorial", []).filter(id => LESSONS.some(l => l.id === id)));
   const lessonsRef = useRef(lessons);
   const [sheet, setSheet] = useState(false);
+  const [board, setBoard] = useState(false);
+  const myId = useRef(-1);
 
   const toast = useCallback((text: string, kind: Toast["kind"] = "") => {
     const id = ++toastId.current;
@@ -92,10 +95,15 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const handleEvents = useCallback((sim: Sim, events: SimEvent[]) => {
     for (const e of events) {
       if (e.type === "shot" || e.type === "fling" || e.type === "commit" || e.type === "nova" || e.type === "portal") learn(e.type);
-      if (e.type === "shot") { sfx.shot(); net.current?.send({ t: "shot", x: e.x, z: e.z, a: e.a }); }
+      if (e.type === "shot") { sfx.shot(); net.current?.send({ t: "shot", x: e.x, z: e.z, a: e.a, d: HULLS[sim.ship.hull].dmg }); }
+      else if (e.type === "pvpHit") tone(1900, .05, "square", .03, .6);
       else if (e.type === "kill") { sfx.kill(); if (e.kind === "mothership") toast(`Mothership destroyed! +${e.points}`, "good"); }
       else if (e.type === "hurt") { sfx.hurt(); pulse("hurt"); }
-      else if (e.type === "dead") { toast("Ship destroyed. Respawning at the portal.", "bad"); net.current?.send({ t: "boom", x: sim.ship.x, z: sim.ship.z }); }
+      else if (e.type === "dead") {
+        net.current?.send({ t: "boom", x: sim.ship.x, z: sim.ship.z });
+        if (e.by != null) net.current?.send({ t: "killed", by: e.by }); // the kill feed comes back from the relay
+        else toast("Ship destroyed. Respawning near the sun.", "bad");
+      }
       else if (e.type === "wave") { sfx.wave(); toast(e.boss ? `Wave ${e.n}: a MOTHERSHIP is coming` : `Wave ${e.n}: alien ships inbound`, "bad"); }
       else if (e.type === "grab") sfx.grab();
       else if (e.type === "fling") sfx.fling();
@@ -145,9 +153,9 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       const sim = ctl.current?.sim; if (!sim) return;
       const id = Number(m.id);
       if (m.t === "welcome") {
-        sim.remotes.clear();
-        const list = (m.peers as (Peer & { state?: { x: number; z: number; a: number } | null })[]);
-        for (const p of list) sim.remotes.set(p.id, { ...p, x: p.state?.x ?? SPAWN.x, z: p.state?.z ?? SPAWN.z, a: p.state?.a ?? 0, vx: 0, vz: 0, hp: 100, tx: p.state?.x ?? SPAWN.x, tz: p.state?.z ?? SPAWN.z, seen: sim.t });
+        sim.remotes.clear(); myId.current = Number(m.id);
+        const list = (m.peers as (Peer & { state?: { x: number; z: number; a: number; s?: number; k?: number } | null })[]);
+        for (const p of list) sim.remotes.set(p.id, { ...p, hull: isHull(p.hull) ? p.hull : "dart", x: p.state?.x ?? SPAWN.x, z: p.state?.z ?? SPAWN.z, a: p.state?.a ?? 0, vx: 0, vz: 0, hp: 100, tx: p.state?.x ?? SPAWN.x, tz: p.state?.z ?? SPAWN.z, seen: sim.t, score: p.state?.s ?? 0, kills: p.state?.k ?? 0 });
         setPeers(list.map(({ id, name, color, hull }) => ({ id, name, color, hull: isHull(hull) ? hull : "dart" })));
       } else if (m.t === "joined") {
         const p = { id, name: String(m.name), color: String(m.color), hull: isHull(m.hull) ? m.hull : "dart" as HullId };
@@ -160,22 +168,33 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         if (r) toast(`${r.name} left`);
       } else if (m.t === "state") {
         const r = sim.remotes.get(id); if (!r) return;
-        Object.assign(r, { tx: m.x, tz: m.z, vx: m.vx, vz: m.vz, a: m.a, hp: m.hp, seen: sim.t });
+        Object.assign(r, { tx: m.x, tz: m.z, vx: m.vx, vz: m.vz, a: m.a, hp: m.hp, seen: sim.t, score: Number(m.s) || 0, kills: Number(m.k) || 0 });
       } else if (m.t === "shot") {
         const a = Number(m.a);
-        sim.bullets.push({ x: Number(m.x), z: Number(m.z), vx: Math.cos(a) * 115, vz: Math.sin(a) * 115, life: .85, from: "ally" });
+        const d = Number(m.d) === 2 ? 2 : 1;
+        sim.bullets.push({ x: Number(m.x), z: Number(m.z), vx: Math.cos(a) * 115, vz: Math.sin(a) * 115, life: .85, from: "ally", owner: id, dmg: d, big: d > 1 });
       } else if (m.t === "grab") remoteGrab(sim, m as unknown as { planet: number; x: number; z: number; vx: number; vz: number });
       else if (m.t === "nova") {
-        sim.novas.push({ x: Number(m.x), z: Number(m.z), t: 0, mine: false, hit: new Set() });
+        sim.novas.push({ x: Number(m.x), z: Number(m.z), t: 0, mine: false, hit: new Set(), owner: id });
         toast(`${sim.remotes.get(id)?.name ?? "Someone"} triggered a supernova`, "good");
       } else if (m.t === "boom") explode(sim, Number(m.x), Number(m.z), "#ffb547", 50, 12);
+      else if (m.t === "killed") {
+        // Kill feed for everyone; the winner's client credits itself.
+        const by = Number(m.by), who = (pid: number) => sim.remotes.get(pid)?.name ?? "A pilot";
+        if (by === myId.current) { sim.pvpKills++; sim.score += PVP.killScore; sfx.kill(); toast(`⚔️ You shot down ${who(id)}! +${PVP.killScore}`, "good"); }
+        else if (id === myId.current) toast(`⚔️ ${who(by)} shot you down`, "bad");
+        else toast(`⚔️ ${who(by)} shot down ${who(id)}`);
+      } else if (m.t === "emote") {
+        const r = sim.remotes.get(id), e = EMOTES[Number(m.e)];
+        if (r && e) { r.emote = e; r.emoteUntil = performance.now() + 3500; }
+      }
       else if (m.t === "error") toast(String(m.message), "bad");
     }, setStatus);
     net.current = n;
     const tick = setInterval(() => {
       const c = ctl.current; if (!c || c.attract) return;
       const s = c.sim.ship;
-      n.send({ t: "state", x: s.x, z: s.z, a: s.a, vx: s.vx, vz: s.vz, hp: s.dead > 0 ? 0 : s.hp });
+      n.send({ t: "state", x: s.x, z: s.z, a: s.a, vx: s.vx, vz: s.vz, hp: s.dead > 0 ? 0 : s.hp, s: c.sim.score, k: c.sim.pvpKills });
       for (const p of c.sim.planets) if (p.mode === "held" || p.mode === "flung") n.send({ t: "grab", planet: p.i, x: p.x, z: p.z, vx: p.vx, vz: p.vz, held: p.mode === "held" });
     }, 100);
     return () => { clearInterval(tick); n.close(); net.current = null; };
@@ -206,11 +225,14 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       const s = c.sim;
       if (Math.hypot(s.ship.vx, s.ship.vz) > 14) learn("move");
       const boss = s.aliens.find(a => a.kind === "mothership" && a.hp > 0);
-      setHud({ boss: boss ? { hp: boss.hp, max: boss.max } : null, score: s.score, hp: s.ship.hp / HULLS[s.ship.hull].hp * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, comet: s.nearComet, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
+      const rows: BoardRow[] = [{ id: myId.current, name, color, hull: s.ship.hull, score: s.score, kills: s.pvpKills, me: true },
+        ...[...s.remotes.values()].map(r => ({ id: r.id, name: r.name, color: r.color, hull: r.hull ?? "dart", score: r.score ?? 0, kills: r.kills ?? 0, me: false }))];
+      rows.sort((a, b) => b.score - a.score);
+      setHud({ board: rows, boss: boss ? { hp: boss.hp, max: boss.max } : null, score: s.score, hp: s.ship.hp / HULLS[s.ship.hull].hp * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, comet: s.nearComet, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
       drawRadar(radar.current, s);
     }, 100);
     return () => clearInterval(id);
-  }, [phase, learn]);
+  }, [phase, learn, name, color]);
 
   /* ---- keyboard + mouse (one held-key set feeds the sim input) ---- */
   const held = useRef(new Set<string>());
@@ -232,6 +254,8 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       const k = e.key.toLowerCase();
       if (k === "q" && ctl.current) ctl.current.input.nova = true;
       if (k === "h" && !e.repeat) setSheet(v => !v);
+      if (k === "tab") { e.preventDefault(); if (!e.repeat) setBoard(v => !v); return; }
+      if (/^[1-6]$/.test(k) && !e.repeat) { sendEmote(Number(k) - 1); return; }
       if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
       keys.add(k); syncInput();
     };
@@ -242,6 +266,13 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     return () => { removeEventListener("keydown", down); removeEventListener("keyup", up); removeEventListener("blur", blur); };
   }, [phase, jumpOpen, syncInput]);
   const mouseButton = (button: number, on: boolean) => { if (on) held.current.add("mouse" + button); else held.current.delete("mouse" + button); syncInput(); };
+
+  /* ---- multiplayer extras ---- */
+  function sendEmote(i: number) {
+    const sim = ctl.current?.sim, e = EMOTES[i]; if (!sim || !e) return;
+    sim.emote = e; sim.emoteUntil = performance.now() + 3500;
+    net.current?.send({ t: "emote", e: i });
+  }
 
   /* ---- universes ---- */
   async function launch() {
@@ -314,6 +345,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
             </button>; })}
           </div>
         </div>
+        <p className="orbit-pvp-note">⚔️ No peace mode: every pilot in a universe can shoot you, and you them. You get a short shield after respawning.</p>
         <div className="orbit-glass orbit-launch-bar">
           <div className="orbit-swatches" role="radiogroup" aria-label="Ship colour">
             {COLORS.map(c => <button type="button" key={c} role="radio" aria-checked={c === color} aria-label={`Colour ${c}`} className="orbit-swatch" style={{ "--sw": c } as React.CSSProperties} onClick={() => setColor(c)} />)}
@@ -364,6 +396,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       </div>
       <div className="orbit-actions">
         <button className="orbit-ghost" onClick={() => { const m = !muted; setMuted(m); store.set("muted", m); }} aria-pressed={!muted}>{muted ? "Sound off" : "Sound on"}</button>
+        <button className="orbit-ghost" onClick={() => setBoard(v => !v)} aria-pressed={board}>Pilots · Tab</button>
         <button className="orbit-ghost" onClick={() => setSheet(v => !v)} aria-pressed={sheet}>Controls</button>
         <button className="orbit-ghost" onClick={onExit}>Leave</button>
       </div>
@@ -441,6 +474,17 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
 
     {touch && c && <TouchControls ctl={c} />}
 
+    {board && hud && <aside className="orbit-board" aria-label="Pilots in this universe">
+      <div className="orbit-tut-head"><span className="orbit-eyebrow">PILOTS · {hud.board.length}</span><button type="button" className="orbit-link" onClick={() => setBoard(false)}>Close</button></div>
+      <table>
+        <thead><tr><th>Pilot</th><th>Ship</th><th>Score</th><th title="Dogfight wins">⚔️</th></tr></thead>
+        <tbody>{hud.board.map(r => <tr key={r.id} className={r.me ? "me" : ""}>
+          <td><i style={{ background: r.color }} />{r.name}{r.me ? " (you)" : ""}</td><td>{HULLS[r.hull].name}</td><td>{r.score.toLocaleString()}</td><td>{r.kills}</td>
+        </tr>)}</tbody>
+      </table>
+      {hud.board.length === 1 && <p>Nobody else is here yet. Share this page, or check the hyperjump gate for busier universes.</p>}
+      <div className="orbit-emotes" role="group" aria-label="Emotes">{EMOTES.map((e, i) => <button type="button" key={e} onClick={() => sendEmote(i)} title={`Key ${i + 1}`}>{e}</button>)}</div>
+    </aside>}
     {sheet ? <KeySheet touch={touch} onClose={() => setSheet(false)} onReplay={() => { saveLessons([]); setSheet(false); }} />
       : <Tutorial done={lessons} touch={touch} onSkip={() => saveLessons(LESSONS.map(l => l.id))} />}
     </>}

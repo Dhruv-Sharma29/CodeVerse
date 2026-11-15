@@ -125,3 +125,26 @@ test('the comet follows a seeded random chord per universe and pays out once per
   assert.deepEqual(caught, [1, 0, 0]);
   assert.equal(sim.score, 250);
 });
+
+test("dogfights: any other pilot's shots hurt (no peace mode), and the kill names the shooter", async () => {
+  const { PVP } = await import('../src/game/sim.ts');
+  const sim = createSim({ room: 'trending', title: 't', subtitle: '', owner: '', repos: [] });
+  sim.waveTimer = 99; sim.aliens.length = 0;
+  Object.assign(sim.ship, { x: 60, z: 0, vx: 0, vz: 0, inv: 0, hp: 100 });
+  const shoot = owner => sim.bullets.push({ x: 58.5, z: 0, vx: 115, vz: 0, life: .85, from: 'ally', owner, dmg: 1 });
+
+  shoot(42); step(sim, emptyInput(), 1 / 60, []);
+  assert.equal(sim.ship.hp, 100, 'a shot from someone no longer in the universe does nothing');
+
+  sim.remotes.set(7, { id: 7, name: 'Rival', color: '#f00', x: 40, z: 0, a: 0, vx: 0, vz: 0, hp: 100, tx: 40, tz: 0, seen: 0 });
+  shoot(7); step(sim, emptyInput(), 1 / 60, []);
+  assert.equal(sim.ship.hp, 100 - PVP.bullet);
+
+  sim.ship.hp = 5; sim.ship.inv = 0;
+  const ev = []; shoot(7); step(sim, emptyInput(), 1 / 60, ev);
+  assert.deepEqual(ev.find(e => e.type === 'dead'), { type: 'dead', by: 7 });
+
+  Object.assign(sim.ship, { dead: 0, hp: 100, inv: 2.5 }); // respawn shield
+  shoot(7); step(sim, emptyInput(), 1 / 60, []);
+  assert.equal(sim.ship.hp, 100, 'the respawn shield blocks damage');
+});

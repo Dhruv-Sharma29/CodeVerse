@@ -5,6 +5,7 @@ import { WebSocketServer } from 'ws';
 
 export const PLAY_PATH = '/api/play';
 const HULLS = new Set(['dart', 'wasp', 'titan']);
+const EMOTE_COUNT = 6; // matches EMOTES in src/game/sim.ts
 const ROOM = /^(?:trending|u:[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?)$/;
 const MAX_PER_ROOM = 24;
 const MAX_CLIENTS = 400;
@@ -54,16 +55,24 @@ export function createRelay() {
     if (m.t === 'rooms') return send(c, { t: 'rooms', rooms: summary() });
     if (!c.room) return;
     if (m.t === 'state') {
-      c.state = { x: num(m.x), z: num(m.z), a: num(m.a, 10), vx: num(m.vx), vz: num(m.vz), hp: num(m.hp, 100) };
+      // s: score, k: dogfight wins. Self-reported; nothing is stored or ranked.
+      c.state = { x: num(m.x), z: num(m.z), a: num(m.a, 10), vx: num(m.vx), vz: num(m.vz), hp: num(m.hp, 1000), s: num(m.s, 1e9) | 0, k: num(m.k, 1e6) | 0 };
       cast(c.room, { t: 'state', id: c.id, ...c.state }, c);
     } else if (m.t === 'shot') {
-      cast(c.room, { t: 'shot', id: c.id, x: num(m.x), z: num(m.z), a: num(m.a, 10) }, c);
+      cast(c.room, { t: 'shot', id: c.id, x: num(m.x), z: num(m.z), a: num(m.a, 10), d: m.d === 2 ? 2 : 1 }, c);
     } else if (m.t === 'grab') {
       cast(c.room, { t: 'grab', id: c.id, planet: num(m.planet, 999) | 0, x: num(m.x), z: num(m.z), vx: num(m.vx), vz: num(m.vz), held: !!m.held }, c);
     } else if (m.t === 'nova') {
       cast(c.room, { t: 'nova', id: c.id, x: num(m.x), z: num(m.z) }, c);
     } else if (m.t === 'boom') {
       cast(c.room, { t: 'boom', id: c.id, x: num(m.x), z: num(m.z) }, c);
+    } else if (m.t === 'killed') {
+      // The shot-down pilot announces who got them; only ids of pilots in this room are passed on.
+      const by = num(m.by, 1e9) | 0;
+      if ([...rooms.get(c.room) ?? []].some(p => p.id === by && p !== c)) cast(c.room, { t: 'killed', id: c.id, by });
+    } else if (m.t === 'emote') {
+      const e = num(m.e, 99) | 0;
+      if (e >= 0 && e < EMOTE_COUNT) cast(c.room, { t: 'emote', id: c.id, e }, c);
     }
   }
 
