@@ -48,8 +48,9 @@ service.
 1. In Render: **New → Blueprint**, choose this repository, and apply `render.yaml`. It creates
    `codeverse-relay` with root directory `viewer`, `npm ci --omit=dev --legacy-peer-deps`, and
    `node server/relay.mjs`.
-2. Note the service address, for example `https://codeverse-relay.onrender.com`, and check that
-   `/health` returns `ok`.
+2. Note the service address, for example `https://codeverse-relay.onrender.com`, and check it end
+   to end from `viewer/`: `npm run check:relay -- https://codeverse-relay.onrender.com`. It tests
+   `/health`, a WebSocket from the site's origin, and that other origins are refused.
 3. In Vercel → project → Settings → Environment Variables, add
    `VITE_RELAY_URL = wss://codeverse-relay.onrender.com/api/play` for Production, then redeploy.
    It is read at build time, so a redeploy is required.
