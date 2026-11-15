@@ -36,3 +36,16 @@ test('players in the same universe see each other; other universes stay separate
   a.ws.close(); c.ws.close();
   await new Promise(r => server.close(r));
 });
+
+test('a relay with an origin allow-list refuses other sites', async () => {
+  const server = createServer(); attachMultiplayer(server, { origins: ['https://codeverse-orbit.vercel.app'] });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const url = `ws://127.0.0.1:${server.address().port}${PLAY_PATH}`;
+  const opened = origin => new Promise(resolve => {
+    const ws = new WebSocket(url, { headers: { Origin: origin } });
+    ws.onopen = () => { ws.close(); resolve(true); }; ws.onerror = () => resolve(false);
+  });
+  assert.equal(await opened('https://codeverse-orbit.vercel.app'), true);
+  assert.equal(await opened('https://evil.example'), false);
+  await new Promise(r => server.close(r));
+});

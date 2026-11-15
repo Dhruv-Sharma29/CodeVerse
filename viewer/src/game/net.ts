@@ -4,7 +4,8 @@ export type NetStatus = "connecting" | "online" | "offline";
 
 export function connectNet(onMessage: (m: NetMessage) => void, onStatus: (s: NetStatus) => void) {
   let ws: WebSocket | null = null, closed = false, retry = 0, join: NetMessage | null = null;
-  const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/play`;
+  // A separately hosted relay (VITE_RELAY_URL, set at build time) or the page's own server.
+  const url = import.meta.env.VITE_RELAY_URL || `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/play`;
   function open() {
     onStatus("connecting");
     ws = new WebSocket(url);

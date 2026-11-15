@@ -65,6 +65,7 @@ All messages are JSON objects with a `t` field.
 | Hulls | `dart`, `wasp` or `titan`, otherwise `dart` |
 | Numbers | Finite, clamped, rounded to two decimals |
 | Liveness | Ping every 20 s; silent connections are closed |
+| Origins | Optional allow-list (`RELAY_ORIGINS` on the standalone relay); other pages get 403 |
 
 Upgrade requests on other paths are ignored, so Vite's hot-reload socket keeps working.
 

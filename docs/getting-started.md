@@ -38,11 +38,13 @@ npm start          # serves dist/ plus all APIs and the relay on http://127.0.0.
 
 ## Environment variables
 
-None are required to play. All are server-side only.
+None are required to play. All are server-side except `VITE_RELAY_URL`, which is built into the page and is not secret.
 
 | Variable | Used by | Purpose |
 |---|---|---|
-| `PORT`, `HOST` | `npm start` | Listen address (default `127.0.0.1:4173`) |
+| `PORT`, `HOST` | `npm start`, `npm run relay` | Listen address (default `127.0.0.1:4173`; relay `0.0.0.0:8787`) |
+| `VITE_RELAY_URL` | Build of the game | `wss://` address of a separately hosted relay; empty uses the page's own server |
+| `RELAY_ORIGINS` | `npm run relay` | Page origins allowed to connect to the standalone relay |
 | `GITHUB_TOKEN` | GitHub proxy | Optional. Raises the shared GitHub rate limit; see [github-proxy.md](github-proxy.md) |
 | `NVIDIA_API_KEY` or `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL` | Oracle | Optional AI commit explanations; see [oracle.md](oracle.md) |
 | `CODEVERSE_ORACLE_ENABLED` | Oracle on Vercel | Must be `true` to enable the Oracle there |
