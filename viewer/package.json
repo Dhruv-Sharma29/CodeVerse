@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "start": "node server/start.mjs",
-    "relay": "node server/relay.mjs"
+    "relay": "node server/relay.mjs",
+    "check:relay": "node scripts/check-relay.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.8",
