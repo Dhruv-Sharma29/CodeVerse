@@ -8,8 +8,8 @@ import { loadUniverse, ownerOf } from "./universe";
 import { KeySheet, LESSONS, Tutorial, type LessonId } from "./Tutorial";
 import "./game.css";
 
-/** The open-source project behind the game, shown by the comet. */
-const REPO_URL = "https://github.com/Dhruv-Sharma29/CodeVerse";
+/** The creator's GitHub profile, shown by the comet. */
+const CREATOR = { name: "Dhruv Sharma", login: "Dhruv-Sharma29", url: "https://github.com/Dhruv-Sharma29" };
 const COLORS = ["#74e2ff", "#ffb547", "#7dffb4", "#ff6fae", "#b18cff", "#ff8a5c"];
 const store = {
   get<T>(k: string, d: T): T { try { const v = localStorage.getItem("orbit:" + k); return v == null ? d : JSON.parse(v) as T; } catch { return d; } },
@@ -100,7 +100,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       else if (e.type === "grab") sfx.grab();
       else if (e.type === "fling") sfx.fling();
       else if (e.type === "gate") toast("The hyperjump gate moved. Follow the violet arrow.");
-      else if (e.type === "comet") { sfx.commit(); setTimeout(sfx.commit, 140); toast("☄ You caught the CodeVerse comet! +250 and nova charge", "good"); }
+      else if (e.type === "comet") { sfx.commit(); setTimeout(sfx.commit, 140); toast(`☄ You caught ${CREATOR.login}'s comet! +250 and nova charge`, "good"); }
       else if (e.type === "boom") net.current?.send({ t: "boom", x: e.x, z: e.z });
       else if (e.type === "nova") { sfx.nova(); pulse("nova"); net.current?.send({ t: "nova", x: e.x, z: e.z }); }
       else if (e.type === "portal") { setJumpTarget(""); setJumpOpen(true); net.current?.send({ t: "rooms" }); }
@@ -390,11 +390,11 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       </a>)}
     </aside>}
 
-    {hud?.comet && !jumpOpen && <section className="orbit-card comet" aria-label="CodeVerse comet">
-      <div className="orbit-card-head"><strong>☄ The CodeVerse comet</strong><span>open source</span></div>
-      <p>This game is open source. The comet crosses every universe on a new random path every two minutes. Fly through it for a bonus.</p>
+    {hud?.comet && !jumpOpen && <section className="orbit-card comet" aria-label={`${CREATOR.name}'s comet`}>
+      <div className="orbit-card-head"><strong>☄ {CREATOR.name}'s comet</strong><span>@{CREATOR.login}</span></div>
+      <p>Made by {CREATOR.name}. This comet crosses every universe on a new random path every two minutes. Fly through it for a bonus.</p>
       <div className="orbit-card-actions">
-        <a className="orbit-primary small" href={REPO_URL} target="_blank" rel="noreferrer">★ View CodeVerse on GitHub</a>
+        <a className="orbit-primary small" href={CREATOR.url} target="_blank" rel="noreferrer">Visit @{CREATOR.login} on GitHub</a>
       </div>
     </section>}
     {near && !hud?.comet && !jumpOpen && <section className="orbit-card" aria-label="Nearby planet">

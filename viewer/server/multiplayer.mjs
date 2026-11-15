@@ -79,13 +79,16 @@ export function createRelay() {
 }
 
 /** Attach the relay to an HTTP server. Other upgrade paths (e.g. Vite HMR) are left alone. */
-export function attachMultiplayer(httpServer) {
+/** @param {{ origins?: string[] }} [options] origins: when non-empty, only pages from these origins may connect. */
+export function attachMultiplayer(httpServer, { origins = [] } = {}) {
   if (!httpServer) return null;
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE * 2 });
   const relay = createRelay();
   const clients = new Set();
   httpServer.on('upgrade', (req, socket, head) => {
     if (new URL(req.url ?? '/', 'http://localhost').pathname !== PLAY_PATH) return;
+    // A hosted relay only serves its own site: browsers always send Origin, so other pages are refused.
+    if (origins.length && !origins.includes(String(req.headers.origin ?? ''))) { socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); socket.destroy(); return; }
     if (wss.clients.size >= MAX_CLIENTS) { socket.destroy(); return; }
     wss.handleUpgrade(req, socket, head, ws => { const c = relay.connect(ws); clients.add(c); ws.on('close', () => clients.delete(c)); });
   });

@@ -12,7 +12,7 @@ Other pilots in the same universe fly beside you in real time.
 
 The original, calmer **explorer** is still part of the app at `/explorer/`.
 
-**Live:** <https://codeverse-orbit.vercel.app> (the current Vercel deployment runs the game solo; see [Deployment](docs/deployment.md))
+**Live:** <https://codeverse-orbit.vercel.app> (multiplayer goes through a relay hosted on Render; see [Deployment](docs/deployment.md))
 
 ## Features
 
@@ -21,7 +21,7 @@ The original, calmer **explorer** is still part of the app at `/explorer/`.
 - **Three ships.** *Dart* (balanced), *Wasp* (fast, rapid fire, light hull) and *Titan* (armoured, three-way heavy cannon), in six colours, previewed in a 3D hangar.
 - **Four alien types.** Saucers strafe and shoot, hunters ram, swarmer drones weave in packs, and every fifth wave a mothership boss rings the area with fire and launches swarmers.
 - **Gravity beam.** Grab a planet or an alien, drag it, and fling it. Flung planets smash aliens and knock other planets out of orbit, and every pilot in the universe sees it.
-- **The CodeVerse comet.** One comet crosses every universe on a new random path every two minutes. Fly near it for a link to this repository, and through it for a bonus.
+- **The creator's comet.** One comet crosses every universe on a new random path every two minutes. Fly near it for a link to the creator's GitHub profile, and through it for a bonus.
 - **Commits as power.** Fly through a planet's gold satellites to collect its real recent commits. They charge a supernova that clears the area.
 - **Onboarding.** A lobby over the live universe, then a six-step first flight that ticks off as you actually do each thing.
 - **Multiplayer.** A small WebSocket relay syncs ships, shots, flung planets and supernovas, up to 24 pilots per universe.
@@ -97,7 +97,8 @@ CI runs the same steps on every push and pull request, plus the analyzer's `pyte
 
 ## Known limits
 
-- The relay keeps rooms in one process's memory. Multiplayer needs the included Node server (`npm run dev`, `npm run preview` or `npm start`). Static or serverless hosting runs the game solo and says so in the HUD.
+- The relay keeps rooms in one process's memory. Multiplayer needs the included Node server (`npm run dev`, `npm run preview`, `npm start`) or the standalone relay (`npm run relay`, deployed on Render for the live site). Without either, the game runs solo and says so in the HUD.
+- On Render's free plan the relay sleeps when idle; the first connection after that can take up to a minute.
 - Aliens are simulated on each player's machine; two pilots in one universe fight different alien waves.
 - GitHub's unauthenticated API rate limit applies when loading universes and commits.
 - The gate's position is computed from each player's clock, so a clock that is minutes off shows an outdated spot.

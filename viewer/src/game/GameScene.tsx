@@ -182,7 +182,7 @@ function Portal({ sim }: { sim: Sim }) {
   </group>;
 }
 
-/** The CodeVerse comet: icy core, glowing coma, and a tail streaming behind its motion. */
+/** The creator's comet (links to their GitHub profile): icy core, glowing coma, and a tail streaming behind its motion. */
 function Comet({ sim }: { sim: Sim }) {
   const g = useRef<THREE.Group>(null), core = useRef<THREE.Mesh>(null);
   useFrame((_, dt) => {
@@ -197,7 +197,7 @@ function Comet({ sim }: { sim: Sim }) {
     {Array.from({ length: 12 }, (_, i) => { const k = (i + 1) / 12; return <sprite key={i} position={[-k * 30, 0, 0]} scale={[8 + k * 10, 4 + k * 9, 1]}>
       <spriteMaterial map={glow()} color={i < 4 ? "#e8fbff" : "#7fd8ff"} opacity={.42 * (1 - k) + .04} {...additive} />
     </sprite>; })}
-    <Html center position={[0, 4.2, 0]} zIndexRange={[5, 0]} pointerEvents="none"><span className="orbit-label comet">☄ CodeVerse on GitHub</span></Html>
+    <Html center position={[0, 4.2, 0]} zIndexRange={[5, 0]} pointerEvents="none"><span className="orbit-label comet">☄ @Dhruv-Sharma29</span></Html>
   </group>;
 }
 

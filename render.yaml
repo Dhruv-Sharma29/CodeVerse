@@ -1,0 +1,23 @@
+# Render blueprint for the Orbit multiplayer relay. The website stays on Vercel and connects here
+# through VITE_RELAY_URL (wss://<this service>/api/play).
+services:
+  - type: web
+    name: codeverse-relay
+    runtime: node
+    plan: free
+    rootDir: viewer
+    buildCommand: npm ci --omit=dev --legacy-peer-deps
+    startCommand: node server/relay.mjs
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - viewer/server/multiplayer.mjs
+        - viewer/server/relay.mjs
+        - viewer/package.json
+        - viewer/package-lock.json
+    envVars:
+      - key: RELAY_ORIGINS
+        value: https://codeverse-orbit.vercel.app
+      - key: NODE_VERSION
+        value: "22"

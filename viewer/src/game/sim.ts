@@ -21,7 +21,7 @@ export function gateSpot(room: string, edge: number, epoch: number) {
 }
 export const gateEpoch = () => Math.floor(Date.now() / GATE_PERIOD);
 
-/** The CodeVerse comet crosses every universe once per period on a fresh random chord. */
+/** The creator's comet crosses every universe once per period on a fresh random chord. */
 export const COMET_PERIOD = 120_000;
 export const COMET_CATCH = 6;
 /**
