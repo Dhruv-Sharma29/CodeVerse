@@ -1,12 +1,34 @@
-# 🌌 CODEVERSE
+# CodeVerse Orbit
 
-> Your codebase is bigger than a folder. Explore it. Understand it. Watch it evolve.
+> Fly through GitHub, together.
 
-Explore GitHub as a living planetary system: monthly trending repositories, any public handle, and real commit history.
+CodeVerse Orbit is a multiplayer space game set inside real GitHub data. Repositories are planets,
+recent commits are collectibles in orbit around them, and every GitHub user or organization is a
+universe you can hyperjump into.
 
-**Live:** <https://codeverse-orbit.vercel.app> · **Status:** GitHub explorer + local history prototype · **Docs:** [docs/](docs/README.md) ([build plan](docs/PLAN.md), [identity & discovery proposal](docs/social-layer.md), [bundle schema](docs/bundle-schema.md))
+Everyone starts in the **trending hub**: GitHub's monthly trending repositories circling a shared
+sun. Find the hyperjump gate on the outer rim, type any username, and warp into their universe.
+Other pilots in the same universe fly beside you in real time.
 
-## GitHub explorer
+The original, calmer **explorer** is still part of the app at `/explorer/`.
+
+**Live:** <https://codeverse-orbit.vercel.app> (the current Vercel deployment runs the game solo; see [Deployment](docs/deployment.md))
+
+## Features
+
+- **Real data, real places.** Universes are built from GitHub's public API: trending repositories, or a user's own repositories ranked by importance. Planet colour and surface come from the repository's language.
+- **Hyperjump gate.** Each universe has one gate in an outer band past the last planet. It moves to a new random spot every three minutes, the same spot for every pilot, and an on-screen arrow always points to it.
+- **Three ships.** *Dart* (balanced), *Wasp* (fast, rapid fire, light hull) and *Titan* (armoured, three-way heavy cannon), in six colours, previewed in a 3D hangar.
+- **Four alien types.** Saucers strafe and shoot, hunters ram, swarmer drones weave in packs, and every fifth wave a mothership boss rings the area with fire and launches swarmers.
+- **Gravity beam.** Grab a planet or an alien, drag it, and fling it. Flung planets smash aliens and knock other planets out of orbit, and every pilot in the universe sees it.
+- **Commits as power.** Fly through a planet's gold satellites to collect its real recent commits. They charge a supernova that clears the area.
+- **Onboarding.** A lobby over the live universe, then a six-step first flight that ticks off as you actually do each thing.
+- **Multiplayer.** A small WebSocket relay syncs ships, shots, flung planets and supernovas, up to 24 pilots per universe.
+- **Touch support.** On-screen stick plus Fire, Grab and Nova buttons.
+
+## Quick start
+
+Requires Node.js 22.6 or newer.
 
 ```bash
 cd viewer
@@ -14,133 +36,67 @@ npm install --legacy-peer-deps
 npm run dev
 ```
 
-The opening universe uses **GitHub’s monthly trending feed**, preserving its
-ranking and showing star gains for the month. Enter a GitHub username (or profile
-URL) to map their public repositories into planets. Users and organizations are
-supported. Filter by repository or language, move between eight-planet sectors,
-and load additional repository pages when available.
+Open <http://localhost:5173/> for the game or <http://localhost:5173/explorer/> for the explorer.
+To try multiplayer, open the game in a second tab and pick a different callsign.
 
-Select a planet to inspect up to **60 recent default-branch commits** as satellites.
-Click a satellite, choose a commit in the list, or play the timeline. Pausing loads
-its additions, deletions, and changed files. The first eight files are displayed
-from up to 100 fetched; **Read message, code & AI explanation** opens the full message, all returned files, and their line-numbered text diffs. GitHub links open the complete commit. This view is recent
-history, not a complete repository analysis. Import a local JSON bundle for the
-existing full first-parent history viewer.
-
-Planets use deterministic procedural terrain, oceans, ice, cloud patterns, gas
-bands, atmosphere rims, and optional decorative rings. Language determines the
-palette and surface family. Size uses repository KB for profiles and total stars
-for trending, where GitHub does not publish repository size. Planet identities
-stay consistent when filtering. Rotation can be paused; reduced-motion preferences
-are respected at startup. Every 3D action also has an ordinary list control.
-
-**Data and limits:** profile/commit requests go directly to GitHub’s public REST
-API, with five-minute in-memory caching and readable rate-limit errors. No token
-is required or stored. Monthly trending is fetched through a fixed local endpoint
-(`/api/trending`), cached for 30 minutes; it does not accept arbitrary upstream URLs.
-GitHub has no official trending REST endpoint, so this adapter parses the public
-monthly trending page and fails visibly if its markup changes. It does not substitute
-a “new repositories sorted by stars” search for actual monthly trending.
-
-**Production preview:** `npm run build && npm start` serves the built viewer and
-trending endpoint on `http://127.0.0.1:4173`. `PORT` and `HOST` are configurable.
-A static-only deployment needs an equivalent `/api/trending` backend; the included
-Node server and Vite dev/preview server already provide it.
-
-## Optional AI: the Oracle
-
-The **AI explanation** tab in the commit inspector can explain the selected public
-commit using its message and actual patch excerpts, with source citations and
-qualified intent. Model calls happen only after **Explain this commit** is clicked.
-The key stays on the server; normal GitHub exploration needs no AI configuration.
-
-Local setup reuses `NVIDIA_API_KEY` (or `LLM_API_KEY`), `LLM_BASE_URL`, and `LLM_MODEL`
-from the root `.env`. Vercel additionally requires `CODEVERSE_ORACLE_ENABLED=true`
-in its server environment. No deployment or hosting-secret changes are automatic.
-See [docs/oracle.md](docs/oracle.md) for setup, evidence limits, and request budgets.
-
-## Analyzer dev setup
-
-```bash
-cd analyzer
-uv sync                     # Python 3.12 venv + all deps (analyzer + Jupyter)
-cp ../.env.example ../.env  # then put your NVIDIA key in ../.env
-uv run codeverse llm-check  # should print: CODEVERSE online
-uv run jupyter lab ../notebooks
-```
-
-In Jupyter, pick the **Python (codeverse)** kernel. The `codeverse` package is installed in editable mode, and the notebooks use `%autoreload`, so edits in `analyzer/codeverse/` show up without restarting the kernel.
-
-| Notebook | What it does |
+| Key | Action |
 |---|---|
-| `00_setup_llm.ipynb` | Env check, Nemotron chat/stream, generate-code-then-test loop |
-| `01_phase0_history_spike.ipynb` | Clone repo → history events → growth/hotspot charts → `spike/out/<repo>.json` |
+| W / S | Thrust where the nose points / reverse |
+| A / D | Strafe (with a mouse) or turn (keyboard only) |
+| Mouse, click or Space | Aim and fire |
+| Shift | Boost |
+| E or hold right-click | Gravity beam: hold to grab, release to fling |
+| Q | Supernova, when the bar is full |
+| H | Controls sheet |
 
-## Layout
+## Documentation
+
+| Guide | What it covers |
+|---|---|
+| [Getting started](docs/getting-started.md) | Install, run, build, environment variables, troubleshooting |
+| [Gameplay](docs/game/gameplay.md) | Ships, aliens, waves, scoring, the gate, the first flight |
+| [Architecture](docs/architecture.md) | How the pages, simulation, scene, relay and data fit together |
+| [Simulation](docs/game/simulation.md) | The game loop, entities, tuning tables and tests |
+| [Multiplayer protocol](docs/game/multiplayer.md) | Rooms, messages, validation, limits, what is and isn't shared |
+| [Deployment](docs/deployment.md) | `npm start`, Vercel, and hosting the relay |
+| [Contributing](docs/contributing.md) | Workflow, checks, code conventions |
+| [Explorer](docs/explorer.md) | The non-game explorer at `/explorer/`, the local history viewer, the Oracle |
+| [Analyzer](docs/analyzer.md) | The Python exporter for full local Git history |
+
+The full index is in [docs/README.md](docs/README.md).
+
+## Repository layout
 
 ```
-codeverse/
-├── docs/                    see docs/README.md for an index
-│   ├── PLAN.md              full build plan (read this first)
-│   ├── social-layer.md      identity/discovery proposal (share links, evolution, social)
-│   └── bundle-schema.md     analyzer → viewer JSON contract
-├── .env / .env.example      LLM config (.env is gitignored)
-├── analyzer/                Python package `codeverse`
-│   └── codeverse/
-│       ├── llm.py           OpenAI-compatible client (NVIDIA NIM default): chat, stream, extract_code
-│       ├── history.py       git log → commits / file-event DataFrame (renames, deletes, LOC)
-│       └── cli.py           `codeverse` CLI
-├── notebooks/                see table above
-├── viewer/                  Vite + React Three Fiber web product
-│   └── public/repo.json       optional local-history bundle
-└── spike/                   exploratory notebooks and generated data
-    ├── repos/                cloned repos to analyze (gitignored)
-    └── out/                  exported JSON bundles (gitignored)
+├── viewer/                  Web app (Vite + React + React Three Fiber)
+│   ├── index.html           The game, served at /
+│   ├── explorer/index.html  The explorer, served at /explorer/ and /@handle
+│   ├── src/game/            Game: simulation, 3D scene, UI, tutorial, networking
+│   ├── src/github/          GitHub client, planet styling, explorer UI
+│   ├── src/scene/           Shared shader planets and sun
+│   ├── server/              Node server: GitHub proxy, trending, Oracle, multiplayer relay
+│   ├── api/                 Vercel serverless functions
+│   └── tests/               node:test suites
+├── analyzer/                Python package: Git history → JSON bundle
+├── docs/                    Documentation
+└── game/                    Earlier single-file prototype (snapshot data, no multiplayer)
 ```
-
-## Analyze a local repository
-
-Export a viewer-ready JSON bundle directly from Git. This command does not use the
-LLM, need an API key, or send repository content to a server.
-
-```bash
-cd analyzer
-uv run codeverse analyze /path/to/repository -o ../spike/out/my-repo.json
-# Optional: stop at a particular tag, branch, or commit
-uv run codeverse analyze /path/to/repository --rev v1.0 -o ../spike/out/v1.json
-```
-
-The exporter records first-parent history, including merges and empty commits,
-renames, deletions, and contributor display names. Contributor email addresses and
-file contents are not exported. Line counts are estimates from Git's line deltas;
-binary files have a line count of zero. Remote URLs must be cloned locally first.
-The current format is JSON, not the planned `.codeverse` archive format.
-
-## Web viewer
-
-```bash
-cd viewer
-npm install --legacy-peer-deps
-npm run dev
-```
-
-Choose **Open repository bundle** and select the exported JSON file. The viewer reads it locally in your browser, validates its structure, and supports switching repositories without reloading. Bundles are limited to 50 MB and 50,000 paths. Existing notebook exports remain compatible. An optional `public/repo.json` still loads automatically when present. Drag to orbit, scroll to zoom, click a planet to pin its info panel, and use the timeline at the bottom to scrub or replay the repo's history.
-
-**Known issue:** Bloom/postprocessing (`@react-three/postprocessing`) is currently disabled in `App.tsx` — combined with the ~5k-instance planet mesh it rendered solid black with no console error in one tested environment (looked like a corrupted/NaN'd render target, possibly software-GPU-specific). Untested on a real discrete GPU; worth revisiting before Phase 2 polish.
 
 ## Verification
 
 ```bash
-cd analyzer
-uv run pytest tests -q
-cd ../viewer
-npm test                 # Node.js 22.6+ (native TypeScript stripping)
-npm run build
+cd viewer
+npx tsc -b
 npm run lint
+npm test
+npm run build
 ```
 
-See [docs/bundle-schema.md](docs/bundle-schema.md) for the JSON contract.
+CI runs the same steps on every push and pull request, plus the analyzer's `pytest` suite.
 
-## Deployment directory
+## Known limits
 
-The production web app is now in `viewer/`. Update any hosting provider's configured root directory from `spike/viewer` to `viewer` before redeploying; this setting is external to Git. The analyzer and exploratory data remain in their original directories.
+- The relay keeps rooms in one process's memory. Multiplayer needs the included Node server (`npm run dev`, `npm run preview` or `npm start`). Static or serverless hosting runs the game solo and says so in the HUD.
+- Aliens are simulated on each player's machine; two pilots in one universe fight different alien waves.
+- GitHub's unauthenticated API rate limit applies when loading universes and commits.
+- The gate's position is computed from each player's clock, so a clock that is minutes off shows an outdated spot.
