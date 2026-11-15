@@ -1,10 +1,10 @@
-# Getting started
+# 01 — Getting started
 
 ## Requirements
 
 - Node.js **22.6+** (the tests use native TypeScript stripping; CI uses Node 22)
 - npm
-- Optional: Python 3.12 and [uv](https://docs.astral.sh/uv/) for the [analyzer](analyzer.md)
+- Optional: Python 3.12 and [uv](https://docs.astral.sh/uv/) for the [analyzer](09-analyzer.md)
 
 ## Run the game locally
 

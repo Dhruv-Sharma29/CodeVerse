@@ -1,4 +1,4 @@
-# Multiplayer protocol
+# 05 — Multiplayer protocol
 
 The relay (`viewer/server/multiplayer.mjs`) is a WebSocket server at **`/api/play`**. It validates
 and forwards messages between pilots in the same universe. It runs no game logic and stores
@@ -18,7 +18,9 @@ A client is in at most one room. Joining another room leaves the previous one.
 | Shared with the room | Local to each pilot |
 |---|---|
 | Ship position, heading, velocity, hull points (10 Hz) | Aliens and waves |
-| Shots (as they are fired) | Score, kills, charge, commits |
+| Shots (as they are fired), with damage | Charge, commits |
+| Score and dogfight wins (10 Hz, self-reported) | |
+| Dogfight kill announcements, emotes | |
 | Held and flung planets (10 Hz while active) | Tutorial progress |
 | Supernovas, explosions | Particles and effects |
 | Name, colour, hull | |
@@ -34,8 +36,10 @@ All messages are JSON objects with a `t` field.
 | `t` | Fields | Effect |
 |---|---|---|
 | `join` | `room`, `name`, `color`, `hull` | Enter a room. Replies `welcome`; others get `joined`. |
-| `state` | `x`, `z`, `a`, `vx`, `vz`, `hp` | Ship state, relayed as `state` |
-| `shot` | `x`, `z`, `a` | Relayed as `shot` |
+| `state` | `x`, `z`, `a`, `vx`, `vz`, `hp`, `s` (score), `k` (dogfight wins) | Ship state, relayed as `state` |
+| `shot` | `x`, `z`, `a`, `d` (damage 1 or 2) | Relayed as `shot` |
+| `killed` | `by` | Sent by a pilot who was shot down in a dogfight; relayed to the whole room (sender included) as `killed` with `id` and `by`, only if `by` is in the room |
+| `emote` | `e` (0–5) | Relayed as `emote` |
 | `grab` | `planet`, `x`, `z`, `vx`, `vz`, `held` | Planet throw, relayed as `grab` |
 | `nova` | `x`, `z` | Relayed as `nova` |
 | `boom` | `x`, `z` | Relayed as `boom` |
@@ -48,7 +52,8 @@ All messages are JSON objects with a `t` field.
 | `welcome` | `id`, `room`, `peers: [{ id, name, color, hull, state }]` |
 | `joined` | `id`, `name`, `color`, `hull` |
 | `left` | `id` |
-| `state`, `shot`, `grab`, `nova`, `boom` | The sender's fields plus `id` |
+| `state`, `shot`, `grab`, `nova`, `boom`, `emote` | The sender's fields plus `id` |
+| `killed` | `id` (shot down), `by` (winner) |
 | `rooms` | `rooms: [{ room, count }]`, busiest 12 |
 | `error` | `message` (invalid room, room full) |
 
@@ -71,6 +76,13 @@ Upgrade requests on other paths are ignored, so Vite's hot-reload socket keeps w
 
 The client (`src/game/net.ts`) reconnects with exponential backoff capped at 15 seconds and
 re-sends its last `join` after reconnecting.
+
+## Dogfights
+
+There is no peace mode: a shot or supernova from any other pilot in the room can damage you. Each
+client owns its own ship: the pilot who gets hit detects the hit and applies the damage, and when
+shot down announces `killed` with the winner's id. The winner's client then credits itself +300
+score and a dogfight win. The respawn shield blocks damage for a few seconds after respawning.
 
 ## Trust model
 

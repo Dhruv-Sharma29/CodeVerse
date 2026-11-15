@@ -1,4 +1,4 @@
-# Deployment
+# 06 — Deployment
 
 ## Option 1: Node server (full features)
 
@@ -29,6 +29,10 @@ Routing in the production server:
 The repository includes `vercel.json` and serverless functions in `viewer/api/` for trending, the
 GitHub proxy, profile pages, share images and the Oracle. Set the project's root directory to
 `viewer`.
+
+Hosting settings live outside Git. When folders move, check them: after the app moved from
+`spike/viewer/` to `viewer/`, every production deploy failed until the Root Directory setting was
+updated ([10](10-implementation-notes.md)).
 
 Vercel functions cannot hold WebSocket connections, so the website on Vercel connects to a
 separately hosted relay (Option 3). Without one, the game runs solo and the HUD says so.

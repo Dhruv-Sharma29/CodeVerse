@@ -1,4 +1,4 @@
-# Contributing
+# 11 — Contributing
 
 ## Workflow
 
@@ -27,7 +27,7 @@ CI (`.github/workflows/`) runs all of these on every push and pull request.
 - **Simulation first.** New mechanics go into `sim.ts` with a small test in `tests/orbitSim.test.mjs`. The scene only draws what the simulation says.
 - **No per-frame React state.** Update three.js objects in `useFrame`; sample into React state at most ten times a second.
 - **No randomness during render.** Seed it (`seedFor`) or compute it once; random values in render code re-run on every re-render and cause flicker.
-- **Multiplayer changes** update the relay's validation, `tests/multiplayer.test.mjs`, and [game/multiplayer.md](game/multiplayer.md) together.
+- **Multiplayer changes** update the relay's validation, `tests/multiplayer.test.mjs`, and [game/multiplayer.md](05-multiplayer.md) together.
 - **Secrets stay server-side.** No tokens or keys in client code.
 - **Accessibility.** Interactive elements are buttons or inputs with labels; respect `prefers-reduced-motion`.
 - **Comments explain why**, not what. Mark known shortcuts with a `ponytail:` comment naming the limit and the upgrade path.
