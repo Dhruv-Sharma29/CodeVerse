@@ -111,6 +111,8 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         else if (e.phase === "active") toast(`☄ Meteor storm! +${STORM.points} per meteor shot, ${STORM.damage} hull per hit`, "bad");
         else toast("The meteor storm has passed.", "good");
       } else if (e.type === "meteor") tone(520, .12, "triangle", .04, .5);
+      else if (e.type === "issue") { tone(990, .07, "triangle", .035); toast(`✅ Closed an issue on ${e.planet.repo.name} +30`, "good"); }
+      else if (e.type === "star") { sfx.commit(); toast(`★ Star shield from ${e.planet.repo.name}: shielded and repaired`, "good"); }
       else if (e.type === "hurt") { sfx.hurt(); pulse("hurt"); }
       else if (e.type === "dead") {
         net.current?.send({ t: "boom", x: sim.ship.x, z: sim.ship.z });
@@ -561,6 +563,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     {near && !dock && !hud?.comet && !jumpOpen && <section className="orbit-card" aria-label="Nearby planet">
       <div className="orbit-card-head"><strong>{near.repo.name}</strong><span>{near.repo.language ?? "Mixed"}</span></div>
       {near.repo.description && <p>{clip(near.repo.description, 150)}</p>}
+      <div className="orbit-facts"><span>{near.trait.label}</span>{near.rocks.length > 0 && <span>{near.rocks.filter(r => r.alive).length}/{near.rocks.length} issue rocks</span>}{near.star && <span>{near.star.cool > 0 ? `★ shield in ${Math.ceil(near.star.cool)}s` : "★ shield ready"}</span>}{near.fresh && <span>✨ active</span>}</div>
       <div className="orbit-facts"><span>★ {compact(near.repo.stargazers_count)}</span><span>forks {compact(near.repo.forks_count)}</span>
         <span>{near.commits === null ? "scanning commits…" : `${near.sats.filter(s => !s.done).length}/${near.commits.length} commits left`}</span></div>
       <div className="orbit-card-actions">

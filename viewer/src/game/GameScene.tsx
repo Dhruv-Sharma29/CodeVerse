@@ -299,6 +299,39 @@ function RemoteShip({ sim, peer }: { sim: Sim; peer: Peer }) {
   </group>;
 }
 
+/** Real-data extras around planets: issue asteroids, star-shield pickups and an activity glow. */
+const ROCK_POOL = 220, STAR_POOL = 24, GLOW_POOL = 24;
+function PlanetExtras({ sim }: { sim: Sim }) {
+  const rocks = useRef<THREE.InstancedMesh>(null), stars = useRef<THREE.InstancedMesh>(null);
+  const glows = useRef<(THREE.Sprite | null)[]>([]);
+  useFrame(({ clock }) => {
+    let nr = 0, ns = 0, ng = 0;
+    const t = clock.elapsedTime;
+    for (const p of sim.planets) {
+      for (const rock of p.rocks) {
+        if (!rock.alive || nr >= ROCK_POOL) continue;
+        tmp.position.set(p.x + Math.cos(rock.a) * rock.r, 1.2, p.z + Math.sin(rock.a) * rock.r);
+        tmp.rotation.set(t + rock.a, t * .7, 0); tmp.scale.setScalar(.9); tmp.updateMatrix(); rocks.current?.setMatrixAt(nr++, tmp.matrix);
+      }
+      if (p.star && p.star.cool <= 0 && ns < STAR_POOL) {
+        tmp.position.set(p.x + Math.cos(p.star.a) * p.star.r, 1.8 + Math.sin(t * 2 + p.i) * .3, p.z + Math.sin(p.star.a) * p.star.r);
+        tmp.rotation.set(0, t * 2, 0); tmp.scale.setScalar(1.2); tmp.updateMatrix(); stars.current?.setMatrixAt(ns++, tmp.matrix);
+      }
+      if (p.fresh && ng < GLOW_POOL) {
+        const g = glows.current[ng++];
+        if (g) { g.visible = true; g.position.set(p.x, 0, p.z); g.scale.setScalar(p.R * (4.2 + Math.sin(t * 2 + p.i) * .5)); (g.material as THREE.SpriteMaterial).color.set(p.glow); }
+      }
+    }
+    for (const [m, n] of [[rocks, nr], [stars, ns]] as const) if (m.current) { m.current.count = n; m.current.instanceMatrix.needsUpdate = true; }
+    for (let i = ng; i < GLOW_POOL; i++) { const g = glows.current[i]; if (g) g.visible = false; }
+  });
+  return <>
+    <instancedMesh ref={rocks} args={[undefined, undefined, ROCK_POOL]} frustumCulled={false}><dodecahedronGeometry args={[1, 0]} /><meshStandardMaterial color="#6b1d2a" emissive="#ff4f6a" emissiveIntensity={.7} flatShading /></instancedMesh>
+    <instancedMesh ref={stars} args={[undefined, undefined, STAR_POOL]} frustumCulled={false}><octahedronGeometry args={[1, 0]} /><meshStandardMaterial color="#fff1b0" emissive="#ffc23d" emissiveIntensity={2} flatShading toneMapped={false} /></instancedMesh>
+    {Array.from({ length: GLOW_POOL }, (_, i) => <sprite key={i} ref={el => { glows.current[i] = el; }} visible={false}><spriteMaterial map={glow()} opacity={.22} {...additive} /></sprite>)}
+  </>;
+}
+
 /** Meteor storm: glowing rocks with a fiery trail along their flight. */
 const METEOR_POOL = 80;
 function Meteors({ sim }: { sim: Sim }) {
@@ -508,6 +541,7 @@ export const GameScene = memo(function GameScene({ ctl, peers, color, hull }: { 
     <Comet sim={sim} />
     <Pings sim={sim} />
     <Meteors sim={sim} />
+    <PlanetExtras sim={sim} />
     <LocalShip ctl={ctl} color={color} hull={hull} />
     {peers.map(p => <RemoteShip key={p.id} sim={sim} peer={p} />)}
     <Aliens sim={sim} />

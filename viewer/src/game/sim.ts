@@ -2,6 +2,7 @@
 // The game plays on the x/z plane; the renderer adds height and effects.
 import { planetStyle, seedFor } from "../github/planetStyle.ts";
 import { HOLD, STORM, stormMeteors, stormPhase, type Meteor, type StormPhase } from "./events.ts";
+import { ISSUE, STAR, isFresh, issueRockCount, planetTrait, type Trait } from "./traits.ts";
 import type { GitCommit, Repository } from "../github/api";
 
 export interface Universe { room: string; title: string; subtitle: string; owner: string | null; repos: Repository[] }
@@ -43,6 +44,8 @@ export interface Planet {
   x: number; z: number; vx: number; vz: number; px: number; pz: number;
   mode: "orbit" | "held" | "flung" | "return" | "remote"; modeT: number;
   commits: GitCommit[] | null; loading: boolean; sats: Sat[];
+  /** Real-data extras: language physics, open-issue asteroids, a star-shield pickup, activity glow. */
+  trait: Trait; rocks: { a: number; r: number; alive: boolean }[]; star: { a: number; r: number; cool: number } | null; fresh: boolean;
 }
 export type AlienKind = "saucer" | "hunter" | "swarmer" | "mothership";
 export interface Alien { id: number; kind: AlienKind; x: number; z: number; vx: number; vz: number; hp: number; max: number; cool: number; held: boolean; flung: number; spin: number; orbitDir: number; t: number; hitCool: number }
@@ -77,7 +80,7 @@ export interface Input { move: { x: number; z: number }; aim: { x: number; z: nu
 export type SimEvent =
   | { type: "commit"; planet: Planet; commit: GitCommit }
   | { type: "kill"; kind: Alien["kind"]; points: number }
-  | { type: "hurt" } | { type: "dead"; by?: number } | { type: "storm"; phase: StormPhase } | { type: "meteor" } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean }
+  | { type: "hurt" } | { type: "dead"; by?: number } | { type: "storm"; phase: StormPhase } | { type: "meteor" } | { type: "issue"; planet: Planet } | { type: "star"; planet: Planet } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean }
   | { type: "load"; planet: Planet } | { type: "shot"; x: number; z: number; a: number }
   | { type: "nova"; x: number; z: number } | { type: "grab" } | { type: "fling" } | { type: "boom"; x: number; z: number };
 
@@ -91,6 +94,10 @@ export function createSim(universe: Universe) {
       i, repo, R: 1.4 + st.radius * 2.4, orbit, ang: st.seed * TAU, glow: st.glow,
       speed: .55 * Math.pow(46 / orbit, 1.5) * (i % 3 === 2 ? -1 : 1),
       x: 0, z: 0, vx: 0, vz: 0, px: 0, pz: 0, mode: "orbit", modeT: 0, commits: null, loading: false, sats: [],
+      trait: planetTrait(repo.language),
+      rocks: Array.from({ length: issueRockCount(repo.open_issues_count) }, (_, k) => ({ a: k / 10 * TAU + st.seed * 3, r: 1.4 + st.radius * 2.4 + 6 + (k % 3) * 1.4, alive: true })),
+      star: repo.stargazers_count >= STAR.minStars ? { a: st.seed * 7, r: 1.4 + st.radius * 2.4 + 12, cool: 0 } : null,
+      fresh: isFresh(repo, Date.now()),
     };
   });
   for (const p of planets) placeOnOrbit(p);
@@ -243,28 +250,41 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
       p.x += p.vx * dt; p.z += p.vz * dt;
       const drag = Math.exp(-(p.mode === "flung" ? .45 : 0) * dt); p.vx *= drag; p.vz *= drag;
       p.modeT += dt;
-      if (p.mode === "flung" && p.modeT > 3.8) { p.mode = "return"; p.modeT = 0; }
+      if (p.mode === "flung" && p.modeT > p.trait.flight) { p.mode = "return"; p.modeT = 0; }
       if (p.mode === "remote" && p.modeT > .8) { p.mode = "return"; p.modeT = 0; }
       if (p.mode === "flung") {
-        for (const a of sim.aliens) if (a.hp > -99 && dist(p, a) < p.R + ALIENS[a.kind].r) damageAlien(sim, a, 99, ev);
+        for (const a of sim.aliens) if (a.hp > -99 && dist(p, a) < p.R + ALIENS[a.kind].r + p.trait.reach) damageAlien(sim, a, 99, ev);
         for (const q of sim.planets) {
           if (q === p) continue;
           const d = dist(p, q);
           if (d < p.R + q.R) {
             const nx = (q.x - p.x) / (d || 1), nz = (q.z - p.z) / (d || 1);
-            q.px += nx * 6; q.pz += nz * 6; p.vx -= nx * 30; p.vz -= nz * 30;
+            q.px += nx * 6 * p.trait.knock; q.pz += nz * 6 * p.trait.knock;
+            if (p.trait.bounce) {
+              // Bouncy planets ricochet: reflect off the one they hit and step clear of it.
+              const vn = p.vx * nx + p.vz * nz;
+              if (vn > 0) { p.vx = (p.vx - 2 * vn * nx) * p.trait.bounce; p.vz = (p.vz - 2 * vn * nz) * p.trait.bounce; }
+              p.x = q.x - nx * (p.R + q.R + .1); p.z = q.z - nz * (p.R + q.R + .1);
+            } else { p.vx -= nx * 30; p.vz -= nz * 30; }
             explode(sim, (p.x + q.x) / 2, (p.z + q.z) / 2, q.glow, 30, 10); sim.shake = Math.min(1, sim.shake + .4);
             ev.push({ type: "boom", x: p.x, z: p.z });
           }
         }
       }
-      if (Math.hypot(p.x, p.z) < SUN_R + p.R) { const d = Math.hypot(p.x, p.z) || 1; p.vx = p.x / d * 30; p.vz = p.z / d * 30; }
+      if (Math.hypot(p.x, p.z) < SUN_R + p.R) {
+        const d = Math.hypot(p.x, p.z) || 1, nx = p.x / d, nz = p.z / d, vn = p.vx * nx + p.vz * nz;
+        if (p.mode === "flung" && p.trait.bounce && vn < 0) { p.vx = (p.vx - 2 * vn * nx) * p.trait.bounce; p.vz = (p.vz - 2 * vn * nz) * p.trait.bounce; }
+        else { p.vx = nx * 30; p.vz = nz * 30; }
+        p.x = nx * (SUN_R + p.R + .1); p.z = nz * (SUN_R + p.R + .1);
+      }
     } else if (p.mode === "return") {
       const o = orbitPos(p), k = Math.min(1, dt * 2.6);
       p.x += (o.x - p.x) * k; p.z += (o.z - p.z) * k;
       if (dist(p, o) < .4) p.mode = "orbit";
     }
     for (const sat of p.sats) sat.a += dt * (1.1 + 4 / sat.r);
+    for (const rock of p.rocks) rock.a -= dt * (.6 + 2 / rock.r);
+    if (p.star) { p.star.a += dt * .5; p.star.cool = Math.max(0, p.star.cool - dt); }
   }
 
   // ---- ship
@@ -366,6 +386,14 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
       explode(sim, sim.comet.x, sim.comet.z, "#e8fbff", 60, 14); ev.push({ type: "comet" });
     }
     if (dist(s, sim.portal) < sim.portal.r && sim.portalCool <= 0) { sim.portalCool = 1e9; s.vx = s.vz = 0; ev.push({ type: "portal" }); }
+    // Star shields: fly through a planet's star for a short shield and some hull.
+    for (const p of sim.planets) {
+      const st = p.star; if (!st || st.cool > 0) continue;
+      if (Math.hypot(s.x - (p.x + Math.cos(st.a) * st.r), s.z - (p.z + Math.sin(st.a) * st.r)) < STAR.catch) {
+        st.cool = STAR.respawn; s.inv = Math.max(s.inv, STAR.shield); s.hp = Math.min(HULLS[s.hull].hp, s.hp + STAR.heal);
+        explode(sim, s.x, s.z, "#ffd76e", 30, 9); ev.push({ type: "star", planet: p });
+      }
+    }
     // Hold the gate: score while alone in the ring around it; any other live pilot inside contests it.
     const dg = dist(s, sim.portal);
     if (dg < HOLD.r && dg > sim.portal.r) {
@@ -384,7 +412,8 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   if (sim.grab && (!input.grab || !alive)) {
     const dx = Math.cos(s.a), dz = Math.sin(s.a), g = sim.grab;
     const target = g.planet ?? g.alien!;
-    target.vx = s.vx + dx * 85; target.vz = s.vz + dz * 85;
+    const throwSpeed = 85 * (g.planet?.trait.fling ?? 1);
+    target.vx = s.vx + dx * throwSpeed; target.vz = s.vz + dz * throwSpeed;
     if (g.planet) { g.planet.mode = "flung"; g.planet.modeT = 0; }
     if (g.alien) { g.alien.held = false; g.alien.flung = 2.4; }
     sim.grab = null; sim.shake = Math.min(1, sim.shake + .3); ev.push({ type: "fling" });
@@ -499,6 +528,15 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
       b.life = 0; explode(sim, b.x, b.z, "#ff6f7f", 6, 3); hurt(sim, PVP.bullet * (b.dmg ?? 1), ev, b.owner); continue;
     }
     if (b.from === "me") {
+      let closed = false;
+      for (const p of sim.planets) {
+        for (const rock of p.rocks) if (rock.alive && Math.hypot(b.x - (p.x + Math.cos(rock.a) * rock.r), b.z - (p.z + Math.sin(rock.a) * rock.r)) < ISSUE.r + .7) {
+          rock.alive = false; b.life = 0; closed = true; sim.score += ISSUE.points; sim.charge = Math.min(100, sim.charge + ISSUE.charge);
+          explode(sim, b.x, b.z, "#ff6f7f", 16, 5); ev.push({ type: "issue", planet: p }); break;
+        }
+        if (closed) break;
+      }
+      if (closed) continue;
       const m = sim.meteors.find(m => !sim.meteorsGone.has(m.id) && dist(b, m) < STORM.r + .6);
       if (m) { b.life = 0; sim.meteorsGone.add(m.id); sim.score += STORM.points; explode(sim, m.x, m.z, "#ff9a3c", 24, 7); ev.push({ type: "meteor" }); continue; }
       // My shots stop on other pilots' ships (the damage happens on their side).

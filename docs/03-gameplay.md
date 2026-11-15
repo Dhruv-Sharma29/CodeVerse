@@ -49,6 +49,15 @@ The mothership can't be grabbed. Planets, supernovas and blasts deal it a capped
 once every 0.6 seconds, so it takes several big hits or sustained fire. Its health bar shows at the
 top of the screen.
 
+## Planets are their repositories
+
+| From the repository | In the game |
+|---|---|
+| **Language** | How the planet behaves when flung. **Heavy** (Rust, C, C++, Go, Zig…): thrown 25% slower, smashes aliens from 3 units further and shoves other planets twice as hard. **Bouncy** (JavaScript, TypeScript, Vue, Svelte…): ricochets off planets and the sun and stays in flight 5.5 s. **Light** (Python, Ruby, Shell, Lua, PHP…): thrown 30% faster. Everything else is balanced. The planet card names the trait. |
+| **Open issues** | Red asteroids orbiting the planet, from 2 up to 10 depending on the count. Shooting one closes it: +30 and +3% nova charge. Trending repos have no issue data, so no rocks. |
+| **Stars** | Planets with 50+ stars carry a golden ★. Flying through it gives a 5-second shield and +25 hull; it comes back after 45 s. |
+| **Recent activity** | Repositories pushed to in the last 14 days, and every trending repository, glow. |
+
 ## Docking
 
 Fly close to a planet and press **Enter** (or **🛰 Dock** on its card). The ship parks on the planet's
