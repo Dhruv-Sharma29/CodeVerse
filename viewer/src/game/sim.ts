@@ -20,6 +20,20 @@ export function gateSpot(room: string, edge: number, epoch: number) {
   return { x: Math.cos(a) * r, z: Math.sin(a) * r, r: PORTAL_R, epoch };
 }
 export const gateEpoch = () => Math.floor(Date.now() / GATE_PERIOD);
+
+/** The CodeVerse comet crosses every universe once per period on a fresh random chord. */
+export const COMET_PERIOD = 120_000;
+export const COMET_CATCH = 6;
+/**
+ * Comet position at a moment: enters past the rim at a seeded angle and leaves on the far side,
+ * on a seeded random chord. Same seed scheme as the gate, so all pilots see it in the same place.
+ */
+export function cometAt(room: string, edge: number, now: number) {
+  const epoch = Math.floor(now / COMET_PERIOD), k = (now % COMET_PERIOD) / COMET_PERIOD;
+  const a = seedFor(`comet:${room}:${epoch}`) * TAU, b = a + Math.PI + (seedFor(`${epoch}:comet:${room}`) - .5) * 1.8;
+  const r = edge + 30, sx = Math.cos(a) * r, sz = Math.sin(a) * r, ex = Math.cos(b) * r, ez = Math.sin(b) * r, secs = COMET_PERIOD / 1000;
+  return { x: sx + (ex - sx) * k, z: sz + (ez - sz) * k, vx: (ex - sx) / secs, vz: (ez - sz) / secs, epoch };
+}
 const TAU = Math.PI * 2;
 
 export interface Sat { c: GitCommit; a: number; r: number; done: boolean }
@@ -55,7 +69,7 @@ export interface Input { move: { x: number; z: number }; aim: { x: number; z: nu
 export type SimEvent =
   | { type: "commit"; planet: Planet; commit: GitCommit }
   | { type: "kill"; kind: Alien["kind"]; points: number }
-  | { type: "hurt" } | { type: "dead" } | { type: "portal" } | { type: "gate" } | { type: "wave"; n: number; boss: boolean }
+  | { type: "hurt" } | { type: "dead" } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean }
   | { type: "load"; planet: Planet } | { type: "shot"; x: number; z: number; a: number }
   | { type: "nova"; x: number; z: number } | { type: "grab" } | { type: "fling" } | { type: "boom"; x: number; z: number };
 
@@ -76,6 +90,7 @@ export function createSim(universe: Universe) {
   return {
     universe, planets, t: 0, edge,
     portal: gateSpot(universe.room, edge, gateEpoch()),
+    comet: cometAt(universe.room, edge, Date.now()), cometCaught: -1, nearComet: false,
     ship: { hull: "dart" as HullId, x: SPAWN.x, z: SPAWN.z, vx: 0, vz: 10, a: Math.PI / 2, hp: 100, inv: 2, dead: 0, fireCool: 0, gun: 1, thrust: 0, lastHit: -9 },
     aliens: [] as Alien[], bullets: [] as Bullet[], particles: [] as Particle[], flashes: [] as Flash[], novas: [] as Nova[],
     remotes: new Map<number, Remote>(),
@@ -166,6 +181,11 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   sim.t += dt;
   const epoch = gateEpoch();
   if (epoch !== sim.portal.epoch && sim.portalCool < 1e8) { sim.portal = gateSpot(sim.universe.room, sim.edge, epoch); ev.push({ type: "gate" }); }
+  sim.comet = cometAt(sim.universe.room, sim.edge, Date.now());
+  if (Math.random() < .6 && sim.particles.length < 1300) { // sparkle trail
+    const c = sim.comet;
+    sim.particles.push({ x: c.x + (Math.random() - .5) * 2, y: 1.5, z: c.z + (Math.random() - .5) * 2, vx: -c.vx * .4 + (Math.random() - .5) * 2, vy: (Math.random() - .5) * 2, vz: -c.vz * .4 + (Math.random() - .5) * 2, life: 1.4, max: 1.4, r: .75, g: .95, b: 1 });
+  }
   sim.shake = Math.max(0, sim.shake - dt * 2.2);
   sim.portalCool -= dt;
   const s = sim.ship, alive = s.dead <= 0;
@@ -294,6 +314,13 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
       }
     }
     if (sim.near && sim.near.commits === null && !sim.near.loading) { sim.near.loading = true; ev.push({ type: "load", planet: sim.near }); }
+    const dc = dist(s, sim.comet);
+    sim.nearComet = dc < 28;
+    if (dc < COMET_CATCH && sim.cometCaught !== sim.comet.epoch) {
+      // Catching the comet: once per crossing, a burst of score and supernova charge.
+      sim.cometCaught = sim.comet.epoch; sim.score += 250; sim.charge = Math.min(100, sim.charge + 25);
+      explode(sim, sim.comet.x, sim.comet.z, "#e8fbff", 60, 14); ev.push({ type: "comet" });
+    }
     if (dist(s, sim.portal) < sim.portal.r && sim.portalCool <= 0) { sim.portalCool = 1e9; s.vx = s.vz = 0; ev.push({ type: "portal" }); }
   }
 

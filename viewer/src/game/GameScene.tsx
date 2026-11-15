@@ -182,6 +182,25 @@ function Portal({ sim }: { sim: Sim }) {
   </group>;
 }
 
+/** The CodeVerse comet: icy core, glowing coma, and a tail streaming behind its motion. */
+function Comet({ sim }: { sim: Sim }) {
+  const g = useRef<THREE.Group>(null), core = useRef<THREE.Mesh>(null);
+  useFrame((_, dt) => {
+    const c = sim.comet; if (!g.current) return;
+    g.current.position.set(c.x, 1.6, c.z); g.current.rotation.y = -Math.atan2(c.vz, c.vx);
+    if (core.current) { core.current.rotation.x += dt * .7; core.current.rotation.z += dt * .4; }
+  });
+  return <group ref={g}>
+    <mesh ref={core}><icosahedronGeometry args={[1.5, 1]} /><meshStandardMaterial color="#e8fbff" emissive="#9fe8ff" emissiveIntensity={2.2} flatShading toneMapped={false} /></mesh>
+    <sprite scale={[16, 16, 1]}><spriteMaterial map={glow()} color="#9fe8ff" opacity={.85} {...additive} /></sprite>
+    {/* soft tail: overlapping glows that fade and widen behind the direction of travel (-x) */}
+    {Array.from({ length: 12 }, (_, i) => { const k = (i + 1) / 12; return <sprite key={i} position={[-k * 30, 0, 0]} scale={[8 + k * 10, 4 + k * 9, 1]}>
+      <spriteMaterial map={glow()} color={i < 4 ? "#e8fbff" : "#7fd8ff"} opacity={.42 * (1 - k) + .04} {...additive} />
+    </sprite>; })}
+    <Html center position={[0, 4.2, 0]} zIndexRange={[5, 0]} pointerEvents="none"><span className="orbit-label comet">☄ CodeVerse on GitHub</span></Html>
+  </group>;
+}
+
 const metal = { metalness: .65, roughness: .3 } as const;
 const glass = (c: string) => <meshStandardMaterial color={c} emissive={c} emissiveIntensity={.9} metalness={.2} roughness={.05} />;
 const paint = (c: string) => <meshStandardMaterial color={c} emissive={c} emissiveIntensity={.3} metalness={.5} roughness={.35} />;
@@ -416,6 +435,7 @@ export const GameScene = memo(function GameScene({ ctl, peers, color, hull }: { 
     <Planets sim={sim} />
     <Satellites sim={sim} />
     <Portal sim={sim} />
+    <Comet sim={sim} />
     <LocalShip ctl={ctl} color={color} hull={hull} />
     {peers.map(p => <RemoteShip key={p.id} sim={sim} peer={p} />)}
     <Aliens sim={sim} />

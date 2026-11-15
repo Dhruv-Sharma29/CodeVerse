@@ -8,6 +8,8 @@ import { loadUniverse, ownerOf } from "./universe";
 import { KeySheet, LESSONS, Tutorial, type LessonId } from "./Tutorial";
 import "./game.css";
 
+/** The open-source project behind the game, shown by the comet. */
+const REPO_URL = "https://github.com/Dhruv-Sharma29/CodeVerse";
 const COLORS = ["#74e2ff", "#ffb547", "#7dffb4", "#ff6fae", "#b18cff", "#ff8a5c"];
 const store = {
   get<T>(k: string, d: T): T { try { const v = localStorage.getItem("orbit:" + k); return v == null ? d : JSON.parse(v) as T; } catch { return d; } },
@@ -36,7 +38,7 @@ const sfx = {
 };
 
 interface Toast { id: number; text: string; kind: "" | "good" | "bad" }
-interface Hud { score: number; hp: number; charge: number; wave: number; aliens: number; kills: number; dead: boolean; near: Planet | null; grabbing: boolean; gate: { a: number; d: number }; boss: { hp: number; max: number } | null }
+interface Hud { score: number; hp: number; charge: number; wave: number; aliens: number; kills: number; dead: boolean; near: Planet | null; grabbing: boolean; comet: boolean; gate: { a: number; d: number }; boss: { hp: number; max: number } | null }
 
 export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const [phase, setPhase] = useState<"lobby" | "play">("lobby");
@@ -98,6 +100,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       else if (e.type === "grab") sfx.grab();
       else if (e.type === "fling") sfx.fling();
       else if (e.type === "gate") toast("The hyperjump gate moved. Follow the violet arrow.");
+      else if (e.type === "comet") { sfx.commit(); setTimeout(sfx.commit, 140); toast("☄ You caught the CodeVerse comet! +250 and nova charge", "good"); }
       else if (e.type === "boom") net.current?.send({ t: "boom", x: e.x, z: e.z });
       else if (e.type === "nova") { sfx.nova(); pulse("nova"); net.current?.send({ t: "nova", x: e.x, z: e.z }); }
       else if (e.type === "portal") { setJumpTarget(""); setJumpOpen(true); net.current?.send({ t: "rooms" }); }
@@ -203,7 +206,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       const s = c.sim;
       if (Math.hypot(s.ship.vx, s.ship.vz) > 14) learn("move");
       const boss = s.aliens.find(a => a.kind === "mothership" && a.hp > 0);
-      setHud({ boss: boss ? { hp: boss.hp, max: boss.max } : null, score: s.score, hp: s.ship.hp / HULLS[s.ship.hull].hp * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
+      setHud({ boss: boss ? { hp: boss.hp, max: boss.max } : null, score: s.score, hp: s.ship.hp / HULLS[s.ship.hull].hp * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, comet: s.nearComet, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
       drawRadar(radar.current, s);
     }, 100);
     return () => clearInterval(id);
@@ -387,7 +390,14 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       </a>)}
     </aside>}
 
-    {near && !jumpOpen && <section className="orbit-card" aria-label="Nearby planet">
+    {hud?.comet && !jumpOpen && <section className="orbit-card comet" aria-label="CodeVerse comet">
+      <div className="orbit-card-head"><strong>☄ The CodeVerse comet</strong><span>open source</span></div>
+      <p>This game is open source. The comet crosses every universe on a new random path every two minutes. Fly through it for a bonus.</p>
+      <div className="orbit-card-actions">
+        <a className="orbit-primary small" href={REPO_URL} target="_blank" rel="noreferrer">★ View CodeVerse on GitHub</a>
+      </div>
+    </section>}
+    {near && !hud?.comet && !jumpOpen && <section className="orbit-card" aria-label="Nearby planet">
       <div className="orbit-card-head"><strong>{near.repo.name}</strong><span>{near.repo.language ?? "Mixed"}</span></div>
       {near.repo.description && <p>{clip(near.repo.description, 150)}</p>}
       <div className="orbit-facts"><span>★ {compact(near.repo.stargazers_count)}</span><span>forks {compact(near.repo.forks_count)}</span>
@@ -475,6 +485,7 @@ function drawRadar(cv: HTMLCanvasElement | null, sim: Sim) {
     g.fillStyle = color; g.beginPath(); g.arc(R + dx, R + dz, size, 0, Math.PI * 2); g.fill();
   };
   dot(0, 0, "#ffcf6e", 5);
+  dot(sim.comet.x, sim.comet.z, "#e8fbff", 3.5);
   for (const p of sim.planets) dot(p.x, p.z, p.glow, Math.max(2, p.R * k * 1.4));
   // Gate: drawn on the rim when out of range so it always shows the way.
   { const gate = sim.portal, dx = (gate.x - s.x) * k, dz = (gate.z - s.z) * k, l = Math.hypot(dx, dz), m = Math.min(1, (R - 6) / (l || 1));

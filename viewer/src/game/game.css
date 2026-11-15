@@ -204,3 +204,5 @@
   .orbit-toasts.below-boss { top: calc(var(--o-gt) + 110px); }
 }
 .orbit-foot a { color: var(--o-muted); text-underline-offset: 3px; } .orbit-foot a:hover { color: var(--o-ink); }
+.orbit-label.comet { color: #dff7ff; letter-spacing: .08em; font-size: 11px; text-shadow: 0 0 8px #3aa8ff, 0 1px 4px #000; }
+.orbit-card.comet { border-color: rgba(159,232,255,.45); box-shadow: 0 0 30px rgba(90,190,255,.25); } .orbit-card .orbit-primary { text-decoration: none; display: inline-flex; }

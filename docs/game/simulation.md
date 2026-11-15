@@ -14,11 +14,12 @@ browser and the Node tests run the same code.
 | `remoteGrab(sim, msg)` | Apply another pilot's planet throw |
 | `explode(sim, x, z, colour, …)` | Particles and flash |
 | `gateSpot(room, edge, epoch)` | Deterministic gate position |
+| `cometAt(room, edge, now)` | Deterministic comet position and velocity |
 | `HULLS`, `ALIENS` | Tuning tables for ships and aliens |
 
 ## Step order
 
-1. **Gate:** if the three-minute window changed (and the hyperjump dialog isn't open), move the gate and emit `gate`.
+1. **Gate and comet:** if the three-minute window changed (and the hyperjump dialog isn't open), move the gate and emit `gate`; place the comet on its current chord.
 2. **Planets:** orbit, held, flung, returning, or moved by a remote pilot.
 3. **Ship:** facing (mouse aim, auto-aim on touch, or keyboard turn), thrust along the nose, drag, speed cap, engine trail, sun and edge limits, planet collision, firing, supernova, nearest planet, commits, gate entry.
 4. **Gravity beam:** grab, hold (spring toward a point in front of the ship, damped relative to the ship, kept clear of it), or fling.
@@ -43,6 +44,7 @@ Distances are world units: the sun's radius is 8, the gate's radius is 6, and pl
 
 - shooting kills and scores; aim assist
 - grabbing and flinging a planet
+- the comet's seeded path and once-per-crossing bonus
 - the gate triggering once, sitting in the outer band, and being deterministic per room and window
 - supernova clearing aliens
 - ship-relative thrust

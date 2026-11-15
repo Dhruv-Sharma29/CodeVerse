@@ -23,7 +23,7 @@ A client is in at most one room. Joining another room leaves the previous one.
 | Supernovas, explosions | Particles and effects |
 | Name, colour, hull | |
 
-The gate needs no messages: every client computes it from the room name and the clock.
+The gate and the comet need no messages: every client computes them from the room name and the clock.
 
 ## Messages
 

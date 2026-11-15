@@ -103,3 +103,25 @@ test('flying forward while holding a planet never puts the ship inside it', () =
   assert.equal(p.mode, 'held');
   assert.ok(worst >= 2, `ship got inside the held planet: gap ${worst}`);
 });
+
+test('the comet follows a seeded random chord per universe and pays out once per crossing', async () => {
+  const { cometAt, COMET_PERIOD } = await import('../src/game/sim.ts');
+  const t0 = 50 * COMET_PERIOD;
+  const start = cometAt('trending', 400, t0), mid = cometAt('trending', 400, t0 + COMET_PERIOD / 2);
+  assert.ok(Math.hypot(start.x, start.z) > 400, 'enters from beyond the rim');
+  assert.ok(Math.hypot(mid.x - start.x, mid.z - start.z) > 200, 'moves across the map');
+  assert.deepEqual(cometAt('trending', 400, t0), start); // same for every pilot
+  const other = cometAt('u:torvalds', 400, t0), next = cometAt('trending', 400, t0 + COMET_PERIOD);
+  assert.notDeepEqual([other.x, other.z], [start.x, start.z]);
+  assert.notDeepEqual([next.x, next.z], [start.x, start.z]);
+
+  const sim = createSim({ room: 'trending', title: 't', subtitle: '', owner: '', repos: [] });
+  sim.waveTimer = 99; sim.aliens.length = 0;
+  const caught = [];
+  for (let i = 0; i < 3; i++) {
+    Object.assign(sim.ship, { x: sim.comet.x, z: sim.comet.z, vx: sim.comet.vx, vz: sim.comet.vz, inv: 9 });
+    const ev = []; step(sim, emptyInput(), 1 / 60, ev); caught.push(ev.filter(e => e.type === 'comet').length);
+  }
+  assert.deepEqual(caught, [1, 0, 0]);
+  assert.equal(sim.score, 250);
+});
