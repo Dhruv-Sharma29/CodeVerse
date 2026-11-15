@@ -145,21 +145,22 @@ export async function fetchProfileData(handle) {
 }
 
 const cachedTemplates = new Map();
-/** @param preferSource true in dev, where the built dist/index.html must not be used: it
+/** Profile pages (/@handle) render the explorer, so its page is the template.
+ *  @param preferSource true in dev, where the built dist/explorer/index.html must not be used: it
  *  references hashed /assets/*.js that the dev server does not serve, so the page 404s and
  *  renders blank. Dev serves the source index.html and lets Vite transform it. */
 export async function getTemplateHtml(preferSource = false) {
   const cached = cachedTemplates.get(preferSource);
   if (cached) return cached;
   const built = [
-    resolve(process.cwd(), 'dist/index.html'),
-    resolve(process.cwd(), 'viewer/dist/index.html'),
-    fileURLToPath(new URL('../dist/index.html', import.meta.url)),
+    resolve(process.cwd(), 'dist/explorer/index.html'),
+    resolve(process.cwd(), 'viewer/dist/explorer/index.html'),
+    fileURLToPath(new URL('../dist/explorer/index.html', import.meta.url)),
   ];
   const source = [
-    resolve(process.cwd(), 'index.html'),
-    resolve(process.cwd(), 'viewer/index.html'),
-    fileURLToPath(new URL('../index.html', import.meta.url)),
+    resolve(process.cwd(), 'explorer/index.html'),
+    resolve(process.cwd(), 'viewer/explorer/index.html'),
+    fileURLToPath(new URL('../explorer/index.html', import.meta.url)),
   ];
   const candidates = preferSource ? [...source, ...built] : [...built, ...source];
   for (const candidate of candidates) {
@@ -173,7 +174,7 @@ export async function getTemplateHtml(preferSource = false) {
       // try next candidate
     }
   }
-  throw new Error('index.html template not found');
+  throw new Error('explorer/index.html template not found');
 }
 
 export function createProfileHtmlMiddleware(options = {}) {

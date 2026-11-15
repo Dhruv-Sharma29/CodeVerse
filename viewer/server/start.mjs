@@ -7,20 +7,22 @@ import { oracleMiddleware } from './oracle.mjs';
 import { trendingMiddleware } from './trending.mjs';
 import { githubMiddleware } from './github.mjs';
 import { profileHtmlMiddleware } from './profileHtml.mjs';
+import { attachMultiplayer } from './multiplayer.mjs';
 const root = fileURLToPath(new URL('../dist', import.meta.url));
 const types = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8', '.json':'application/json', '.svg':'image/svg+xml', '.png':'image/png', '.woff2':'font/woff2' };
 const server = createServer((req,res) => void ogMiddleware(req,res,() => oracleMiddleware(req,res,() => trendingMiddleware(req,res,() => githubMiddleware(req,res,() => profileHtmlMiddleware(req,res,async () => {
   if (!['GET','HEAD'].includes(req.method)) {res.writeHead(405);res.end();return;}
   try {
     const pathname = decodeURIComponent(new URL(req.url,'http://localhost').pathname);
-    const path = resolve(root, `.${pathname === '/' ? '/index.html' : pathname}`);
+    const path = resolve(root, `.${pathname.endsWith('/') ? pathname + 'index.html' : pathname}`);
     if (!path.startsWith(root + sep)) {res.writeHead(403);res.end();return;}
     let content;
     let extension = extname(path);
     try { content = await readFile(path); }
-    catch { if(extension) throw new Error('Not found'); content=await readFile(resolve(root,'index.html'));extension='.html'; }
+    catch { if(extension) throw new Error('Not found'); content=await readFile(resolve(path,'index.html')).catch(() => readFile(resolve(root,'index.html')));extension='.html'; }
     res.writeHead(200, {'Content-Type':types[extension] ?? 'application/octet-stream','X-Content-Type-Options':'nosniff'});
     res.end(req.method === 'HEAD' ? undefined : content);
   } catch {res.writeHead(404);res.end('Not found');}
 }))))));
+attachMultiplayer(server);
 server.listen(Number(process.env.PORT ?? 4173), process.env.HOST ?? '127.0.0.1', () => console.log(`Codeverse ready at http://${process.env.HOST ?? '127.0.0.1'}:${process.env.PORT ?? 4173}`));
