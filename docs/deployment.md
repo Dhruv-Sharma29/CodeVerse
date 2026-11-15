@@ -55,9 +55,22 @@ service.
 | `RELAY_ORIGINS` | Comma-separated page origins allowed to connect (`https://codeverse-orbit.vercel.app`). Empty allows any origin. |
 | `PORT` | Set by Render |
 
-**Free plan behaviour:** the service sleeps after about 15 minutes without traffic. The first pilot
-afterwards waits up to a minute while it wakes; the game shows "Connecting…" and retries on its own.
-A paid instance stays awake. Preview deployments on other origins are refused by `RELAY_ORIGINS`
+**Free plan behaviour:** the service sleeps after about 15 minutes without traffic and takes up to a
+minute to wake. Two things handle that:
+
+- **Keep-warm schedule.** `.github/workflows/keep-relay-warm.yml` pings `/health` every 10 minutes
+  from 02:00 to 18:59 UTC (07:30–00:29 IST), about 530 instance hours a month. Free instance hours
+  (750/month) are shared by every free service in the Render workspace; running the ping 24/7 would
+  use ~730–744 and leave almost nothing for others, and Render suspends free services once the hours
+  run out. Change the `cron` line to widen or narrow the window. GitHub can delay scheduled runs at
+  busy times and pauses schedules after 60 days without repository activity. It can also be run by
+  hand from the Actions tab.
+- **Waking in the game.** On page load the game sends a request to the relay's `/health` to start it
+  waking. If it isn't connected within 3.5 seconds, the lobby and HUD say the server is waking, the
+  client retries every 3 seconds for up to 90, and players can launch and play solo meanwhile.
+  Other pilots appear once it is up.
+
+A paid instance stays awake without any of this. Preview deployments on other origins are refused by `RELAY_ORIGINS`
 and run solo unless you add their origins.
 
 ## Health checks

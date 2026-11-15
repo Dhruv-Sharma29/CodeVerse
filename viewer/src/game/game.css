@@ -208,3 +208,6 @@
 .orbit-card.comet { border-color: rgba(159,232,255,.45); box-shadow: 0 0 30px rgba(90,190,255,.25); } .orbit-card .orbit-primary { text-decoration: none; display: inline-flex; }
 /* HUD panels sit above 3D world labels (drei Html uses z-index 0-5) */
 .orbit-top, .orbit-hud, .orbit-radar, .orbit-toasts, .orbit-log, .orbit-card, .orbit-tut, .orbit-dead, .orbit-stick, .orbit-buttons { z-index: 6; }
+.orbit-net.waking, .orbit-live-dot.waking { color: var(--o-amber); }
+.orbit-net.waking::before { content: "◌ "; display: inline-block; animation: orbit-ping 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .orbit-net.waking::before { animation: none; } }

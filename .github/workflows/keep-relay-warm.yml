@@ -1,0 +1,26 @@
+# Keeps the free Render relay (multiplayer) awake during waking hours in India (IST).
+# Render's free web services sleep after 15 minutes without traffic and take up to a minute to
+# wake; a ping every 10 minutes prevents that.
+#
+# Budget: free instance hours are shared across the Render workspace (750/month). This window,
+# 02:00–18:59 UTC (07:30–00:29 IST), uses about 530 hours. Running 24/7 would use ~730–744 and leave
+# almost nothing for other free services. Outside the window the game wakes the relay on demand.
+#
+# GitHub may delay scheduled runs at busy times, so an occasional short sleep is still possible.
+# GitHub also pauses schedules in repositories with no activity for 60 days.
+name: Keep relay warm
+
+on:
+  schedule:
+    - cron: "*/10 2-18 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping relay health check
+        run: curl -fsS --max-time 100 --retry 2 --retry-delay 5 https://codeverse-relay.onrender.com/health

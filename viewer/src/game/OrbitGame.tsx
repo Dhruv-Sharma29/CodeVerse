@@ -327,6 +327,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
           <span className="orbit-live-dot">{pilots} pilot{pilots === 1 ? "" : "s"} flying now</span>
           <span className="orbit-live-rooms">{rooms.slice(0, 4).map(r => <span key={r.room}>{roomLabel(r.room)} <b>{r.count}</b></span>)}</span>
         </> : <span className="orbit-live-dot idle">Nobody is flying yet. Launch, then send a friend this page.</span>
+          : status === "waking" ? <span className="orbit-live-dot waking">Waking the multiplayer server. It sleeps when nobody is playing and takes up to a minute. You can launch now; other pilots appear once it is up.</span>
           : status === "connecting" ? <span>Looking for other pilots…</span> : <span>Multiplayer server offline. You will fly solo.</span>}
       </section>
       <p className="orbit-foot">{lessons.length < LESSONS.length ? "New here? A short first flight shows you the controls." : "Press H in flight for the controls."}</p>
@@ -359,7 +360,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         <span className="orbit-eyebrow">{universe?.room === "trending" ? "TRENDING HUB" : "UNIVERSE"}</span>
         <strong>{universe?.title}</strong>
         <span className="orbit-sub">{universe?.subtitle}</span>
-        <span className={`orbit-net ${status}`}>{status === "online" ? `${peers.length + 1} pilot${peers.length ? "s" : ""} here` : status === "connecting" ? "Connecting…" : "Solo: multiplayer server offline"}</span>
+        <span className={`orbit-net ${status}`}>{status === "online" ? `${peers.length + 1} pilot${peers.length ? "s" : ""} here` : status === "waking" ? "Waking multiplayer server (up to a minute)…" : status === "connecting" ? "Connecting…" : "Solo: multiplayer server offline"}</span>
       </div>
       <div className="orbit-actions">
         <button className="orbit-ghost" onClick={() => { const m = !muted; setMuted(m); store.set("muted", m); }} aria-pressed={!muted}>{muted ? "Sound off" : "Sound on"}</button>
