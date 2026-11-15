@@ -51,8 +51,10 @@ function CameraRig({ ctl }: { ctl: Control }) {
       camera.lookAt(look.current.x, -18, look.current.z);
       return;
     }
-    const lead = s.dead > 0 ? 0 : 6;
-    look.current.lerp(hit.set(s.x + Math.cos(s.a) * lead + s.vx * .12, 0, s.z + Math.sin(s.a) * lead + s.vz * .12), Math.min(1, dt * 5));
+    const lead = s.dead > 0 ? 0 : 6, killer = s.dead > 0 && sim.killedBy != null ? sim.remotes.get(sim.killedBy) : undefined;
+    // Follow-cam: while waiting to respawn, watch the pilot who shot you down.
+    if (killer) look.current.lerp(hit.set(killer.x, 0, killer.z), Math.min(1, dt * 3));
+    else look.current.lerp(hit.set(s.x + Math.cos(s.a) * lead + s.vx * .12, 0, s.z + Math.sin(s.a) * lead + s.vz * .12), Math.min(1, dt * 5));
     const d = ctl.zoom * portrait;
     // Lerp (not set) so leaving the lobby swoops down to the ship instead of cutting.
     camera.position.lerp(hit.set(look.current.x, 64 * d, look.current.z + 46 * d), Math.min(1, dt * 4));
@@ -299,6 +301,24 @@ function RemoteShip({ sim, peer }: { sim: Sim; peer: Peer }) {
   </group>;
 }
 
+/** Floating combat text: damage numbers and points, rising and fading where they happened. */
+const FLOAT_POOL = 24;
+function Floats({ sim }: { sim: Sim }) {
+  const groups = useRef<(THREE.Group | null)[]>([]), labels = useRef<(HTMLSpanElement | null)[]>([]);
+  useFrame(() => {
+    for (let i = 0; i < FLOAT_POOL; i++) {
+      const g = groups.current[i], f = sim.floats[i], el = labels.current[i]; if (!g) continue;
+      g.visible = !!f; if (!f || !el) continue;
+      g.position.set(f.x, 3 + f.t * 7, f.z);
+      if (el.textContent !== f.text) el.textContent = f.text;
+      el.style.color = f.color; el.style.opacity = String(Math.max(0, 1 - f.t / .9));
+    }
+  });
+  return <>{Array.from({ length: FLOAT_POOL }, (_, i) => <group key={i} ref={el => { groups.current[i] = el; }} visible={false}>
+    <Html center zIndexRange={[6, 0]} pointerEvents="none"><span ref={el => { labels.current[i] = el; }} className="orbit-float" /></Html>
+  </group>)}</>;
+}
+
 /** Real-data extras around planets: issue asteroids, star-shield pickups and an activity glow. */
 const ROCK_POOL = 220, STAR_POOL = 24, GLOW_POOL = 24;
 function PlanetExtras({ sim }: { sim: Sim }) {
@@ -542,6 +562,7 @@ export const GameScene = memo(function GameScene({ ctl, peers, color, hull }: { 
     <Pings sim={sim} />
     <Meteors sim={sim} />
     <PlanetExtras sim={sim} />
+    <Floats sim={sim} />
     <LocalShip ctl={ctl} color={color} hull={hull} />
     {peers.map(p => <RemoteShip key={p.id} sim={sim} peer={p} />)}
     <Aliens sim={sim} />

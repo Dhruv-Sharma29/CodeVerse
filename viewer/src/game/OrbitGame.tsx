@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { commitUrl, errorMessage, fetchCommits, fetchContributors, fetchReadme, repoUrl, type Contributor, type GitCommit } from "../github/api";
 import { readmeExcerpt } from "./readme";
+import { readPad, type PadState } from "./gamepad";
+import { startMusic } from "./music";
 import { BOUNTY, DAILY_REWARD, STORM, bountyHolder, dailyChallenge } from "./events";
 import { GameScene, ShipPreview, type Control, type Peer } from "./GameScene";
 import { connectNet, type NetMessage, type NetStatus } from "./net";
@@ -25,13 +27,23 @@ const compact = (n: number) => new Intl.NumberFormat("en", { notation: "compact"
 const roomLabel = (room: string) => room === "trending" ? "Trending hub" : room.slice(2);
 
 /* ---- sound: tiny synth, starts after the first interaction ---- */
-let ac: AudioContext | null = null;
+let ac: AudioContext | null = null, master: AudioNode | null = null;
+/** Create the audio context (needs a user gesture) with a master compressor so effects stay full and never clip. */
+function ensureAudio() {
+  if (ac) return;
+  try {
+    ac = new AudioContext();
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 4; comp.attack.value = .004; comp.release.value = .2;
+    comp.connect(ac.destination); master = comp;
+  } catch { /* no audio */ }
+}
 function tone(freq: number, dur = .08, type: OscillatorType = "sine", vol = .05, slide = 1) {
   if (!ac || store.get("muted", false)) return;
   const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
   o.type = type; o.frequency.setValueAtTime(freq, t); if (slide !== 1) o.frequency.exponentialRampToValueAtTime(freq * slide, t + dur);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
-  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
+  o.connect(g).connect(master ?? ac.destination); o.start(t); o.stop(t + dur);
 }
 const sfx = {
   ping: () => { tone(1320, .09, "sine", .045); setTimeout(() => tone(1760, .12, "sine", .035), 90); },
@@ -64,6 +76,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const [log, setLog] = useState<{ planet: Planet; commit: GitCommit }[]>([]);
   const [hud, setHud] = useState<Hud | null>(null);
   const [muted, setMuted] = useState(() => store.get("muted", false));
+  const [music, setMusic] = useState(() => store.get("music", true));
   const [flash, setFlash] = useState<"" | "hurt" | "nova">("");
   const [touch] = useState(() => typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches);
   const ctl = useRef<Control | null>(null);
@@ -104,7 +117,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     for (const e of events) {
       if (e.type === "shot" || e.type === "fling" || e.type === "commit" || e.type === "nova" || e.type === "portal") learn(e.type);
       if (e.type === "shot") { sfx.shot(); net.current?.send({ t: "shot", x: e.x, z: e.z, a: e.a, d: HULLS[sim.ship.hull].dmg }); }
-      else if (e.type === "pvpHit") tone(1900, .05, "square", .03, .6);
+      else if (e.type === "pvpHit") { tone(1900, .05, "square", .03, .6); tone(2600, .03, "sine", .02); }
       else if (e.type === "kill") { sfx.kill(); if (e.kind === "mothership") toast(`Mothership destroyed! +${e.points}`, "good"); }
       else if (e.type === "storm") {
         if (e.phase === "warning") { sfx.wave(); toast("☄ Meteor storm in 10 seconds. Shoot or dodge the meteors!", "bad"); }
@@ -292,12 +305,13 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     if (phase !== "play") return;
     const keys = held.current;
     const down = (e: KeyboardEvent) => {
-      if (!ac) try { ac = new AudioContext(); } catch { /* no audio */ }
+      ensureAudio();
       if (e.target instanceof HTMLInputElement || jumpOpen) return;
       const k = e.key.toLowerCase();
       if (k === "q" && ctl.current) ctl.current.input.nova = true;
       if (k === "p" && !e.repeat) { ping(); return; }
       if (k === "f" && !e.repeat && canFullscreen) { void toggleFullscreen(); return; }
+      if (k === "m" && !e.repeat) { setMusic(v => !v); return; }
       if (k === "enter" && !e.repeat) { if (ctl.current?.docked) undock(); else if (ctl.current?.sim.near) dockAt(ctl.current.sim.near); return; }
       if (k === "escape" && ctl.current?.docked) { undock(); return; }
       if (ctl.current?.docked && ["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) undock(); // flying off undocks
@@ -321,6 +335,42 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     sim.emote = e; sim.emoteUntil = performance.now() + 3500;
     net.current?.send({ t: "emote", e: i });
   }
+
+  /* ---- music: generated in the browser, only while flying, respects Sound off ---- */
+  useEffect(() => {
+    if (phase !== "play" || !music || muted || !ac || !master) return;
+    if (ac.state === "suspended") void ac.resume();
+    return startMusic(ac, master);
+  }, [phase, music, muted]);
+  useEffect(() => { store.set("music", music); }, [music]);
+
+  /* ---- gamepad (standard mapping) ---- */
+  useEffect(() => {
+    if (phase !== "play" || !("getGamepads" in navigator)) return;
+    let raf = 0, prev: PadState | null = null, inUse = false;
+    const onConnect = (e: GamepadEvent) => toast(`🎮 ${e.gamepad.id.split("(")[0].trim() || "Gamepad"} connected: left stick flies, right stick aims, RT fires`, "good");
+    addEventListener("gamepadconnected", onConnect);
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const pad = [...navigator.getGamepads()].find(p => p && p.mapping === "standard") ?? [...navigator.getGamepads()].find(Boolean);
+      const c = ctl.current; if (!pad || !c || c.attract) return;
+      const st = readPad(pad);
+      if (st.active) inUse = true;
+      if (!inUse) return;
+      const s = c.sim.ship, edge = (k: "nova" | "ping" | "dock" | "board") => st[k] && !prev?.[k];
+      c.input.move = st.move; c.input.relative = false; c.input.boost = st.boost; c.input.fire = st.fire; c.input.grab = st.grab;
+      if (st.aim) { c.pointer.mouse = false; c.input.autoAim = false; c.input.aim = { x: s.x + st.aim.x * 30, z: s.z + st.aim.z * 30 }; }
+      else { c.input.aim = null; c.input.autoAim = true; } // centred right stick: aim assist picks targets
+      if (edge("nova")) c.input.nova = true;
+      if (edge("ping")) ping();
+      if (edge("dock")) { if (c.docked) undock(); else if (c.sim.near) dockAt(c.sim.near); }
+      if (edge("board")) setBoard(v => !v);
+      if (!st.active && prev?.active) { c.input.fire = c.input.grab = c.input.boost = false; c.input.move = { x: 0, z: 0 }; }
+      prev = st;
+    };
+    raf = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(raf); removeEventListener("gamepadconnected", onConnect); };
+  }, [phase, toast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---- docking: read a repository and jump along its contributors ---- */
   const dockAbort = useRef<AbortController | null>(null);
@@ -372,7 +422,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
 
   /* ---- universes ---- */
   async function launch() {
-    if (!ac) try { ac = new AudioContext(); } catch { /* no audio */ }
+    ensureAudio();
     const callsign = name.replace(/[^\w .-]/g, "").trim().slice(0, 18) || "Pilot";
     setName(callsign); store.set("name", callsign); store.set("color", color); store.set("hull", hull);
     const c = ctl.current;
@@ -474,6 +524,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
 
   const c = control;
   const near = hud?.near;
+  const killerName = hud?.dead && c?.sim.killedBy != null ? c.sim.remotes.get(c.sim.killedBy)?.name : undefined;
   const nearOwner = near ? ownerOf(near.repo) : "";
   const showOwnerJump = near && nearOwner.toLowerCase() !== (universe?.owner ?? "").toLowerCase();
   const occupied = rooms.filter(r => r.room !== universe?.room);
@@ -482,7 +533,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   return <div className={`orbit-game ${phase} ${flash ? "flash-" + flash : ""}`}>
     {c && <div className="orbit-canvas" onContextMenu={e => e.preventDefault()}
       onPointerMove={e => { if (e.pointerType === "mouse") { c.pointer.x = e.nativeEvent.offsetX; c.pointer.y = e.nativeEvent.offsetY; c.pointer.mouse = true; } }}
-      onPointerDown={e => { if (e.pointerType === "mouse") { if (!ac) try { ac = new AudioContext(); } catch { /* no audio */ } mouseButton(e.button, true); } }}
+      onPointerDown={e => { if (e.pointerType === "mouse") { ensureAudio(); mouseButton(e.button, true); } }}
       onPointerUp={e => { if (e.pointerType === "mouse") mouseButton(e.button, false); }}
       onPointerLeave={() => { held.current.delete("mouse0"); held.current.delete("mouse2"); syncInput(); }}
       onWheel={e => { c.zoom = Math.max(.55, Math.min(1.9, c.zoom * (1 + Math.sign(e.deltaY) * .08))); }}>
@@ -577,7 +628,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       style={{ left: `${50 + Math.cos(hud.gate.a) * 42}%`, top: `${50 + Math.sin(hud.gate.a) * 38}%` }}>
       <i style={{ transform: `rotate(${hud.gate.a}rad)` }}>➤</i><span>HYPERJUMP · {Math.round(hud.gate.d)}</span>
     </div>}
-    {hud?.dead && <div className="orbit-dead">Ship destroyed. Rebuilding at the portal…</div>}
+    {hud?.dead && <div className="orbit-dead">{killerName ? <>Shot down by {killerName}<small>Watching them until you respawn…</small></> : "Ship destroyed. Rebuilding near the sun…"}</div>}
 
     {jumpOpen && <div className="orbit-modal" role="dialog" aria-modal="true" aria-labelledby="jump-title">
       <form className="orbit-modal-card" onSubmit={e => { e.preventDefault(); void jump(jumpTarget); }}>
@@ -616,7 +667,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       {hud.board.length === 1 && <p>Nobody else is here yet. Share this page, or check the hyperjump gate for busier universes.</p>}
       <div className="orbit-emotes" role="group" aria-label="Emotes">{EMOTES.map((e, i) => <button type="button" key={e} onClick={() => sendEmote(i)} title={`Key ${i + 1}`}>{e}</button>)}</div>
     </aside>}
-    {sheet ? <KeySheet touch={touch} onClose={() => setSheet(false)} onReplay={() => { saveLessons([]); setSheet(false); }} />
+    {sheet ? <KeySheet touch={touch} music={music} onMusic={() => setMusic(v => !v)} onClose={() => setSheet(false)} onReplay={() => { saveLessons([]); setSheet(false); }} />
       : <Tutorial done={lessons} touch={touch} onSkip={() => saveLessons(LESSONS.map(l => l.id))} />}
     </>}
   </div>;

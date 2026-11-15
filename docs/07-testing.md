@@ -1,6 +1,6 @@
 # 07 — Testing
 
-**94 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
+**97 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
 (22.6+, native TypeScript stripping) or `pytest`. CI runs all of them, plus type-checking, lint and
 the production build, on every push and pull request.
 
@@ -18,6 +18,7 @@ $ cd ../analyzer && uv run pytest tests -q
 | `multiplayer.test.mjs` | 4 | The relay: rooms are separate, names and colours are cleaned, invalid rooms are refused, leaving is broadcast, hulls fall back, the origin allow-list refuses other sites, dogfight state, kill announcements, emotes and pings are relayed and validated |
 | `events.test.mjs` | 6 | World events: storm schedule and determinism, meteor hits and shooting, the bounty pick, hold-the-gate scoring and contesting, the daily challenge, and evenly spread seeded randomness |
 | `traits.test.mjs` | 5 | Real-data planets: language physics, issue-rock counts, activity glow, closing an issue, star shields, and bouncy planets ricocheting |
+| `feel.test.mjs` | 3 | Gamepad mapping and dead zone, music tuning, floating damage numbers, and the follow-cam's memory of who shot you down |
 | `tilt.test.mjs` | 3 | Tilt-to-steer: portrait and both landscape orientations map to the same screen directions; dead zone and linear ramp |
 | `invite.test.mjs` | 1 | Invite links: a valid GitHub login opens that universe; anything else falls back to the trending hub |
 | `net.test.mjs` | 2 | The client connection: a sleeping hosted relay reports "waking" without flicker and then goes online; a refused local server reports "offline" |
@@ -45,6 +46,7 @@ and are listed here so nobody mistakes them for automated coverage:
 - Tilt-to-steer and the motion permission prompt on a real phone (the maths is unit-tested; the
   sensors and iOS permission flow need a device).
 - Full screen and the home-screen install on real phones.
+- A physical gamepad (the mapping is unit-tested against the standard layout) and how the music sounds.
 
 - Several real players at once, and the relay under load.
 - Frame rate on low-end phones, especially with a mothership on screen.

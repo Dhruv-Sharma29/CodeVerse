@@ -117,6 +117,18 @@ shared; aliens are separate for each pilot.
 - **Emotes.** Press **1–6** (or use the buttons on the board): 👋 Hi, GG, 🔥 Nice!, 🆘 Help!,
   ⚔ Fight me, 🤝 Truce. They appear above your ship for every pilot. Emotes are preset only.
 
+## Feel
+
+- **Damage numbers.** Your hits leave small floating numbers: white damage on aliens, gold points
+  on kills, green for closed issues, orange for meteors, red for damage dealt to another pilot.
+- **Follow-cam.** When another pilot shoots you down, the camera follows them until you respawn.
+- **Gamepad.** Standard layout (Xbox or PlayStation in the browser): left stick flies, right stick aims
+  (centre it and aim assist picks targets), RT fires, LT is the gravity beam, A boosts, Y supernova,
+  X ping, B docks or undocks, Back/Select opens the pilots board.
+- **Music.** An ambient track generated live in the browser (pad chords Am–F–C–G and a soft arpeggio;
+  no recordings), only while flying. **M** or the Controls sheet turns it off; **Sound off** silences
+  everything. Effects and music go through a compressor so they stay full without clipping.
+
 ## Phones, tablets and full screen
 
 - **Touch controls.** Left stick to fly; buttons for **FIRE**, **GRAB**, **BOOST** (hold), **NOVA** and

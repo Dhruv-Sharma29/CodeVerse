@@ -34,7 +34,7 @@ export function Tutorial({ done, touch, onSkip }: { done: LessonId[]; touch: boo
   </aside>;
 }
 
-export function KeySheet({ touch, onReplay, onClose }: { touch: boolean; onReplay: () => void; onClose: () => void }) {
+export function KeySheet({ touch, music, onMusic, onReplay, onClose }: { touch: boolean; music: boolean; onMusic: () => void; onReplay: () => void; onClose: () => void }) {
   return <aside className="orbit-tut sheet" aria-label="Controls">
     <div className="orbit-tut-head"><span className="orbit-eyebrow">CONTROLS · H</span><button type="button" className="orbit-link" onClick={onClose}>Close</button></div>
     {LESSONS.map(l => <div className="orbit-sheet-row" key={l.id}><span>{l.title}</span><Keys keys={touch ? l.touchKeys : l.keys} /></div>)}
@@ -42,6 +42,9 @@ export function KeySheet({ touch, onReplay, onClose }: { touch: boolean; onRepla
     <div className="orbit-sheet-row"><span>Emotes</span><Keys keys={["1", "–", "6"]} /></div>
     <div className="orbit-sheet-row"><span>Ping a spot</span><Keys keys={touch ? ["PING"] : ["P"]} /></div>
     {!touch && <div className="orbit-sheet-row"><span>Full screen</span><Keys keys={["F"]} /></div>}
+    {!touch && <div className="orbit-sheet-row"><span>Dock at a planet</span><Keys keys={["Enter"]} /></div>}
+    <div className="orbit-sheet-row"><span>Music</span><button type="button" className="orbit-link" onClick={onMusic}>{music ? "On · turn off" : "Off · turn on"}{touch ? "" : " (M)"}</button></div>
+    {!touch && <div className="orbit-sheet-row"><span>Gamepad</span><span className="orbit-pad-hint">Sticks fly and aim · RT fire · LT grab · A boost · Y nova · X ping · B dock</span></div>}
     <button type="button" className="orbit-link" onClick={onReplay}>Replay first flight</button>
   </aside>;
 }

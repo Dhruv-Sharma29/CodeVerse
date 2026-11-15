@@ -283,3 +283,6 @@
 .orbit-daily b { color: var(--o-ink); font-weight: 600; }
 .orbit-daily i { font-style: normal; color: var(--o-good); }
 @media (max-width: 760px) { .orbit-status { top: calc(var(--o-gt) + 96px); } }
+.orbit-float { font-family: var(--o-mono); font-size: 13px; font-weight: 700; text-shadow: 0 1px 4px #000, 0 0 8px rgba(0,0,0,.6); white-space: nowrap; pointer-events: none; }
+.orbit-dead small { display: block; font-size: 13px; font-family: var(--o-display); font-weight: 500; color: var(--o-muted); margin-top: 6px; }
+.orbit-pad-hint { font-size: 10px; color: var(--o-muted); text-align: right; max-width: 170px; }

@@ -119,6 +119,9 @@ export function createSim(universe: Universe) {
     holding: null as null | "holding" | "contested", holdAcc: 0,
     /** Pilot id carrying the bounty (set by the UI from everyone's scores), or null. */
     bountyId: null as number | null,
+    /** Floating combat text (damage numbers, points) and who shot this pilot down (for the follow-cam). */
+    floats: [] as { x: number; z: number; text: string; color: string; t: number }[],
+    killedBy: null as number | null,
     grab: null as null | { planet?: Planet; alien?: Alien },
     score: 0, charge: 0, wave: 0, waveTimer: 4, kills: 0, deaths: 0, commits: 0, shake: 0, portalCool: 2.5, nextAlien: 1,
     near: null as Planet | null,
@@ -163,12 +166,18 @@ export function addPing(sim: Sim, x: number, z: number, who: { owner: number; na
 /** True when the given id is another pilot in this universe (there is no peace mode). */
 export const pvpWith = (sim: Sim, id: number | undefined) => id != null && sim.remotes.has(id);
 
+/** A short floating label at a world position: damage dealt, points earned. */
+export function floatText(sim: Sim, x: number, z: number, text: string, color = "#ffffff") {
+  if (sim.floats.length >= 24) sim.floats.shift();
+  sim.floats.push({ x: x + (Math.random() - .5) * 1.5, z, text, color, t: 0 });
+}
+
 function hurt(sim: Sim, amount: number, ev: SimEvent[], by?: number) {
   const s = sim.ship;
   if (s.inv > 0 || s.dead > 0) return;
   s.hp -= amount; s.inv = .12; s.lastHit = sim.t; sim.shake = Math.min(1, sim.shake + .45); ev.push({ type: "hurt" });
   if (s.hp <= 0) {
-    s.hp = 0; s.dead = 2.6; sim.deaths++; sim.grab = null; sim.shake = 1;
+    s.hp = 0; s.dead = 2.6; sim.deaths++; sim.grab = null; sim.shake = 1; sim.killedBy = by ?? null;
     explode(sim, s.x, s.z, "#74e2ff", 90, 16); ev.push(by == null ? { type: "dead" } : { type: "dead", by });
   }
 }
@@ -230,6 +239,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   if (epoch !== sim.portal.epoch && sim.portalCool < 1e8) { sim.portal = gateSpot(sim.universe.room, sim.edge, epoch); ev.push({ type: "gate" }); }
   sim.comet = cometAt(sim.universe.room, sim.edge, Date.now());
   if (sim.pings.length) sim.pings = sim.pings.filter(p => p.until > sim.t);
+  if (sim.floats.length) { for (const f of sim.floats) f.t += dt; sim.floats = sim.floats.filter(f => f.t < .9); }
   const now = Date.now(), phase = stormPhase(now);
   if (phase !== sim.stormPhase) { sim.stormPhase = phase; ev.push({ type: "storm", phase }); if (phase === "calm") sim.meteorsGone.clear(); }
   sim.meteors = stormMeteors(sim.universe.room, sim.edge, now).filter(m => !sim.meteorsGone.has(m.id));
@@ -290,7 +300,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   // ---- ship
   if (!alive) {
     s.dead -= dt;
-    if (s.dead <= 0) Object.assign(s, { x: SPAWN.x, z: SPAWN.z, vx: 0, vz: 12, hp: HULLS[s.hull].hp, inv: 2.5, dead: 0 });
+    if (s.dead <= 0) { Object.assign(s, { x: SPAWN.x, z: SPAWN.z, vx: 0, vz: 12, hp: HULLS[s.hull].hp, inv: 2.5, dead: 0 }); sim.killedBy = null; }
   } else {
     s.inv = Math.max(0, s.inv - dt);
     const hull = HULLS[s.hull];
@@ -531,18 +541,18 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
       let closed = false;
       for (const p of sim.planets) {
         for (const rock of p.rocks) if (rock.alive && Math.hypot(b.x - (p.x + Math.cos(rock.a) * rock.r), b.z - (p.z + Math.sin(rock.a) * rock.r)) < ISSUE.r + .7) {
-          rock.alive = false; b.life = 0; closed = true; sim.score += ISSUE.points; sim.charge = Math.min(100, sim.charge + ISSUE.charge);
+          rock.alive = false; b.life = 0; closed = true; sim.score += ISSUE.points; sim.charge = Math.min(100, sim.charge + ISSUE.charge); floatText(sim, b.x, b.z, `+${ISSUE.points}`, "#7dffb4");
           explode(sim, b.x, b.z, "#ff6f7f", 16, 5); ev.push({ type: "issue", planet: p }); break;
         }
         if (closed) break;
       }
       if (closed) continue;
       const m = sim.meteors.find(m => !sim.meteorsGone.has(m.id) && dist(b, m) < STORM.r + .6);
-      if (m) { b.life = 0; sim.meteorsGone.add(m.id); sim.score += STORM.points; explode(sim, m.x, m.z, "#ff9a3c", 24, 7); ev.push({ type: "meteor" }); continue; }
+      if (m) { b.life = 0; sim.meteorsGone.add(m.id); sim.score += STORM.points; floatText(sim, m.x, m.z, `+${STORM.points}`, "#ffb37a"); explode(sim, m.x, m.z, "#ff9a3c", 24, 7); ev.push({ type: "meteor" }); continue; }
       // My shots stop on other pilots' ships (the damage happens on their side).
       let hitShip = false;
       for (const r of sim.remotes.values()) if (r.hp > 0 && pvpWith(sim, r.id) && dist(b, r) < 1.8) {
-        b.life = 0; explode(sim, b.x, b.z, "#ffffff", 6, 3); ev.push({ type: "pvpHit", id: r.id }); hitShip = true; break;
+        b.life = 0; explode(sim, b.x, b.z, "#ffffff", 6, 3); floatText(sim, r.x, r.z, `−${PVP.bullet * (b.dmg ?? 1)}`, "#ff8a9a"); ev.push({ type: "pvpHit", id: r.id }); hitShip = true; break;
       }
       if (hitShip) continue;
     }
@@ -551,6 +561,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
         b.life = 0;
         if (a.kind !== "mothership") { a.vx += b.vx * .04; a.vz += b.vz * .04; }
         explode(sim, b.x, b.z, "#ffffff", 5, 2);
+        if (b.from === "me") floatText(sim, a.x, a.z, a.hp - (b.dmg ?? 1) <= 0 ? `+${ALIENS[a.kind].pts}` : `−${b.dmg ?? 1}`, a.hp - (b.dmg ?? 1) <= 0 ? "#ffd76e" : "#ffffff");
         damageAlien(sim, a, b.dmg ?? 1, ev, b.from === "me");
         break;
       }
