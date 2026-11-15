@@ -74,14 +74,14 @@ edge points to it with the distance, and the radar pins it to its rim.
 Fly into the gate to open the hyperjump dialog: type any GitHub username or organization, pick a
 universe where other pilots are flying, or choose a recent or suggested one.
 
-## The CodeVerse comet
+## The creator's comet
 
 One comet crosses every universe. Each two-minute window it enters past the rim at a random angle
 and leaves on the far side along a random path, so it can appear anywhere. Like the gate, its path
 comes from the universe name and the clock, so every pilot sees it in the same place. It shows on
 the radar as a white dot.
 
-- Fly within 28 units to see a card linking to the [CodeVerse repository](https://github.com/Dhruv-Sharma29/CodeVerse).
+- Fly within 28 units to see a card linking to the creator's GitHub profile, [@Dhruv-Sharma29](https://github.com/Dhruv-Sharma29).
 - Fly through it (within 6 units) to catch it: +250 score and +25% supernova charge, once per crossing.
 
 ## First flight

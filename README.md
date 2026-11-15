@@ -21,7 +21,7 @@ The original, calmer **explorer** is still part of the app at `/explorer/`.
 - **Three ships.** *Dart* (balanced), *Wasp* (fast, rapid fire, light hull) and *Titan* (armoured, three-way heavy cannon), in six colours, previewed in a 3D hangar.
 - **Four alien types.** Saucers strafe and shoot, hunters ram, swarmer drones weave in packs, and every fifth wave a mothership boss rings the area with fire and launches swarmers.
 - **Gravity beam.** Grab a planet or an alien, drag it, and fling it. Flung planets smash aliens and knock other planets out of orbit, and every pilot in the universe sees it.
-- **The CodeVerse comet.** One comet crosses every universe on a new random path every two minutes. Fly near it for a link to this repository, and through it for a bonus.
+- **The creator's comet.** One comet crosses every universe on a new random path every two minutes. Fly near it for a link to the creator's GitHub profile, and through it for a bonus.
 - **Commits as power.** Fly through a planet's gold satellites to collect its real recent commits. They charge a supernova that clears the area.
 - **Onboarding.** A lobby over the live universe, then a six-step first flight that ticks off as you actually do each thing.
 - **Multiplayer.** A small WebSocket relay syncs ships, shots, flung planets and supernovas, up to 24 pilots per universe.
