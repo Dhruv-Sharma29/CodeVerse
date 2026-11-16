@@ -2,6 +2,7 @@ import { memo, useLayoutEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, Stars } from "@react-three/drei";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { Sun, World } from "../scene/World";
 import { seedFor } from "../github/planetStyle";
 import { PORTAL_R, SUN_R, novaRadius, type HullId, type Input, type Planet, type Sim } from "./sim";
@@ -482,45 +483,77 @@ function Pings({ sim }: { sim: Sim }) {
   </group>)}</>;
 }
 
+/** Alien hulls, built once. Each kind reads by shape as well as colour: lens saucer, arrowhead hunter, spiked mine. */
+let alienGeo: { saucer: THREE.BufferGeometry; hunter: THREE.BufferGeometry; swarmer: THREE.BufferGeometry } | null = null; // swarmer = spikes only; its core is a separate glowing mesh
+function alienGeometry() {
+  if (alienGeo) return alienGeo;
+  const lens = [[0, -.55], [1.2, -.5], [2.3, -.18], [2.75, 0], [2.3, .2], [1.4, .42], [0, .46]].map(([x, y]) => new THREE.Vector2(x, y));
+  const arrow = new THREE.Shape();
+  [[2.3, 0], [-1.4, 1.7], [-.7, .35], [-1.2, 0], [-.7, -.35], [-1.4, -1.7]].forEach(([x, y], i) => i ? arrow.lineTo(x, y) : arrow.moveTo(x, y));
+  const hunter = new THREE.ExtrudeGeometry(arrow, { depth: .3, bevelEnabled: true, bevelThickness: .14, bevelSize: .1, bevelSegments: 1, steps: 1 });
+  hunter.translate(0, 0, -.15).rotateX(-Math.PI / 2);
+  // Spiked mine: six dark spikes along the axes around a glowing core.
+  const dirs = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  const spikes = dirs.map(([x, y, z]) => {
+    const c = new THREE.ConeGeometry(.24, .95, 5).translate(0, .8, 0);
+    c.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(x, y, z)));
+    return c.toNonIndexed();
+  });
+  const swarmer = mergeGeometries(spikes)!;
+  return alienGeo = { saucer: new THREE.LatheGeometry(lens, 32), hunter, swarmer };
+}
+const RIM_BULBS = 8;
 function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
-  const disc = useRef<THREE.InstancedMesh>(null), dome = useRef<THREE.InstancedMesh>(null), lights = useRef<THREE.InstancedMesh>(null);
-  const hunter = useRef<THREE.InstancedMesh>(null), blades = useRef<THREE.InstancedMesh>(null), swarm = useRef<THREE.InstancedMesh>(null);
+  const hull = useRef<THREE.InstancedMesh>(null), dome = useRef<THREE.InstancedMesh>(null), bulbs = useRef<THREE.InstancedMesh>(null);
+  const hunter = useRef<THREE.InstancedMesh>(null), core = useRef<THREE.InstancedMesh>(null), swarm = useRef<THREE.InstancedMesh>(null), swarmCore = useRef<THREE.InstancedMesh>(null);
   const motherships = useRef<(THREE.Group | null)[]>([]);
+  const geo = alienGeometry(), halo = useMemo(() => makeHalo(140, 9), []);
+  const tint = useMemo(() => ({ saucer: new THREE.Color(palette.saucer), hunter: new THREE.Color(palette.hunter), swarmer: new THREE.Color(palette.swarmer), mothership: new THREE.Color(palette.mothership) }), [palette]);
   useFrame(() => {
-    let ns = 0, nh = 0, nw = 0, nm = 0;
+    let ns = 0, nb = 0, nh = 0, nw = 0, nm = 0, ng = 0;
     for (const a of sim.aliens) {
-      const bob = Math.sin(a.spin * .7) * .4 + 1.5;
+      const bob = Math.sin(a.spin * .7) * .4 + 1.5, yaw = -Math.atan2(a.vz, a.vx);
       if (a.kind === "saucer") {
         const tilt = a.held || a.flung > 0 ? a.spin : Math.hypot(a.vx, a.vz) * .015;
         tmp.position.set(a.x, bob, a.z); tmp.rotation.set(tilt, a.spin * .3, 0); tmp.scale.setScalar(1); tmp.updateMatrix();
-        disc.current?.setMatrixAt(ns, tmp.matrix);
-        tmp.position.y = bob + .35; tmp.updateMatrix(); dome.current?.setMatrixAt(ns, tmp.matrix);
-        tmp.position.y = bob; tmp.rotation.y = a.spin; tmp.updateMatrix(); lights.current?.setMatrixAt(ns, tmp.matrix);
-        ns++;
+        hull.current?.setMatrixAt(ns, tmp.matrix);
+        tmp.position.y = bob + .3; tmp.updateMatrix(); dome.current?.setMatrixAt(ns++, tmp.matrix);
+        // Rim lights chase around the hull.
+        for (let k = 0; k < RIM_BULBS && nb < 40 * RIM_BULBS; k++) {
+          const ang = k / RIM_BULBS * TAU + a.spin * .3;
+          tmp.position.set(a.x + Math.cos(ang) * 2.75, bob, a.z - Math.sin(ang) * 2.75); tmp.rotation.set(0, 0, 0);
+          tmp.scale.setScalar(.55 + .55 * Math.max(0, Math.cos(k / RIM_BULBS * TAU - a.spin * 2.5))); tmp.updateMatrix();
+          bulbs.current?.setMatrixAt(nb++, tmp.matrix);
+        }
       } else if (a.kind === "hunter") {
-        // Stretched crystal dart with spinning blades.
-        tmp.position.set(a.x, bob, a.z); tmp.rotation.set(0, -Math.atan2(a.vz, a.vx), 0); tmp.scale.set(1.7, .7, .8); tmp.updateMatrix();
+        tmp.position.set(a.x, bob, a.z); tmp.rotation.set(Math.sin(a.spin * .5) * .3, yaw, 0, "YXZ"); tmp.scale.setScalar(1); tmp.updateMatrix();
         hunter.current?.setMatrixAt(nh, tmp.matrix);
-        tmp.rotation.set(a.spin, -Math.atan2(a.vz, a.vx), 0, "YXZ"); tmp.scale.setScalar(1); tmp.updateMatrix(); blades.current?.setMatrixAt(nh++, tmp.matrix);
+        tmp.position.y = bob + .4; tmp.scale.setScalar(1 + Math.sin(a.spin * 2) * .25); tmp.updateMatrix(); core.current?.setMatrixAt(nh++, tmp.matrix);
       } else if (a.kind === "swarmer") {
-        tmp.position.set(a.x, 1.4, a.z); tmp.rotation.set(a.spin, a.spin * 1.3, 0); tmp.scale.setScalar(1); tmp.updateMatrix();
-        swarm.current?.setMatrixAt(nw++, tmp.matrix);
+        tmp.position.set(a.x, 1.4, a.z); tmp.rotation.set(a.spin, a.spin * 1.3, 0, "XYZ"); tmp.scale.setScalar(1); tmp.updateMatrix();
+        swarm.current?.setMatrixAt(nw, tmp.matrix);
+        tmp.scale.setScalar(.9 + Math.sin(a.t * 9) * .15); tmp.updateMatrix(); swarmCore.current?.setMatrixAt(nw++, tmp.matrix);
       } else {
         const g = motherships.current[nm++]; if (!g) continue;
         g.visible = true; g.position.set(a.x, 2.5 + Math.sin(a.spin) * .5, a.z); g.rotation.y = a.spin;
         g.scale.setScalar(a.hitCool > .45 ? 1.06 : 1); // flinch on heavy hits
+        continue; // has its own glow
       }
+      if (ng < 140) setHalo(halo, ng++, a.x, .6, a.z, tint[a.kind], a.kind === "swarmer" ? .45 : .6);
     }
-    for (const [m, n] of [[disc, ns], [dome, ns], [lights, ns], [hunter, nh], [blades, nh], [swarm, nw]] as const) if (m.current) { m.current.count = n; m.current.instanceMatrix.needsUpdate = true; }
+    for (const [m, n] of [[hull, ns], [dome, ns], [bulbs, nb], [hunter, nh], [core, nh], [swarm, nw], [swarmCore, nw]] as const) if (m.current) { m.current.count = n; m.current.instanceMatrix.needsUpdate = true; }
+    commitHalo(halo, ng);
     for (let i = nm; i < motherships.current.length; i++) { const g = motherships.current[i]; if (g) g.visible = false; }
   });
   return <>
-    <instancedMesh ref={disc} args={[undefined, undefined, 40]} frustumCulled={false}><cylinderGeometry args={[2.2, 2.6, .55, 28]} /><meshStandardMaterial color="#9aa3b8" metalness={.4} roughness={.3} /></instancedMesh>
-    <instancedMesh ref={dome} args={[undefined, undefined, 40]} frustumCulled={false}><sphereGeometry args={[1, 18, 10, 0, TAU, 0, Math.PI / 2]} /><meshStandardMaterial color={palette.saucer} emissive={palette.saucer} emissiveIntensity={1.4} transparent opacity={.85} toneMapped={false} /></instancedMesh>
-    <instancedMesh ref={lights} args={[undefined, undefined, 40]} frustumCulled={false}><torusGeometry args={[2.45, .13, 6, 18]} /><meshBasicMaterial color="#ff4fd8" toneMapped={false} /></instancedMesh>
-    <instancedMesh ref={hunter} args={[undefined, undefined, 40]} frustumCulled={false}><octahedronGeometry args={[1.4, 0]} /><meshStandardMaterial color="#2a1010" emissive={palette.hunter} emissiveIntensity={1.2} flatShading toneMapped={false} /></instancedMesh>
-    <instancedMesh ref={blades} args={[undefined, undefined, 40]} frustumCulled={false}><torusGeometry args={[1.5, .08, 4, 3]} /><meshBasicMaterial color="#ff8a9a" toneMapped={false} /></instancedMesh>
-    <instancedMesh ref={swarm} args={[undefined, undefined, 60]} frustumCulled={false}><tetrahedronGeometry args={[.9, 0]} /><meshStandardMaterial color="#5c4300" emissive={palette.swarmer} emissiveIntensity={1.6} flatShading toneMapped={false} /></instancedMesh>
+    <primitive object={halo} />
+    <instancedMesh ref={hull} args={[geo.saucer, undefined, 40]} frustumCulled={false}><meshStandardMaterial color="#b9c2da" metalness={.35} roughness={.35} /></instancedMesh>
+    <instancedMesh ref={dome} args={[undefined, undefined, 40]} frustumCulled={false}><sphereGeometry args={[1.15, 20, 10, 0, TAU, 0, Math.PI / 2]} /><meshStandardMaterial color={palette.saucer} emissive={palette.saucer} emissiveIntensity={1.3} roughness={.1} transparent opacity={.9} toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={bulbs} args={[undefined, undefined, 40 * RIM_BULBS]} frustumCulled={false}><sphereGeometry args={[.22, 8, 6]} /><meshBasicMaterial color={palette.alienShot} toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={hunter} args={[geo.hunter, undefined, 40]} frustumCulled={false}><meshStandardMaterial color="#4a4f63" emissive={palette.hunter} emissiveIntensity={.18} metalness={.35} roughness={.35} flatShading /></instancedMesh>
+    <instancedMesh ref={core} args={[undefined, undefined, 40]} frustumCulled={false}><octahedronGeometry args={[.6, 0]} /><meshBasicMaterial color={palette.hunter} toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={swarm} args={[geo.swarmer, undefined, 60]} frustumCulled={false}><meshStandardMaterial color="#3d4152" metalness={.4} roughness={.35} flatShading /></instancedMesh>
+    <instancedMesh ref={swarmCore} args={[undefined, undefined, 60]} frustumCulled={false}><icosahedronGeometry args={[.62, 1]} /><meshBasicMaterial color={palette.swarmer} toneMapped={false} /></instancedMesh>
     {[0, 1].map(i => <group key={i} ref={el => { motherships.current[i] = el; }} visible={false}>
       <mesh><cylinderGeometry args={[5.4, 6.6, 1.3, 40]} /><meshStandardMaterial color="#5d5a78" metalness={.4} roughness={.35} /></mesh>
       <mesh position={[0, -.9, 0]}><cylinderGeometry args={[3.4, 2.2, .8, 32]} /><meshStandardMaterial color="#3a3650" metalness={.4} roughness={.4} /></mesh>
