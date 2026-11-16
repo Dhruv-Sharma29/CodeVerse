@@ -286,3 +286,27 @@
 .orbit-float { font-family: var(--o-mono); font-size: 13px; font-weight: 700; text-shadow: 0 1px 4px #000, 0 0 8px rgba(0,0,0,.6); white-space: nowrap; pointer-events: none; }
 .orbit-dead small { display: block; font-size: 13px; font-family: var(--o-display); font-weight: 500; color: var(--o-muted); margin-top: 6px; }
 .orbit-pad-hint { font-size: 10px; color: var(--o-muted); text-align: right; max-width: 170px; }
+
+/* Leaderboards in the lobby: two short columns, stacked on phones. */
+.orbit-leaders { text-align: left; display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: 12px 28px; justify-content: center; font-size: 12px; color: var(--o-muted); animation: orbit-in .7s 1s both; }
+.orbit-leaders h2 { margin: 0 0 6px; font: 600 11px/1.2 var(--o-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--o-muted); }
+.orbit-leaders ol { margin: 0; padding: 0; list-style: none; counter-reset: rank; display: grid; gap: 3px; }
+.orbit-leaders li { display: flex; gap: 8px; counter-increment: rank; }
+.orbit-leaders li::before { content: counter(rank); width: 1.2em; color: var(--o-muted); font-family: var(--o-mono); }
+.orbit-leaders li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--o-ink); }
+.orbit-leaders li b { font: 600 12px var(--o-mono); color: var(--o-ink); }
+.orbit-leaders li.me span, .orbit-leaders li.me b { color: var(--o-cyan); }
+.orbit-leaders p { margin: 0; }
+@media (max-width: 520px) { .orbit-leaders { grid-template-columns: minmax(0, 1fr); } }
+
+/* Settings panel: a centred sheet over lobby and flight alike. */
+.orbit-tut.orbit-settings { position: fixed; z-index: 40; top: 50%; left: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); width: min(380px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow-y: auto; display: grid !important; }
+.orbit-choice { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+.orbit-choice button, .orbit-key { font: 600 11px var(--o-mono); color: var(--o-muted); background: transparent; border: 1px solid var(--o-line); border-radius: 8px; padding: 5px 8px; cursor: pointer; }
+.orbit-choice button[aria-checked="true"], .orbit-key[aria-pressed="true"] { color: var(--o-ink); border-color: var(--o-cyan); background: rgba(116, 226, 255, .12); }
+.orbit-key { min-width: 64px; color: var(--o-ink); }
+.orbit-keymap { display: grid; gap: 4px; }
+
+/* Hyperjump: world labels fade out while the ship is in the tunnel. */
+.orbit-canvas span { transition: opacity .3s; }
+.orbit-game.warping .orbit-canvas span { opacity: 0; }

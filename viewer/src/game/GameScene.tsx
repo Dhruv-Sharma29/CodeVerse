@@ -6,12 +6,15 @@ import { Sun, World } from "../scene/World";
 import { seedFor } from "../github/planetStyle";
 import { PORTAL_R, SUN_R, novaRadius, type HullId, type Input, type Planet, type Sim } from "./sim";
 import { HOLD, STORM } from "./events";
+import { QUALITY, type Palette } from "./settings";
 
 /** Mutable bridge between the React shell and the render loop (never triggers React renders). */
 export interface Control {
   sim: Sim; input: Input; zoom: number; warp: number; color: string; reduceMotion: boolean;
   /** Lobby backdrop: ship hidden, camera circles the sun. */
   attract?: boolean;
+  /** Hyperjumping out of this universe: the sim is frozen while the ship rides the tunnel. */
+  jumping?: boolean;
   /** Docked at this planet: the ship is parked on its surface, shielded, weapons off. */
   docked?: Planet | null;
   pointer: { x: number; y: number; mouse: boolean };
@@ -20,7 +23,7 @@ export interface Control {
 export interface Peer { id: number; name: string; color: string; hull: HullId }
 
 const TAU = Math.PI * 2;
-const tmp = new THREE.Object3D(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
+const tmp = new THREE.Object3D(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3(), chase = new THREE.Vector3(), aim = new THREE.Vector3();
 let glowTexture: THREE.Texture | null = null;
 function glow() {
   if (glowTexture) return glowTexture;
@@ -55,12 +58,15 @@ function CameraRig({ ctl }: { ctl: Control }) {
     // Follow-cam: while waiting to respawn, watch the pilot who shot you down.
     if (killer) look.current.lerp(hit.set(killer.x, 0, killer.z), Math.min(1, dt * 3));
     else look.current.lerp(hit.set(s.x + Math.cos(s.a) * lead + s.vx * .12, 0, s.z + Math.sin(s.a) * lead + s.vz * .12), Math.min(1, dt * 5));
-    const d = ctl.zoom * portrait;
+    const d = ctl.zoom * portrait, w = ctl.warp, ax = Math.cos(s.a), az = Math.sin(s.a);
+    // Hyperjump: the camera drops in behind the ship and looks down the tunnel (blend by warp).
+    hit.set(look.current.x, 64 * d, look.current.z + 46 * d).lerp(chase.set(s.x - ax * 17, 6, s.z - az * 17), w);
     // Lerp (not set) so leaving the lobby swoops down to the ship instead of cutting.
-    camera.position.lerp(hit.set(look.current.x, 64 * d, look.current.z + 46 * d), Math.min(1, dt * 4));
+    camera.position.lerp(hit, Math.min(1, dt * (4 + w * 4)));
     if (sim.shake > 0 && !ctl.reduceMotion) camera.position.add(hit.set((Math.random() - .5) * 2.6, (Math.random() - .5) * 1.4, (Math.random() - .5) * 2.6).multiplyScalar(sim.shake));
-    camera.lookAt(look.current);
-    const cam = camera as THREE.PerspectiveCamera, fov = 50 + ctl.warp * 75;
+    if (w > .02 && !ctl.reduceMotion) camera.position.add(hit.set(0, (Math.random() - .5) * .35 * w, 0)); // tunnel rumble
+    camera.lookAt(aim.copy(look.current).lerp(chase.set(s.x + ax * 30, 1, s.z + az * 30), w));
+    const cam = camera as THREE.PerspectiveCamera, fov = 50 + w * 38;
     if (Math.abs(cam.fov - fov) > .01) { cam.fov = fov; cam.updateProjectionMatrix(); }
     // Mouse aim: project the pointer onto the play plane.
     if (pointer.mouse) {
@@ -69,6 +75,38 @@ function CameraRig({ ctl }: { ctl: Control }) {
     }
   });
   return null;
+}
+
+/** Hyperjump tunnel: light streaks rushing past the ship inside a violet tube, faded in and out by `warp`. */
+const STREAKS = 260;
+function HyperTunnel({ ctl }: { ctl: Control }) {
+  const group = useRef<THREE.Group>(null), lines = useRef<THREE.InstancedMesh>(null), tube = useRef<THREE.MeshBasicMaterial>(null);
+  const streaks = useMemo(() => Array.from({ length: STREAKS }, (_, i) => {
+    const r = (k: number) => { const v = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
+    return { th: r(1) * TAU, rad: 4 + r(2) * 11, x: r(3) * 200 - 50, len: 3 + r(4) * 9 };
+  }), []);
+  useFrame((_, dt) => {
+    const g = group.current, m = lines.current, w = ctl.warp, s = ctl.sim.ship; if (!g || !m) return;
+    g.visible = w > .01; if (!g.visible) return;
+    g.position.set(s.x, 1, s.z); g.rotation.y = -s.a;
+    const speed = ctl.reduceMotion ? 40 : 320 * w;
+    streaks.forEach((k, i) => {
+      k.x -= speed * dt; if (k.x < -50) k.x += 200;
+      tmp.position.set(k.x, Math.sin(k.th) * k.rad, Math.cos(k.th) * k.rad); tmp.rotation.set(0, 0, 0);
+      tmp.scale.set(k.len * (.4 + w * 2.2), 1, 1); tmp.updateMatrix(); m.setMatrixAt(i, tmp.matrix);
+    });
+    m.instanceMatrix.needsUpdate = true;
+    (m.material as THREE.MeshBasicMaterial).opacity = Math.min(1, w * 1.5);
+    if (tube.current) tube.current.opacity = w * .8;
+  });
+  return <group ref={group} visible={false}>
+    <instancedMesh ref={lines} args={[undefined, undefined, STREAKS]} frustumCulled={false}>
+      <boxGeometry args={[1, .09, .09]} /><meshBasicMaterial color="#b9e6ff" {...additive} opacity={0} />
+    </instancedMesh>
+    <mesh rotation={[0, 0, Math.PI / 2]} position={[50, 0, 0]}>
+      <cylinderGeometry args={[17, 17, 220, 40, 1, true]} /><meshBasicMaterial ref={tube} color="#1c1450" transparent opacity={0} depthWrite={false} side={THREE.BackSide} />
+    </mesh>
+  </group>;
 }
 
 function Nebula({ seed }: { seed: number }) {
@@ -90,9 +128,8 @@ function OrbitLines({ sim }: { sim: Sim }) {
   return <group>{lines.map((l, i) => <primitive key={i} object={l} />)}</group>;
 }
 
-function AsteroidBelt({ sim }: { sim: Sim }) {
+function AsteroidBelt({ sim, count }: { sim: Sim; count: number }) {
   const ref = useRef<THREE.InstancedMesh>(null), group = useRef<THREE.Group>(null);
-  const count = 380;
   const radius = sim.planets.length > 4 ? (sim.planets[2].orbit + sim.planets[3].orbit) / 2 : sim.edge - 14;
   // Place rocks once per universe. (This used to run in an inline ref callback, which re-ran on
   // every re-render and re-scattered the whole belt: the flicker.) Seeded so all pilots match.
@@ -108,7 +145,7 @@ function AsteroidBelt({ sim }: { sim: Sim }) {
     }
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
-  }, [sim, radius]);
+  }, [sim, radius, count]);
   useFrame((_, dt) => { if (group.current) group.current.rotation.y += dt * .02; });
   return <group ref={group}><instancedMesh ref={ref} args={[undefined, undefined, count]} frustumCulled={false}>
     <dodecahedronGeometry args={[1, 0]} /><meshStandardMaterial color="#8a7d70" roughness={1} flatShading />
@@ -398,7 +435,7 @@ function Pings({ sim }: { sim: Sim }) {
   </group>)}</>;
 }
 
-function Aliens({ sim }: { sim: Sim }) {
+function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
   const disc = useRef<THREE.InstancedMesh>(null), dome = useRef<THREE.InstancedMesh>(null), lights = useRef<THREE.InstancedMesh>(null);
   const hunter = useRef<THREE.InstancedMesh>(null), blades = useRef<THREE.InstancedMesh>(null), swarm = useRef<THREE.InstancedMesh>(null);
   const motherships = useRef<(THREE.Group | null)[]>([]);
@@ -432,27 +469,27 @@ function Aliens({ sim }: { sim: Sim }) {
   });
   return <>
     <instancedMesh ref={disc} args={[undefined, undefined, 40]} frustumCulled={false}><cylinderGeometry args={[2.2, 2.6, .55, 28]} /><meshStandardMaterial color="#9aa3b8" metalness={.85} roughness={.25} /></instancedMesh>
-    <instancedMesh ref={dome} args={[undefined, undefined, 40]} frustumCulled={false}><sphereGeometry args={[1, 18, 10, 0, TAU, 0, Math.PI / 2]} /><meshStandardMaterial color="#7dffb4" emissive="#2fff8a" emissiveIntensity={1.4} transparent opacity={.85} toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={dome} args={[undefined, undefined, 40]} frustumCulled={false}><sphereGeometry args={[1, 18, 10, 0, TAU, 0, Math.PI / 2]} /><meshStandardMaterial color={palette.saucer} emissive={palette.saucer} emissiveIntensity={1.4} transparent opacity={.85} toneMapped={false} /></instancedMesh>
     <instancedMesh ref={lights} args={[undefined, undefined, 40]} frustumCulled={false}><torusGeometry args={[2.45, .13, 6, 18]} /><meshBasicMaterial color="#ff4fd8" toneMapped={false} /></instancedMesh>
-    <instancedMesh ref={hunter} args={[undefined, undefined, 40]} frustumCulled={false}><octahedronGeometry args={[1.4, 0]} /><meshStandardMaterial color="#5a0f1c" emissive="#ff3355" emissiveIntensity={1.2} flatShading toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={hunter} args={[undefined, undefined, 40]} frustumCulled={false}><octahedronGeometry args={[1.4, 0]} /><meshStandardMaterial color="#2a1010" emissive={palette.hunter} emissiveIntensity={1.2} flatShading toneMapped={false} /></instancedMesh>
     <instancedMesh ref={blades} args={[undefined, undefined, 40]} frustumCulled={false}><torusGeometry args={[1.5, .08, 4, 3]} /><meshBasicMaterial color="#ff8a9a" toneMapped={false} /></instancedMesh>
-    <instancedMesh ref={swarm} args={[undefined, undefined, 60]} frustumCulled={false}><tetrahedronGeometry args={[.9, 0]} /><meshStandardMaterial color="#5c4300" emissive="#ffc23d" emissiveIntensity={1.6} flatShading toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={swarm} args={[undefined, undefined, 60]} frustumCulled={false}><tetrahedronGeometry args={[.9, 0]} /><meshStandardMaterial color="#5c4300" emissive={palette.swarmer} emissiveIntensity={1.6} flatShading toneMapped={false} /></instancedMesh>
     {[0, 1].map(i => <group key={i} ref={el => { motherships.current[i] = el; }} visible={false}>
       <mesh><cylinderGeometry args={[5.4, 6.6, 1.3, 40]} /><meshStandardMaterial color="#5d5a78" metalness={.85} roughness={.3} /></mesh>
       <mesh position={[0, -.9, 0]}><cylinderGeometry args={[3.4, 2.2, .8, 32]} /><meshStandardMaterial color="#3a3650" metalness={.8} roughness={.35} /></mesh>
-      <mesh position={[0, .6, 0]}><sphereGeometry args={[3, 24, 14, 0, TAU, 0, Math.PI / 2]} /><meshStandardMaterial color="#d36bff" emissive="#a13dff" emissiveIntensity={1.5} transparent opacity={.85} toneMapped={false} /></mesh>
+      <mesh position={[0, .6, 0]}><sphereGeometry args={[3, 24, 14, 0, TAU, 0, Math.PI / 2]} /><meshStandardMaterial color={palette.mothership} emissive={palette.mothership} emissiveIntensity={1.5} transparent opacity={.85} toneMapped={false} /></mesh>
       <mesh><torusGeometry args={[6.4, .2, 8, 48]} /><meshBasicMaterial color="#ff4fd8" toneMapped={false} /></mesh>
       {Array.from({ length: 8 }, (_, k) => <mesh key={k} position={[Math.cos(k / 8 * TAU) * 7.2, 0, Math.sin(k / 8 * TAU) * 7.2]} rotation={[0, -k / 8 * TAU, 0]}>
         <boxGeometry args={[1.8, .35, .5]} /><meshStandardMaterial color="#8c86b3" emissive="#ff4fd8" emissiveIntensity={.5} metalness={.7} roughness={.3} />
       </mesh>)}
-      <sprite position={[0, -1.5, 0]} scale={[22, 22, 1]}><spriteMaterial map={glow()} color="#a13dff" opacity={.55} {...additive} /></sprite>
+      <sprite position={[0, -1.5, 0]} scale={[22, 22, 1]}><spriteMaterial map={glow()} color={palette.mothership} opacity={.55} {...additive} /></sprite>
     </group>)}
   </>;
 }
 
-function Bullets({ sim }: { sim: Sim }) {
+function Bullets({ sim, palette }: { sim: Sim; palette: Palette }) {
   const ref = useRef<THREE.InstancedMesh>(null);
-  const colors = useMemo(() => ({ me: new THREE.Color("#7cf2ff").multiplyScalar(2), ally: new THREE.Color("#b6ff8a").multiplyScalar(2), alien: new THREE.Color("#ff4fd8").multiplyScalar(2) }), []);
+  const colors = useMemo(() => ({ me: new THREE.Color("#7cf2ff").multiplyScalar(2), ally: new THREE.Color(palette.ally).multiplyScalar(2), alien: new THREE.Color(palette.alienShot).multiplyScalar(2) }), [palette]);
   useFrame(() => {
     const m = ref.current; if (!m) return;
     let n = 0;
@@ -541,7 +578,7 @@ function Beam({ sim }: { sim: Sim }) {
   </group>;
 }
 
-export const GameScene = memo(function GameScene({ ctl, peers, color, hull }: { ctl: Control; peers: Peer[]; color: string; hull: HullId }) {
+export const GameScene = memo(function GameScene({ ctl, peers, color, hull, palette, quality }: { ctl: Control; peers: Peer[]; color: string; hull: HullId; palette: Palette; quality: "high" | "low" }) {
   const sim = ctl.sim;
   const seed = useMemo(() => seedFor(sim.universe.room), [sim]);
   return <>
@@ -549,12 +586,12 @@ export const GameScene = memo(function GameScene({ ctl, peers, color, hull }: { 
     <ambientLight intensity={.45} color="#8fa0d8" />
     <pointLight position={[0, 4, 0]} intensity={3.2} decay={0} color="#ffe2b0" />
     <directionalLight position={[20, 60, 40]} intensity={.6} />
-    <Stars radius={1100} depth={400} count={9000} factor={9} fade speed={.6} />
+    <Stars radius={1100} depth={400} count={QUALITY[quality].stars} factor={9} fade speed={.6} />
     <Nebula seed={seed} />
     <group scale={SUN_R / 1.95}><Sun /></group>
     <Html center position={[0, SUN_R + 4, 0]} zIndexRange={[5, 0]} pointerEvents="none"><span className="orbit-label sun">{sim.universe.title}</span></Html>
     <OrbitLines sim={sim} />
-    <AsteroidBelt sim={sim} />
+    <AsteroidBelt sim={sim} count={QUALITY[quality].belt} />
     <Planets sim={sim} />
     <Satellites sim={sim} />
     <Portal sim={sim} />
@@ -565,12 +602,13 @@ export const GameScene = memo(function GameScene({ ctl, peers, color, hull }: { 
     <Floats sim={sim} />
     <LocalShip ctl={ctl} color={color} hull={hull} />
     {peers.map(p => <RemoteShip key={p.id} sim={sim} peer={p} />)}
-    <Aliens sim={sim} />
-    <Bullets sim={sim} />
+    <Aliens sim={sim} palette={palette} />
+    <Bullets sim={sim} palette={palette} />
     <Beam sim={sim} />
     <Particles sim={sim} />
     <Flashes sim={sim} />
     <Novas sim={sim} />
+    <HyperTunnel ctl={ctl} />
     <CameraRig ctl={ctl} />
     <Driver ctl={ctl} />
   </>;

@@ -59,12 +59,12 @@ between retries; the test written for it caught that before it shipped.
 
 ## The crossed-swords symbol rendered as an "x"
 
-**What happened.** `⚔` without an emoji selector rendered in the game font as a plain "x", so the
+**What happened.** The crossed-swords character (U+2694) without an emoji selector rendered in the game font as a plain "x", so the
 Dogfights button read "x Dogfights on" and pilots looked like "x Ada".
 
 **How it was found.** Taking the README screenshots.
 
-**What changed.** First the symbol was written as `⚔️` (with U+FE0F). Later the game dropped emoji altogether and uses plain words ("Wins", "bounty", "Gate contested").
+**What changed.** First the symbol was written with the emoji selector U+FE0F. Later the game dropped emoji altogether and uses plain words ("Wins", "bounty", "Gate contested").
 
 ## Dogfights stopped being optional
 

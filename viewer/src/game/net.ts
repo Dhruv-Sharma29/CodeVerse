@@ -10,6 +10,13 @@ export const WAKE_HINT_MS = 3_500;
 
 const relayUrl = () => import.meta.env?.VITE_RELAY_URL as string | undefined;
 
+/** Leaderboards live on the relay: same origin locally, the hosted relay in production. */
+export function boardUrl(room: string, relay = relayUrl()) {
+  const base = relay ? relay.replace(/^ws/, "http").replace(/\/api\/play$/, "") : "";
+  return `${base}/board?room=${encodeURIComponent(room)}`;
+}
+export interface Leader { name: string; score: number }
+
 export function connectNet(onMessage: (m: NetMessage) => void, onStatus: (s: NetStatus) => void,
   { url = relayUrl() || `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/play`, hosted = !!relayUrl() } = {}) {
   let ws: WebSocket | null = null, closed = false, retry = 0, join: NetMessage | null = null, everOnline = false, wakingShown = false;

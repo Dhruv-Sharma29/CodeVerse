@@ -59,6 +59,9 @@ service.
 |---|---|
 | `RELAY_ORIGINS` | Comma-separated page origins allowed to connect (`https://codeverse-orbit.vercel.app`). Empty allows any origin. |
 | `PORT` | Set by Render |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Leaderboard store (Upstash Redis, free tier). Without them the boards are kept in memory and reset whenever the relay restarts or sleeps. |
+| `RENDER_EXTERNAL_URL` | Set by Render; the relay pings itself here (see below) |
+| `KEEP_WARM_HOURS` | UTC hours for self-pings, inclusive (default `2-18`) |
 
 **Free plan behaviour:** the service sleeps after about 15 minutes without traffic and takes up to a
 minute to wake. Two things handle that:
@@ -69,7 +72,11 @@ minute to wake. Two things handle that:
   use ~730–744 and leave almost nothing for others, and Render suspends free services once the hours
   run out. Change the `cron` line to widen or narrow the window. GitHub can delay scheduled runs at
   busy times and pauses schedules after 60 days without repository activity. It can also be run by
-  hand from the Actions tab.
+  hand from the Actions tab. In practice GitHub ran it once in its first eight hours, so it can't be
+  relied on alone.
+- **Self-ping.** Once awake, the relay requests its own public `/health` every 10 minutes while the
+  UTC hour is inside `KEEP_WARM_HOURS` (`server/keepWarm.mjs`). So after the first visitor or
+  scheduled ping of the day, it stays awake until 19:00 UTC, then sleeps overnight to save hours.
 - **Waking in the game.** On page load the game sends a request to the relay's `/health` to start it
   waking. If it isn't connected within 3.5 seconds, the lobby and HUD say the server is waking, the
   client retries every 3 seconds for up to 90, and players can launch and play solo meanwhile.

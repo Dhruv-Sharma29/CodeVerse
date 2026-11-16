@@ -88,14 +88,32 @@ score and a dogfight win. The respawn shield blocks damage for a few seconds aft
 ## Stats
 
 The standalone relay serves `GET /stats`: aggregate, anonymous counters (connections, sessions,
-joins, joins with company, hyperjumps per session, peak pilots, busiest universe). See
-[06](06-deployment.md#measuring-it).
+joins, joins with company, hyperjumps per session, peak pilots, busiest universe, pilots flagged by
+the checks below) and which leaderboard store is in use. See [06](06-deployment.md#measuring-it).
+
+## Leaderboards
+
+`GET /board?room=<universe>` returns `{ day, room, all, daily }`: the all-time top 10 (best run)
+and today's top 10 in that universe, as `{ name, score }`. The relay records runs itself from the
+`state` messages it already relays (`server/board.mjs`). Storage is Upstash Redis when
+`UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set, otherwise memory (lost on restart).
 
 ## Trust model
 
 Clients are not trusted to be honest about gameplay: a modified client could report any position
-or throw any planet in its room. Because scores are not stored or ranked, the relay only enforces
-shape and rate limits. Persistent leaderboards would need server-side simulation or verification.
+or throw any planet in its room. For the leaderboards the relay checks every `state` message
+(`CHECK` in `server/multiplayer.mjs`):
+
+- **Score growth:** a budget of 80 points a second, with bursts up to 4,000 (a mothership, a
+  daily reward). A larger jump fails.
+- **Speed:** above 130 fails (boost tops out near 95).
+- **Hull:** above the hull's maximum fails.
+
+A pilot who fails is still relayed but is left off the boards for the rest of the connection.
+These checks stop typed-in scores and obvious speed or health hacks. They do not stop a client
+that ignores hits (damage is decided by the victim's client) or that earns points slightly faster
+than possible. That would need the server to run the simulation. The limits are estimates; the
+`flagged` count in `/stats` shows whether they catch honest pilots.
 
 ## Scaling
 

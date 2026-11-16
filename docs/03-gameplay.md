@@ -94,6 +94,12 @@ edge points to it with the distance, and the radar pins it to its rim.
 Fly into the gate to open the hyperjump dialog: type any GitHub username or organization, pick a
 universe where other pilots are flying, or choose a recent or suggested one.
 
+The jump itself takes two seconds. The old universe freezes, the camera drops in behind the ship and
+it flies down a tunnel of light streaks; then it glides out into the new universe while the tunnel
+fades and the camera rises back to its usual view. If the new universe takes longer than two seconds
+to load, the ship stays in the tunnel until it is ready. If loading fails, the ship comes back out
+of the gate it entered.
+
 ## Multiplayer
 
 Everyone in the same universe flies together. Ships, shots, thrown planets and supernovas are
@@ -155,6 +161,33 @@ with no server state.
 | **Bounty** | Whenever two or more pilots are in a universe | The clear top scorer (at least 1,000) carries the bounty: BOUNTY on their name tag and on the pilots board. Shooting them down pays +500 on top of the usual +300. |
 | **Hold the gate** | Always | A gold ring of radius 22 around the hyperjump gate. Alone inside it you score +15 per second; any other live pilot inside makes it contested and nobody scores. |
 | **Daily challenge** | Each UTC day | A well-known GitHub account and a goal (collect commits or shoot down aliens) picked from the date, the same for everyone. The lobby offers it, the HUD tracks progress from when you arrive, and finishing pays +1,000 once per day. |
+
+## Leaderboards
+
+The lobby shows two boards, top five each:
+
+- **All-time best:** the most points earned in one run (one connection, across hyperjumps).
+- **Today in the daily challenge's universe:** the most points earned inside that universe today (UTC).
+
+Nobody submits a score. The relay records a run when the pilot leaves a universe or starts a new
+game, and only if the relay's checks passed for the whole connection (see
+[05](05-multiplayer.md#trust-model)). Pilots using the default name "Pilot" are not ranked.
+
+## Settings
+
+**Settings** in the lobby or the HUD:
+
+- **Graphics:** Auto, High or Low. Low renders at 1x pixel density without antialiasing, with fewer
+  background stars and belt asteroids. Auto picks Low on phones and tablets with four or fewer CPU
+  cores or 4 GB or less memory.
+- **Colours:** Standard or Colour-blind. The colour-blind palette replaces red-against-green with
+  sky blue, orange, yellow and purple (the Okabe-Ito colours) for aliens, bullets, the radar and the
+  good and bad colours in the HUD. Alien kinds also differ by shape.
+- **Keys (keyboards):** every action can be rebound. A key already in use swaps places with the old
+  one. Arrow keys, 1 to 6 for emotes and Esc always work and can't be rebound. The tutorial and the
+  Controls sheet show your bindings.
+
+Settings are saved in the browser.
 
 ## The creator's comet
 

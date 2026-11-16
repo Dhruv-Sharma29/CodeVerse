@@ -13,7 +13,8 @@ at. Looking is passive and solo. The same real data gets more interesting when i
 fly through, where you can grab a repository and throw it, and where other people are flying too.
 
 **Status: live and multiplayer, on free hosting.** **[Play it at codeverse-orbit.vercel.app](https://codeverse-orbit.vercel.app).**
-Planet docking with contributor hyperjumps, meteor storms, bounties, a hold-the-gate zone and a
+All-time and daily leaderboards checked by the relay, settings for graphics, colour-blind colours and keys, a two-second hyperjump tunnel,
+planet docking with contributor hyperjumps, meteor storms, bounties, a hold-the-gate zone and a
 daily challenge, planets that behave by language with issue asteroids and star shields, three ships, four alien types with a boss every fifth wave, a gravity beam, commit-charged
 supernovas, dogfights between every pilot with a kill feed, a pilots board, emotes, pings,
 invite links, tilt-to-steer on phones, gamepad support, generated music, damage numbers, full screen on laptops and phones, a hyperjump gate that moves,
@@ -21,7 +22,7 @@ and a comet that links to the creator. The website is on Vercel; the multiplayer
 kept warm during waking hours in India. The original explorer is still at
 [`/explorer/`](https://codeverse-orbit.vercel.app/explorer/).
 
-**98 tests in `viewer/`, no network calls.** New here? **[`docs/01-getting-started.md`](docs/01-getting-started.md)**.
+**105 tests in `viewer/`, no network calls.** New here? **[`docs/01-getting-started.md`](docs/01-getting-started.md)**.
 Full design record in [`docs/`](docs/README.md); everything the build got wrong on the way is in
 [`docs/10-implementation-notes.md`](docs/10-implementation-notes.md); everything *not* done, and
 whether that was a constraint or a choice, is in [`REMAINING.md`](REMAINING.md).
@@ -29,7 +30,7 @@ whether that was a constraint or a choice, is in [`REMAINING.md`](REMAINING.md).
 ```console
 $ cd viewer && npm install --legacy-peer-deps
 $ npm run dev                                   # game at :5173, explorer at :5173/explorer/, relay included
-$ npm test                                      # 98 tests, no network
+$ npm test                                      # 105 tests, no network
 $ npm run build && npm start                    # production server with the relay on :4173
 $ npm run relay                                 # the relay on its own (what Render runs)
 $ npm run check:relay -- https://codeverse-relay.onrender.com   # test a deployed relay end to end
