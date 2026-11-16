@@ -57,7 +57,7 @@ service.
 
 | Relay variable | Purpose |
 |---|---|
-| `RELAY_ORIGINS` | Comma-separated page origins allowed to connect (`https://codeverse-orbit.vercel.app`). Empty allows any origin. |
+| `RELAY_ORIGINS` | Comma-separated page origins allowed to connect (`https://orbit29.vercel.app,https://codeverse-orbit.vercel.app`). Empty allows any origin. |
 | `PORT` | Set by Render |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Leaderboard store (Upstash Redis, free tier). Without them the boards are kept in memory and reset whenever the relay restarts or sleeps. |
 | `RENDER_EXTERNAL_URL` | Set by Render; the relay pings itself here (see below) |

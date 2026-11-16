@@ -20,7 +20,7 @@ services:
         - viewer/package-lock.json
     envVars:
       - key: RELAY_ORIGINS
-        value: https://codeverse-orbit.vercel.app
+        value: https://orbit29.vercel.app,https://codeverse-orbit.vercel.app
       - key: NODE_VERSION
         value: "22"
       # Leaderboard store (Upstash Redis, free tier). Without these the boards live in memory and
