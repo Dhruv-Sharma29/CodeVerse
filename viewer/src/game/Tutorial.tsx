@@ -56,9 +56,9 @@ export function KeySheet({ touch, keys = DEFAULT_KEYS, music, onMusic, onReplay,
 }
 
 /** Settings: graphics quality, colour palette and (on keyboards) key bindings. */
-export function SettingsPanel({ touch, quality, resolved, onQuality, palette, onPalette, keys, onKeys, onClose }: {
+export function SettingsPanel({ touch, quality, resolved, onQuality, palette, onPalette, keys, onKeys, onControls, onClose }: {
   touch: boolean; quality: QualitySetting; resolved: "high" | "low"; onQuality: (q: QualitySetting) => void;
-  palette: PaletteId; onPalette: (p: PaletteId) => void; keys: KeyMap; onKeys: (k: KeyMap) => void; onClose: () => void;
+  palette: PaletteId; onPalette: (p: PaletteId) => void; keys: KeyMap; onKeys: (k: KeyMap) => void; onControls: () => void; onClose: () => void;
 }) {
   const [listening, setListening] = useState<Action | null>(null);
   useEffect(() => {
@@ -79,6 +79,7 @@ export function SettingsPanel({ touch, quality, resolved, onQuality, palette, on
     <div className="orbit-tut-head"><span className="orbit-eyebrow">SETTINGS</span><button type="button" className="orbit-link" onClick={onClose}>Close</button></div>
     <div className="orbit-sheet-row"><span>Graphics</span>{choice(quality, onQuality, [["auto", `Auto (${resolved})`], ["high", "High"], ["low", "Low"]])}</div>
     <div className="orbit-sheet-row"><span>Colours</span>{choice(palette, onPalette, [["standard", "Standard"], ["colorblind", "Colour-blind"]])}</div>
+    <div className="orbit-sheet-row"><span>Controls</span><button type="button" className="orbit-link" onClick={onControls}>Show all controls{touch ? "" : ` (${keyLabel(keys.controls)})`}</button></div>
     {!touch && <>
       <div className="orbit-sheet-row"><span>Keys</span><button type="button" className="orbit-link" onClick={() => onKeys({ ...DEFAULT_KEYS })}>Reset to defaults</button></div>
       <div className="orbit-keymap">

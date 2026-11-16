@@ -595,7 +595,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         <GameScene ctl={c} peers={peers} color={color} hull={hull} palette={palette} quality={quality} />
       </Canvas>
     </div>}
-    {settings && <SettingsPanel touch={touch} quality={qualitySetting} resolved={quality} onQuality={setQualitySetting} palette={paletteId} onPalette={setPaletteId} keys={keys} onKeys={setKeys} onClose={() => setSettings(false)} />}
+    {settings && <SettingsPanel touch={touch} quality={qualitySetting} resolved={quality} onQuality={setQualitySetting} palette={paletteId} onPalette={setPaletteId} keys={keys} onKeys={setKeys} onControls={() => { setSettings(false); setSheet(true); }} onClose={() => setSettings(false)} />}
     {phase === "lobby" ? lobby : <>
 
     <header className="orbit-top">
@@ -610,7 +610,6 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         <button className="orbit-ghost" onClick={() => { const m = !muted; setMuted(m); store.set("muted", m); }} aria-pressed={!muted}>{muted ? "Sound off" : "Sound on"}</button>
         {/* Keyboards open the pilots board with Tab; touch has no Tab key. */}
         {touch && <button className="orbit-ghost" onClick={() => setBoard(v => !v)} aria-pressed={board}>Pilots</button>}
-        <button className="orbit-ghost" onClick={() => setSheet(v => !v)} aria-pressed={sheet}>Controls</button>
         <button className="orbit-ghost" onClick={() => setSettings(v => !v)} aria-pressed={settings}>Settings</button>
         <button className="orbit-ghost" onClick={onExit}>Leave</button>
       </div>
