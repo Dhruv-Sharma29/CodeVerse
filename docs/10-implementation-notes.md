@@ -64,7 +64,7 @@ Dogfights button read "x Dogfights on" and pilots looked like "x Ada".
 
 **How it was found.** Taking the README screenshots.
 
-**What changed.** The symbol is written as `⚔️` (with U+FE0F) everywhere in the game.
+**What changed.** First the symbol was written as `⚔️` (with U+FE0F). Later the game dropped emoji altogether and uses plain words ("Wins", "bounty", "Gate contested").
 
 ## Dogfights stopped being optional
 

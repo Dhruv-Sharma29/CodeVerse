@@ -203,7 +203,7 @@ function Comet({ sim }: { sim: Sim }) {
     {Array.from({ length: 12 }, (_, i) => { const k = (i + 1) / 12; return <sprite key={i} position={[-k * 30, 0, 0]} scale={[8 + k * 10, 4 + k * 9, 1]}>
       <spriteMaterial map={glow()} color={i < 4 ? "#e8fbff" : "#7fd8ff"} opacity={.42 * (1 - k) + .04} {...additive} />
     </sprite>; })}
-    <Html center position={[0, 4.2, 0]} zIndexRange={[5, 0]} pointerEvents="none"><span className="orbit-label comet">☄ @Dhruv-Sharma29</span></Html>
+    <Html center position={[0, 4.2, 0]} zIndexRange={[5, 0]} pointerEvents="none"><span className="orbit-label comet">@Dhruv-Sharma29</span></Html>
   </group>;
 }
 
@@ -291,7 +291,7 @@ function RemoteShip({ sim, peer }: { sim: Sim; peer: Peer }) {
     g.current.visible = r.hp > 0;
     g.current.position.set(r.x, 1.2, r.z); g.current.rotation.y = -r.a;
     showEmote(bubble.current, r.emote, r.emoteUntil);
-    if (tag.current) { const label = sim.bountyId === peer.id ? `🎯 ${peer.name}` : peer.name; if (tag.current.textContent !== label) tag.current.textContent = label; }
+    if (tag.current) { const label = sim.bountyId === peer.id ? `${peer.name} · BOUNTY` : peer.name; if (tag.current.textContent !== label) tag.current.textContent = label; }
   });
   return <group ref={g}><ShipModel color={peer.color} hull={peer.hull} />
     <Html center position={[0, 3.4, 0]} zIndexRange={[6, 0]} pointerEvents="none"><div className="orbit-shiplabel">

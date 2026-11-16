@@ -120,12 +120,12 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       else if (e.type === "pvpHit") { tone(1900, .05, "square", .03, .6); tone(2600, .03, "sine", .02); }
       else if (e.type === "kill") { sfx.kill(); if (e.kind === "mothership") toast(`Mothership destroyed! +${e.points}`, "good"); }
       else if (e.type === "storm") {
-        if (e.phase === "warning") { sfx.wave(); toast("☄ Meteor storm in 10 seconds. Shoot or dodge the meteors!", "bad"); }
-        else if (e.phase === "active") toast(`☄ Meteor storm! +${STORM.points} per meteor shot, ${STORM.damage} hull per hit`, "bad");
+        if (e.phase === "warning") { sfx.wave(); toast("Meteor storm in 10 seconds. Shoot or dodge the meteors!", "bad"); }
+        else if (e.phase === "active") toast(`Meteor storm! +${STORM.points} per meteor shot, ${STORM.damage} hull per hit`, "bad");
         else toast("The meteor storm has passed.", "good");
       } else if (e.type === "meteor") tone(520, .12, "triangle", .04, .5);
-      else if (e.type === "issue") { tone(990, .07, "triangle", .035); toast(`✅ Closed an issue on ${e.planet.repo.name} +30`, "good"); }
-      else if (e.type === "star") { sfx.commit(); toast(`★ Star shield from ${e.planet.repo.name}: shielded and repaired`, "good"); }
+      else if (e.type === "issue") { tone(990, .07, "triangle", .035); toast(`Closed an issue on ${e.planet.repo.name} +30`, "good"); }
+      else if (e.type === "star") { sfx.commit(); toast(`Star shield from ${e.planet.repo.name}: shielded and repaired`, "good"); }
       else if (e.type === "hurt") { sfx.hurt(); pulse("hurt"); }
       else if (e.type === "dead") {
         net.current?.send({ t: "boom", x: sim.ship.x, z: sim.ship.z });
@@ -136,7 +136,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       else if (e.type === "grab") sfx.grab();
       else if (e.type === "fling") sfx.fling();
       else if (e.type === "gate") toast("The hyperjump gate moved. Follow the violet arrow.");
-      else if (e.type === "comet") { sfx.commit(); setTimeout(sfx.commit, 140); toast(`☄ You caught ${CREATOR.login}'s comet! +250 and nova charge`, "good"); }
+      else if (e.type === "comet") { sfx.commit(); setTimeout(sfx.commit, 140); toast(`You caught ${CREATOR.login}'s comet! +250 and nova charge`, "good"); }
       else if (e.type === "boom") net.current?.send({ t: "boom", x: e.x, z: e.z });
       else if (e.type === "nova") { sfx.nova(); pulse("nova"); net.current?.send({ t: "nova", x: e.x, z: e.z }); }
       else if (e.type === "portal") { setJumpTarget(""); setJumpOpen(true); net.current?.send({ t: "rooms" }); }
@@ -164,7 +164,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       pointer: { x: 0, y: 0, mouse: false },
       onStep: dt => {
         if (c.attract) { c.sim.waveTimer = 5; c.input.fire = c.input.grab = false; } // lobby: no aliens, no shooting
-        if (c.docked) { c.input.fire = c.input.grab = c.input.boost = false; c.input.move = { x: 0, z: 0 }; }
+        if (c.docked) { c.input.fire = c.input.grab = c.input.boost = c.input.nova = false; c.input.move = { x: 0, z: 0 }; } // docked: no bullets, no nova
         events.length = 0;
         step(c.sim, c.input, dt, events);
         if (c.docked) {
@@ -215,12 +215,12 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       else if (m.t === "killed") {
         // Kill feed for everyone; the winner's client credits itself.
         const by = Number(m.by), who = (pid: number) => sim.remotes.get(pid)?.name ?? "A pilot";
-        const bounty = sim.bountyId === id, extra = bounty ? " and claimed the 🎯 bounty" : "";
+        const bounty = sim.bountyId === id, extra = bounty ? " and claimed the bounty" : "";
         if (by === myId.current) {
           const pts = PVP.killScore + (bounty ? BOUNTY.bonus : 0);
-          sim.pvpKills++; sim.score += pts; sfx.kill(); toast(`⚔️ You shot down ${who(id)}${extra}! +${pts}`, "good");
-        } else if (id === myId.current) toast(`⚔️ ${who(by)} shot you down${bounty ? " and took your 🎯 bounty" : ""}`, "bad");
-        else toast(`⚔️ ${who(by)} shot down ${who(id)}${extra}`);
+          sim.pvpKills++; sim.score += pts; sfx.kill(); toast(`You shot down ${who(id)}${extra}! +${pts}`, "good");
+        } else if (id === myId.current) toast(`${who(by)} shot you down${bounty ? " and took your bounty" : ""}`, "bad");
+        else toast(`${who(by)} shot down ${who(id)}${extra}`);
       } else if (m.t === "ping") {
         const r = sim.remotes.get(id);
         addPing(sim, Number(m.x), Number(m.z), { owner: id, name: r?.name ?? "A pilot", color: r?.color ?? "#ffffff" }); sfx.ping();
@@ -281,7 +281,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         if (!dailyBase.current || dailyBase.current.room !== s.universe.room) dailyBase.current = { room: s.universe.room, commits: s.commits, kills: s.kills };
         const doneToday = store.get(`daily:${today.day}`, false);
         const got = today.goal.kind === "commits" ? s.commits - dailyBase.current.commits : s.kills - dailyBase.current.kills;
-        if (!doneToday && got >= today.goal.n) { store.set(`daily:${today.day}`, true); s.score += DAILY_REWARD; sfx.wave(); toast(`📅 Daily challenge complete! +${DAILY_REWARD}`, "good"); }
+        if (!doneToday && got >= today.goal.n) { store.set(`daily:${today.day}`, true); s.score += DAILY_REWARD; sfx.wave(); toast(`Daily challenge complete! +${DAILY_REWARD}`, "good"); }
         daily = { done: Math.min(today.goal.n, got), n: today.goal.n, text: today.goal.text, complete: doneToday || got >= today.goal.n };
       }
       setHud({ board: rows, holding: s.holding, bounty: s.bountyId, storm: s.stormPhase, meteors: s.meteors.length, daily, boss: boss ? { hp: boss.hp, max: boss.max } : null, score: s.score, hp: s.ship.hp / HULLS[s.ship.hull].hp * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, comet: s.nearComet, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
@@ -348,7 +348,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   useEffect(() => {
     if (phase !== "play" || !("getGamepads" in navigator)) return;
     let raf = 0, prev: PadState | null = null, inUse = false;
-    const onConnect = (e: GamepadEvent) => toast(`🎮 ${e.gamepad.id.split("(")[0].trim() || "Gamepad"} connected: left stick flies, right stick aims, RT fires`, "good");
+    const onConnect = (e: GamepadEvent) => toast(`${e.gamepad.id.split("(")[0].trim() || "Gamepad"} connected: left stick flies, right stick aims, RT fires`, "good");
     addEventListener("gamepadconnected", onConnect);
     const loop = () => {
       raf = requestAnimationFrame(loop);
@@ -474,7 +474,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     <div className="orbit-lobby-inner">
       <p className="orbit-tagline">A multiplayer flight through GitHub</p>
       <h1 className="orbit-title" aria-label="Orbit">{"ORBIT".split("").map((ch, i) => <span key={i} aria-hidden="true" style={{ "--i": i } as React.CSSProperties}>{ch}</span>)}</h1>
-      {universe && universe.room !== "trending" && <p className="orbit-invited">📨 You're heading into <b>{universe.title}</b>'s universe{universe.subtitle ? ` · ${universe.subtitle}` : ""}</p>}
+      {universe && universe.room !== "trending" && <p className="orbit-invited">You're heading into <b>{universe.title}</b>'s universe{universe.subtitle ? ` · ${universe.subtitle}` : ""}</p>}
       <form className="orbit-launch" onSubmit={e => { e.preventDefault(); void launch(); }}>
         <label className="orbit-hello">
           <span>Hello,</span>
@@ -495,7 +495,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
           </div>
         </div>
         <div className="orbit-daily">
-          <span>📅 Today's challenge</span>
+          <span>Today's challenge</span>
           <b>{today.goal.text} in {today.login}'s universe</b>
           {store.get(`daily:${today.day}`, false) ? <i>Done today ✓</i>
             : <button type="button" className="orbit-ghost" disabled={busy} onClick={() => { void launch().then(() => { if (universe?.room !== today.room) void jump(today.login); }); }}>Fly it →</button>}
@@ -516,7 +516,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
           : status === "waking" ? <span className="orbit-live-dot waking">Waking the multiplayer server. It sleeps when nobody is playing and takes up to a minute. You can launch now; other pilots appear once it is up.</span>
           : status === "connecting" ? <span>Looking for other pilots…</span> : <span>Multiplayer server offline. You will fly solo.</span>}
       </section>
-      {iosBrowser && <p className="orbit-foot">📱 For full screen on iPhone: Share → <b>Add to Home Screen</b>, then open Orbit from there.</p>}
+      {iosBrowser && <p className="orbit-foot">For full screen on iPhone: Share → <b>Add to Home Screen</b>, then open Orbit from there.</p>}
       <p className="orbit-foot">{lessons.length < LESSONS.length ? "New here? A short first flight shows you the controls." : "Press H in flight for the controls."}</p>
       <p className="orbit-foot"><a href="/explorer/">Prefer to browse quietly? Open the explorer →</a></p>
     </div>
@@ -571,12 +571,12 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     <canvas ref={radar} className="orbit-radar" width={160} height={160} aria-hidden="true" />
 
     {hud && (hud.holding || hud.bounty != null || hud.storm !== "calm" || hud.daily) && <div className="orbit-status" role="status">
-      {hud.storm === "warning" && <span className="warn">☄ Meteor storm incoming</span>}
-      {hud.storm === "active" && <span className="warn">☄ Meteor storm · {hud.meteors} in flight</span>}
-      {hud.holding === "holding" && <span className="good">🏁 Holding the gate · +15/s</span>}
-      {hud.holding === "contested" && <span className="warn">⚔️ Gate contested</span>}
-      {hud.bounty != null && <span>{hud.bounty === myId.current ? "🎯 You carry the bounty" : `🎯 Bounty: ${hud.board.find(r => r.id === hud.bounty)?.name ?? "a pilot"}`}</span>}
-      {hud.daily && <span className={hud.daily.complete ? "good" : ""}>📅 {hud.daily.text}: {hud.daily.done}/{hud.daily.n}{hud.daily.complete ? " ✓" : ""}</span>}
+      {hud.storm === "warning" && <span className="warn">Meteor storm incoming</span>}
+      {hud.storm === "active" && <span className="warn">Meteor storm · {hud.meteors} in flight</span>}
+      {hud.holding === "holding" && <span className="good">Holding the gate · +15/s</span>}
+      {hud.holding === "contested" && <span className="warn">Gate contested</span>}
+      {hud.bounty != null && <span>{hud.bounty === myId.current ? "You carry the bounty" : `Bounty: ${hud.board.find(r => r.id === hud.bounty)?.name ?? "a pilot"}`}</span>}
+      {hud.daily && <span className={hud.daily.complete ? "good" : ""}>{hud.daily.text}: {hud.daily.done}/{hud.daily.n}{hud.daily.complete ? " ✓" : ""}</span>}
     </div>}
     {hud?.boss && <div className="orbit-boss" role="status" aria-label={`Mothership ${Math.round(hud.boss.hp / hud.boss.max * 100)} percent`}>
       <span>MOTHERSHIP</span><div><i style={{ width: `${hud.boss.hp / hud.boss.max * 100}%` }} /></div>
@@ -591,14 +591,14 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     </aside>}
 
     {hud?.comet && !jumpOpen && <section className="orbit-card comet" aria-label={`${CREATOR.name}'s comet`}>
-      <div className="orbit-card-head"><strong>☄ {CREATOR.name}'s comet</strong><span>@{CREATOR.login}</span></div>
+      <div className="orbit-card-head"><strong>{CREATOR.name}'s comet</strong><span>@{CREATOR.login}</span></div>
       <p>Made by {CREATOR.name}. This comet crosses every universe on a new random path every two minutes. Fly through it for a bonus.</p>
       <div className="orbit-card-actions">
         <a className="orbit-primary small" href={CREATOR.url} target="_blank" rel="noreferrer">Visit @{CREATOR.login} on GitHub</a>
       </div>
     </section>}
     {dock && !jumpOpen && <aside className="orbit-dock" aria-label={`Docked at ${dock.planet.repo.full_name}`}>
-      <div className="orbit-tut-head"><span className="orbit-eyebrow">🛰 DOCKED · {dock.planet.repo.language ?? "MIXED"}</span><button type="button" className="orbit-link" onClick={undock}>Undock{touch ? "" : " · Esc"}</button></div>
+      <div className="orbit-tut-head"><span className="orbit-eyebrow">DOCKED · {dock.planet.repo.language ?? "MIXED"}</span><button type="button" className="orbit-link" onClick={undock}>Undock{touch ? "" : " · Esc"}</button></div>
       <strong>{dock.planet.repo.full_name}</strong>
       <div className="orbit-facts"><span>★ {compact(dock.planet.repo.stargazers_count)}</span><span>forks {compact(dock.planet.repo.forks_count)}</span>{dock.planet.commits && <span>{dock.planet.commits.length} recent commits</span>}</div>
       {dock.planet.repo.description && <p className="orbit-dock-desc">{dock.planet.repo.description}</p>}
@@ -614,11 +614,11 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     {near && !dock && !hud?.comet && !jumpOpen && <section className="orbit-card" aria-label="Nearby planet">
       <div className="orbit-card-head"><strong>{near.repo.name}</strong><span>{near.repo.language ?? "Mixed"}</span></div>
       {near.repo.description && <p>{clip(near.repo.description, 150)}</p>}
-      <div className="orbit-facts"><span>{near.trait.label}</span>{near.rocks.length > 0 && <span>{near.rocks.filter(r => r.alive).length}/{near.rocks.length} issue rocks</span>}{near.star && <span>{near.star.cool > 0 ? `★ shield in ${Math.ceil(near.star.cool)}s` : "★ shield ready"}</span>}{near.fresh && <span>✨ active</span>}</div>
+      <div className="orbit-facts"><span>{near.trait.label}</span>{near.rocks.length > 0 && <span>{near.rocks.filter(r => r.alive).length}/{near.rocks.length} issue rocks</span>}{near.star && <span>{near.star.cool > 0 ? `★ shield in ${Math.ceil(near.star.cool)}s` : "★ shield ready"}</span>}{near.fresh && <span>Active</span>}</div>
       <div className="orbit-facts"><span>★ {compact(near.repo.stargazers_count)}</span><span>forks {compact(near.repo.forks_count)}</span>
         <span>{near.commits === null ? "scanning commits…" : `${near.sats.filter(s => !s.done).length}/${near.commits.length} commits left`}</span></div>
       <div className="orbit-card-actions">
-        <button className="orbit-primary small" onClick={() => dockAt(near)}>🛰 Dock{touch ? "" : " · Enter"}</button>
+        <button className="orbit-primary small" onClick={() => dockAt(near)}>Dock{touch ? "" : " · Enter"}</button>
         <a className="orbit-ghost" href={repoUrl(near.repo)} target="_blank" rel="noreferrer">Open on GitHub</a>
         {showOwnerJump && <button className="orbit-primary small" disabled={warping} onClick={() => void jump(nearOwner)}>Hyperjump to {nearOwner}</button>}
       </div>
@@ -659,9 +659,9 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     {board && hud && <aside className="orbit-board" aria-label="Pilots in this universe">
       <div className="orbit-tut-head"><span className="orbit-eyebrow">PILOTS · {hud.board.length}</span><button type="button" className="orbit-link" onClick={() => setBoard(false)}>Close</button></div>
       <table>
-        <thead><tr><th>Pilot</th><th>Ship</th><th>Score</th><th title="Dogfight wins">⚔️</th></tr></thead>
+        <thead><tr><th>Pilot</th><th>Ship</th><th>Score</th><th title="Dogfight wins">Wins</th></tr></thead>
         <tbody>{hud.board.map(r => <tr key={r.id} className={r.me ? "me" : ""}>
-          <td><i style={{ background: r.color }} />{hud.bounty === r.id ? "🎯 " : ""}{r.name}{r.me ? " (you)" : ""}</td><td>{HULLS[r.hull].name}</td><td>{r.score.toLocaleString()}</td><td>{r.kills}</td>
+          <td><i style={{ background: r.color }} />{r.name}{r.me ? " (you)" : ""}{hud.bounty === r.id ? " · bounty" : ""}</td><td>{HULLS[r.hull].name}</td><td>{r.score.toLocaleString()}</td><td>{r.kills}</td>
         </tr>)}</tbody>
       </table>
       {hud.board.length === 1 && <p>Nobody else is here yet. Share this page, or check the hyperjump gate for busier universes.</p>}

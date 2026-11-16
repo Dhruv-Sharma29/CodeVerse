@@ -155,13 +155,13 @@ test('pings are labelled from the world, capped per pilot, and expire', async ()
   const sim = createSim({ room: 'u:torvalds', title: 't', subtitle: '', owner: 'torvalds', repos: [repo] });
   sim.waveTimer = 99; sim.aliens.length = 0;
   const me = { owner: 1, name: 'Ada', color: '#fff' };
-  assert.equal(addPing(sim, sim.planets[0].x, sim.planets[0].z, me).label, '🪐 linux');
-  assert.equal(addPing(sim, sim.portal.x, sim.portal.z, me).label, '🌀 Hyperjump gate');
+  assert.equal(addPing(sim, sim.planets[0].x, sim.planets[0].z, me).label, 'linux');
+  assert.equal(addPing(sim, sim.portal.x, sim.portal.z, me).label, 'Hyperjump gate');
   sim.aliens.push({ id: 1, kind: 'saucer', x: 300, z: 300, vx: 0, vz: 0, hp: 3, max: 3, cool: 9, held: false, flung: 0, spin: 0, orbitDir: 1, t: 0, hitCool: 0 });
-  assert.equal(addPing(sim, 305, 300, me).label, '⚠️ Danger');
+  assert.equal(addPing(sim, 305, 300, me).label, 'Danger');
   addPing(sim, 0, 200, me); // a 4th ping from the same pilot drops their oldest
   assert.equal(sim.pings.filter(p => p.owner === 1).length, PING.perPilot);
-  assert.ok(!sim.pings.some(p => p.label === '🪐 linux'));
+  assert.ok(!sim.pings.some(p => p.label === 'linux'));
   sim.aliens.length = 0;
   for (let i = 0; i < (PING.life + 1) * 60; i++) step(sim, emptyInput(), 1 / 60, []);
   assert.equal(sim.pings.length, 0);

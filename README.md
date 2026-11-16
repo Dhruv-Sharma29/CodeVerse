@@ -71,7 +71,7 @@ rate limits, an origin allow-list, and heartbeats.
 **Invite links and pings.** `/?u=torvalds` opens straight into that universe (it is shown behind the
 lobby, too), and the address bar follows you through hyperjumps, so copying it shares the universe
 you are in. Press **P** to drop a ping everyone in the universe sees, labelled
-from what is there: ⚠️ Danger, a planet's name, the gate, the comet, or 📍 Here.
+from what is there: Danger, a planet's name, the gate, the comet, or Here.
 
 **Some things need no messages at all.** The hyperjump gate moves to a random spot on the outer rim
 every three minutes, and the comet crosses on a new random path every two. Both positions come from
@@ -146,7 +146,7 @@ state the rest of the time. Neither would exist on a paid instance.
 and every production deploy failed for five weeks, including the one that shipped the game, because a
 setting outside Git still pointed at the old folder. The code built fine the whole time.
 
-**Look at the screen sooner.** The belt flicker and the "x" that should have been ⚔️ both survived
+**Look at the screen sooner.** The belt flicker and the "x" that should have been a crossed-swords symbol both survived
 passing tests, type-checks and builds. Both were obvious the moment someone looked at the game.
 
 **Write the two-player test first.** Most multiplayer bugs only appear with two clients. Testing with

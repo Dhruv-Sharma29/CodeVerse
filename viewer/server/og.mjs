@@ -130,7 +130,7 @@ export function generateUniverseSvg(user, repos = []) {
       
       <g transform="translate(180, 32)">
         <text x="0" y="0" fill="#7a7d92" font-size="11" font-weight="600" letter-spacing="0.1em" font-family="system-ui, sans-serif">TOTAL STARS</text>
-        <text x="0" y="34" fill="#f0dfc1" font-size="26" font-weight="bold" font-family="Georgia, serif">⭐ ${compact(totalStars)}</text>
+        <text x="0" y="34" fill="#f0dfc1" font-size="26" font-weight="bold" font-family="Georgia, serif">★ ${compact(totalStars)}</text>
       </g>
       
       <g transform="translate(330, 32)">

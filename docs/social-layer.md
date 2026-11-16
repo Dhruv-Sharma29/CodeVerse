@@ -90,7 +90,7 @@ Grouped by what each tier *forces you to own*. The jump from Tier 1 to Tier 2 is
 | **Universe card** (name, repo count, stars, active projects, "Enter universe") | Pure derived data. Cheap, and it's the frame the share link needs |
 | **Share/OG image** | The highest-leverage item in this doc. A link with no preview image does not travel. Needs a rendering route, but no database |
 | **Pretty URLs** — `/@handle` instead of `?user=` | Needs a rewrite rule; cosmetic but it's literally the positioning |
-| **Universe Evolution** ⭐ | The differentiator (§3). Needs the analyzer, not a server |
+| **Universe Evolution** (key feature) | The differentiator (§3). Needs the analyzer, not a server |
 | **Moons** (branches/releases), **satellites** (contributors) | Verified available: `/branches`, `/releases`, `/contributors` all return 200. Each is an extra call — respect §4 |
 | **Black holes** (archived repos) | `archived` is already in the fetched data. Free |
 

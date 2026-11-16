@@ -4,7 +4,7 @@ const base = (process.argv[2] ?? '').replace(/\/+$/, '');
 const origin = process.argv[3] ?? 'https://codeverse-orbit.vercel.app';
 if (!/^https?:\/\//.test(base)) { console.error('Pass the relay address, e.g. https://codeverse-relay.onrender.com'); process.exit(2); }
 
-const step = (ok, msg) => { console.log(`${ok ? '✔' : '✖'} ${msg}`); if (!ok) process.exit(1); };
+const step = (ok, msg) => { console.log(`${ok ? 'OK' : 'FAIL'} ${msg}`); if (!ok) process.exit(1); };
 
 // 1. Health. A sleeping free instance can take up to a minute to wake.
 const t0 = Date.now();

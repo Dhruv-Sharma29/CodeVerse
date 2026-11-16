@@ -262,7 +262,7 @@ test('buildProfileMeta and injectProfileMeta escape attacker-controlled name/bio
   const html2 = injectProfileMeta(template, meta2, 'artist');
   assert.ok(html2.includes('Jane &amp; &quot;The&quot; Co (@artist) — Codeverse'));
   assert.ok(html2.includes('Artist &amp; dev · $100 bounty · $&amp; replacement test · 🪐 ⭐ 🚀'));
-  assert.ok(html2.includes('⭐ 200'));
+  assert.ok(html2.includes('★ 200'));
 
   // Fallback for null meta (lookup failure) preserves default tags but sets canonical for valid handle
   const fallbackHtml = injectProfileMeta(template, null, 'someuser');

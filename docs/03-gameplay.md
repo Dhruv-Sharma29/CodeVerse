@@ -60,7 +60,7 @@ top of the screen.
 
 ## Docking
 
-Fly close to a planet and press **Enter** (or **🛰 Dock** on its card). The ship parks on the planet's
+Fly close to a planet and press **Enter** (or **Dock** on its card). The ship parks on the planet's
 surface, shielded and with weapons off, and a panel shows the repository: description, stars, forks,
 a short excerpt of its README, and its top contributors (bots left out). Each contributor is a
 hyperjump: pick one to warp into their universe. That is the way to walk GitHub's real social graph:
@@ -109,13 +109,13 @@ shared; aliens are separate for each pilot.
   why.
 - **Pings.** Press **P** (or **PING** on touch) to mark the spot under your mouse, or ahead of your ship
   on keyboard or touch. Everyone in the universe sees a beam, a pulsing ring and a label worked out
-  from what is there: ⚠️ Danger near aliens, 🪐 a planet's name, 🌀 the gate, ☄ the comet, or 📍 Here.
+  from what is there: Danger near aliens, a planet's name, Hyperjump gate, Comet, or Here.
   Pings last 6 seconds, each pilot has at most 3 at once, there is a 1.2 s cooldown, and they show on
   the radar (pinned to its edge when far away).
 - **Pilots board.** Press **Tab** to see everyone here with ship, score and dogfight wins. Touch
   devices have no Tab key, so they get a **Pilots** button instead.
-- **Emotes.** Press **1–6** (or use the buttons on the board): 👋 Hi, GG, 🔥 Nice!, 🆘 Help!,
-  ⚔ Fight me, 🤝 Truce. They appear above your ship for every pilot. Emotes are preset only.
+- **Emotes.** Press **1–6** (or use the buttons on the board): Hi, GG, Nice!, Help!,
+  Fight me, Truce. They appear above your ship for every pilot. Emotes are preset only.
 
 ## Feel
 
@@ -138,7 +138,7 @@ shared; aliens are separate for each pilot.
   when you switch it on (tap it off and on to re-centre) and re-centres when the screen rotates. The
   stick still works and wins while you touch it. iPhone and iPad ask for motion permission the first
   time. Tilt angles: 3° dead zone, full speed at 18°.
-- **Full screen.** **⛶ Full screen** in the HUD, or **F** on a keyboard. Phones go full screen
+- **Full screen.** **Full screen** in the HUD, or **F** on a keyboard. Phones go full screen
   automatically on Launch where the browser allows it. iPhone Safari has no full-screen API for web
   pages, so the lobby suggests **Share → Add to Home Screen**; the installed game opens full screen.
 - **Any window size.** The game fills the window or the screen and re-lays-out on resize; short
@@ -151,10 +151,10 @@ with no server state.
 
 | Event | When | What it does |
 |---|---|---|
-| **☄ Meteor storm** | 40 s every 10 minutes (at :00, :10, :20… past the hour), announced 10 s before | Meteors cross the whole map on seeded paths. A hit costs 20 hull; shooting one gives +50. |
-| **🎯 Bounty** | Whenever two or more pilots are in a universe | The clear top scorer (at least 1,000) carries the bounty: 🎯 on their name tag and the pilots board. Shooting them down pays +500 on top of the usual +300. |
-| **🏁 Hold the gate** | Always | A gold ring of radius 22 around the hyperjump gate. Alone inside it you score +15 per second; any other live pilot inside makes it contested and nobody scores. |
-| **📅 Daily challenge** | Each UTC day | A well-known GitHub account and a goal (collect commits or shoot down aliens) picked from the date, the same for everyone. The lobby offers it, the HUD tracks progress from when you arrive, and finishing pays +1,000 once per day. |
+| **Meteor storm** | 40 s every 10 minutes (at :00, :10, :20… past the hour), announced 10 s before | Meteors cross the whole map on seeded paths. A hit costs 20 hull; shooting one gives +50. |
+| **Bounty** | Whenever two or more pilots are in a universe | The clear top scorer (at least 1,000) carries the bounty: BOUNTY on their name tag and on the pilots board. Shooting them down pays +500 on top of the usual +300. |
+| **Hold the gate** | Always | A gold ring of radius 22 around the hyperjump gate. Alone inside it you score +15 per second; any other live pilot inside makes it contested and nobody scores. |
+| **Daily challenge** | Each UTC day | A well-known GitHub account and a goal (collect commits or shoot down aliens) picked from the date, the same for everyone. The lobby offers it, the HUD tracks progress from when you arrive, and finishing pays +1,000 once per day. |
 
 ## The creator's comet
 

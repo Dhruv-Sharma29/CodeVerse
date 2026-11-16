@@ -17,11 +17,11 @@ const date = (value?: string) => value ? new Date(value).toLocaleDateString(unde
 const SECTOR_SIZE = 8;
 
 const SPOTLIGHT_CATEGORIES = [
-  { id: "trending", label: "🔥 Trending", handles: [] },
-  { id: "ai", label: "🧠 AI & ML", handles: ["karpathy", "huggingface", "meta-llama"] },
-  { id: "web", label: "🌐 Web", handles: ["shadcn", "gaearon", "antfu"] },
-  { id: "systems", label: "⚡ Systems", handles: ["torvalds", "mit-pdos", "ziglang"] },
-  { id: "games", label: "🎮 Games", handles: ["mrdoob", "bevyengine"] },
+  { id: "trending", label: "Trending", handles: [] },
+  { id: "ai", label: "AI & ML", handles: ["karpathy", "huggingface", "meta-llama"] },
+  { id: "web", label: "Web", handles: ["shadcn", "gaearon", "antfu"] },
+  { id: "systems", label: "Systems", handles: ["torvalds", "mit-pdos", "ziglang"] },
+  { id: "games", label: "Games", handles: ["mrdoob", "bevyengine"] },
 ] as const;
 
 export default function Explorer({ onImport, onDemo }: { onImport: () => void; onDemo: () => void }) {
@@ -269,7 +269,7 @@ export default function Explorer({ onImport, onDemo }: { onImport: () => void; o
           <span><b>●</b> repository planet</span>
           <span><b className="legend-moon">●</b> branch moon</span>
           <span><b className="legend-star">◆</b> release moon</span>
-          <span><b className="legend-comet">☄</b> recent commit</span>
+          <span><b className="legend-comet">✧</b> recent commit</span>
           <span><b className="legend-nebula">✦</b> primary-language nebula</span>
           <span><b className="legend-satellite">▣</b> contributor satellite</span>
           <span><b className="legend-black-hole">◉</b> archived black hole</span>

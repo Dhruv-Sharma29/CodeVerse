@@ -36,7 +36,7 @@ export function UniverseCard({ profile, repositories, onEvolve }: { profile: Git
     <div className="universe-card-heading">
       <div><span>DEVELOPER UNIVERSE</span><h3 id="universe-card-title">{profile.name ?? profile.login}</h3><p>@{profile.login}</p></div>
       <div className="universe-card-actions">
-        {onEvolve && <button type="button" className="evolve-button" onClick={onEvolve}>✨ Evolve Universe</button>}
+        {onEvolve && <button type="button" className="evolve-button" onClick={onEvolve}>Evolve Universe</button>}
         <button type="button" onClick={() => void copyLink()}>Copy link</button>
         {typeof navigator.share === "function" && <button type="button" onClick={() => void share()}>Share</button>}
       </div>

@@ -44,11 +44,11 @@ export function buildProfileMeta(user, repos = []) {
     const cleanBio = user.bio.trim().replace(/\s+/g, ' ').slice(0, 300);
     const parts = [cleanBio];
     if (repoCount) parts.push(`${repoCount} ${repoCount === 1 ? 'repository' : 'repositories'}`);
-    if (totalStars) parts.push(`⭐ ${compact(totalStars)}`);
+    if (totalStars) parts.push(`★ ${compact(totalStars)}`);
     parts.push('Explore this GitHub universe in 3D orbit.');
     description = parts.join(' · ');
   } else {
-    description = `Explore @${login}’s GitHub universe: ${repoCount} ${repoCount === 1 ? 'repository' : 'repositories'}${totalStars ? `, ⭐ ${compact(totalStars)}` : ''}, and recent commits in 3D orbit.`;
+    description = `Explore @${login}’s GitHub universe: ${repoCount} ${repoCount === 1 ? 'repository' : 'repositories'}${totalStars ? `, ★ ${compact(totalStars)}` : ''}, and recent commits in 3D orbit.`;
   }
 
   return { login, title, description, repoCount, totalStars };

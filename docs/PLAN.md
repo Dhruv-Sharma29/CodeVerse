@@ -148,9 +148,9 @@ The brainstorm maps things inconsistently: files are planets *and* buildings, an
 | Release tag | Epoch marker | Labelled notches on the timeline |
 
 **Lenses:** the other brainstorm ideas become re-skins of the *same data*:
-- 🧬 **DNA lens:** each file is a gene strip; the repo is a genome bar that mutates per commit.
-- 🧠 **MRI lens:** a grayscale cross-section with a "diagnosis" side panel.
-- 👻 **Ghost lens:** only deleted code, abandoned files and departed contributors are visible.
+- **DNA lens:** each file is a gene strip; the repo is a genome bar that mutates per commit.
+- **MRI lens:** a grayscale cross-section with a "diagnosis" side panel.
+- **Ghost lens:** only deleted code, abandoned files and departed contributors are visible.
 
 Lenses cost little once the data model exists, and they're great `good first issue` material.
 
@@ -458,7 +458,7 @@ codeverse/
 
 Estimates assume **one strong full-stack developer working full-time**. Double them for part-time.
 
-### Phase 0: "Is it beautiful?" spike (Week 1) ⚠️ go/no-go gate
+### Phase 0: "Is it beautiful?" spike (Week 1): go/no-go gate
 Goal: prove the GIF before building any infrastructure.
 - [ ] Hacky Python script: `git log --numstat` on 3 repos (small: `httpie`, medium: `fastapi`, large: `react`)
 - [ ] Naive union-tree galaxy layout → JSON
@@ -494,7 +494,7 @@ Goal: prove the GIF before building any infrastructure.
 - [ ] Clip recording (WebM) plus deterministic `?render=1` mode and Playwright → ffmpeg script
 - **Exit:** a 15-second MP4 of `react` evolving that you'd happily put at the top of the README.
 
-### Phase 4: Launch v0.1 (Weeks 9–10) 🚀
+### Phase 4: Launch v0.1 (Weeks 9–10)
 - [ ] Gallery: about 12 bundles (see §10.2), hosted on Vercel or Cloudflare Pages
 - [ ] Drag-and-drop your own bundle
 - [ ] `uvx codeverse .` one-liner tested on macOS, Linux and Windows
@@ -504,7 +504,7 @@ Goal: prove the GIF before building any infrastructure.
 - [ ] 10+ `good first issue`s: resolvers, lenses, themes, gallery repos
 - [ ] Launch sequence (§10.3) — and in the launch post, name Gource/CodeCohesion/GitGalaxy explicitly and say what's different, rather than let a comment thread "discover" them first
 
-### Phase 5: The full Oracle, v0.2 (Weeks 11–13) 🚀 second launch
+### Phase 5: The full Oracle, v0.2 (Weeks 11–13), second launch
 Builds on the Oracle MVP shipped in v0.1 (above).
 - [ ] `LLMProvider` interface plus NIM (Nemotron), Ollama and OpenAI-compatible adapters
 - [ ] Symbol-chunked retrieval index built at analyze time (opt-in: `--with-oracle`)
