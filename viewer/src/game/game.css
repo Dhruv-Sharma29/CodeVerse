@@ -124,9 +124,9 @@
 .orbit-modal-card { margin: auto; width: min(520px, 100%); display: grid; gap: 12px; background: var(--o-panel); border: 1px solid rgba(177,140,255,.45); border-radius: 12px; padding: 22px; box-shadow: 0 0 60px rgba(125,77,255,.35); }
 .orbit-modal-card h2 { font-family: var(--o-display); font-weight: 700; font-size: 30px; margin: 0; letter-spacing: -.02em; }
 .orbit-modal-card label { font-family: var(--o-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--o-muted); }
-.orbit-jump-row { display: flex; gap: 8px; align-items: center; }
+.orbit-jump-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .orbit-jump-row span { color: var(--o-muted); font-size: 16px; }
-.orbit-jump-row input { flex: 1; }
+.orbit-jump-row input { flex: 1; width: 0; } /* width 0: shrink with the card instead of keeping the default input width */
 .orbit-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .orbit-chips button { background: rgba(255,255,255,.04); border: 1px solid var(--o-line); border-radius: 999px; padding: 5px 12px; font-size: 12px; }
 .orbit-chips button:hover { border-color: #b18cff; }

@@ -188,11 +188,13 @@ function Satellites({ sim }: { sim: Sim }) {
   </instancedMesh>;
 }
 
-function Portal({ sim }: { sim: Sim }) {
+function Portal({ ctl }: { ctl: Control }) {
+  const sim = ctl.sim;
   const swirl = useRef<THREE.ShaderMaterial>(null), ring = useRef<THREE.Group>(null), root = useRef<THREE.Group>(null);
   const uniforms = useMemo(() => ({ uTime: { value: 0 } }), []);
   useFrame((_, dt) => {
-    if (root.current) root.current.position.set(sim.portal.x, 0, sim.portal.z);
+    // Hidden during a hyperjump: the ship starts inside the gate, which would wrap around it in the tunnel.
+    if (root.current) { root.current.position.set(sim.portal.x, 0, sim.portal.z); root.current.visible = ctl.warp < .02; }
     uniforms.uTime.value += dt;
     if (ring.current) ring.current.rotation.z += dt * .6;
     if (swirl.current) swirl.current.opacity = sim.portalCool > 0 && sim.portalCool < 9 ? .4 : 1;
@@ -594,7 +596,7 @@ export const GameScene = memo(function GameScene({ ctl, peers, color, hull, pale
     <AsteroidBelt sim={sim} count={QUALITY[quality].belt} />
     <Planets sim={sim} />
     <Satellites sim={sim} />
-    <Portal sim={sim} />
+    <Portal ctl={ctl} />
     <Comet sim={sim} />
     <Pings sim={sim} />
     <Meteors sim={sim} />

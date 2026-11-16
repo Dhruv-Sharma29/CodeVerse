@@ -94,8 +94,8 @@ edge points to it with the distance, and the radar pins it to its rim.
 Fly into the gate to open the hyperjump dialog: type any GitHub username or organization, pick a
 universe where other pilots are flying, or choose a recent or suggested one.
 
-The jump itself takes two seconds. The old universe freezes, the camera drops in behind the ship and
-it flies down a tunnel of light streaks; then it glides out into the new universe while the tunnel
+The jump itself takes two seconds. The old universe freezes, the gate disappears, the camera drops in
+behind the ship and it flies down a tunnel of light streaks; then it glides out into the new universe while the tunnel
 fades and the camera rises back to its usual view. If the new universe takes longer than two seconds
 to load, the ship stays in the tunnel until it is ready. If loading fails, the ship comes back out
 of the gate it entered.
