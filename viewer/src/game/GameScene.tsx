@@ -18,6 +18,9 @@ export interface Control {
   jumping?: boolean;
   /** Docked at this planet: the ship is parked on its surface, shielded, weapons off. */
   docked?: Planet | null;
+  /** Docking approach: 0 at the moment of docking, 1 once parked; and where the ship started from. */
+  dockT?: number;
+  dockFrom?: { x: number; z: number; a: number };
   pointer: { x: number; y: number; mouse: boolean };
   onStep: (dt: number) => void;
 }
@@ -76,7 +79,7 @@ function Driver({ ctl }: { ctl: Control }) {
 
 function CameraRig({ ctl }: { ctl: Control }) {
   const { camera, size, raycaster } = useThree();
-  const look = useRef(new THREE.Vector3(ctl.sim.ship.x, 0, ctl.sim.ship.z));
+  const look = useRef(new THREE.Vector3(ctl.sim.ship.x, 0, ctl.sim.ship.z)), dock = useRef(0);
   useFrame(({ clock }, dt) => {
     const { sim, pointer, input } = ctl, s = sim.ship;
     const portrait = Math.max(1, size.height / size.width * .85);
@@ -90,9 +93,13 @@ function CameraRig({ ctl }: { ctl: Control }) {
     }
     const lead = s.dead > 0 ? 0 : 6, killer = s.dead > 0 && sim.killedBy != null ? sim.remotes.get(sim.killedBy) : undefined;
     // Follow-cam: while waiting to respawn, watch the pilot who shot you down.
+    const dk = ctl.docked, wide = size.width > 760;
     if (killer) look.current.lerp(hit.set(killer.x, 0, killer.z), Math.min(1, dt * 3));
+    // Docked: frame ship and planet together, clear of the dock panel (right on wide screens, bottom on phones).
+    else if (dk) look.current.lerp(hit.set(s.x * .6 + dk.x * .4 + (wide ? 10 * ctl.zoom : 0), 0, s.z * .6 + dk.z * .4 + (wide ? 0 : 12 * ctl.zoom)), Math.min(1, dt * 3));
     else look.current.lerp(hit.set(s.x + Math.cos(s.a) * lead + s.vx * .12, 0, s.z + Math.sin(s.a) * lead + s.vz * .12), Math.min(1, dt * 5));
-    const d = ctl.zoom * portrait, w = ctl.warp, ax = Math.cos(s.a), az = Math.sin(s.a);
+    dock.current += ((dk ? 1 : 0) - dock.current) * Math.min(1, dt * 2.5); // docked: ease the camera in closer
+    const d = ctl.zoom * portrait * (1 - dock.current * .4), w = ctl.warp, ax = Math.cos(s.a), az = Math.sin(s.a);
     // Hyperjump: the camera drops in behind the ship and looks down the tunnel (blend by warp).
     hit.set(look.current.x, 64 * d, look.current.z + 46 * d).lerp(chase.set(s.x - ax * 17, 6, s.z - az * 17), w);
     // Lerp (not set) so leaving the lobby swoops down to the ship instead of cutting.
@@ -203,6 +210,46 @@ function Planets({ sim }: { sim: Sim }) {
     </mesh>
     <Html center position={[0, p.R + 2.2, 0]} zIndexRange={[5, 0]} pointerEvents="none"><span className="orbit-label">{p.repo.name}</span></Html>
   </group>)}</>;
+}
+
+/** Docking effects: planet glow, a tether from the ship to the surface and a spinning landing pad. */
+function DockFx({ ctl }: { ctl: Control }) {
+  const root = useRef<THREE.Group>(null), aura = useRef<THREE.Sprite>(null), tether = useRef<THREE.Group>(null), pad = useRef<THREE.Group>(null);
+  const last = useRef<Planet | null>(null), b = useRef(0);
+  useFrame(({ clock }, dt) => {
+    if (ctl.docked) last.current = ctl.docked;
+    b.current += ((ctl.docked ? 1 : 0) - b.current) * Math.min(1, dt * 4);
+    const p = last.current, g = root.current; if (!g) return;
+    g.visible = !!p && b.current > .01; if (!g.visible || !p) return;
+    const s = ctl.sim.ship, t = clock.elapsedTime, settled = ctl.docked ? Math.max(0, ((ctl.dockT ?? 1) - .55) / .45) : 1;
+    const k = b.current * settled, a = Math.atan2(s.z - p.z, s.x - p.x);
+    if (aura.current) {
+      aura.current.position.set(p.x, 0, p.z); aura.current.scale.setScalar(p.R * (3.4 + Math.sin(t * 2) * .12));
+      (aura.current.material as THREE.SpriteMaterial).opacity = .6 * b.current;
+    }
+    if (tether.current) { // from the hull down to the surface
+      const sx = p.x + Math.cos(a) * p.R, sz = p.z + Math.sin(a) * p.R, len = Math.hypot(s.x - sx, s.z - sz) || .01;
+      tether.current.position.set((s.x + sx) / 2, 1, (s.z + sz) / 2); tether.current.rotation.set(0, -a, Math.PI / 2);
+      tether.current.scale.set(1 + Math.sin(t * 14) * .15, len, 1 + Math.sin(t * 14) * .15); tether.current.visible = k > .02;
+      tether.current.children.forEach(m => { ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = (m.userData.o as number) * k; });
+    }
+    if (pad.current) {
+      pad.current.position.set(s.x, .15, s.z); pad.current.rotation.y = t * .8; pad.current.scale.setScalar(.8 + k * .4);
+      pad.current.children.forEach(m => { ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = (m.userData.o as number) * k; });
+    }
+  });
+  return <group ref={root} visible={false}>
+    <sprite ref={aura}><spriteMaterial map={glow()} color="#74e2ff" opacity={0} {...additive} /></sprite>
+    <group ref={tether}>
+      <mesh userData={{ o: .5 }}><cylinderGeometry args={[.9, .9, 1, 14, 1, true]} /><meshBasicMaterial color="#74e2ff" {...additive} opacity={0} side={THREE.DoubleSide} /></mesh>
+      <mesh userData={{ o: 1 }}><cylinderGeometry args={[.2, .2, 1, 8, 1, true]} /><meshBasicMaterial color="#e8fbff" {...additive} opacity={0} /></mesh>
+    </group>
+    <group ref={pad}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} userData={{ o: .9 }}><ringGeometry args={[3.6, 4, 64]} /><meshBasicMaterial color="#74e2ff" {...additive} opacity={0} side={THREE.DoubleSide} /></mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} userData={{ o: .6 }}><ringGeometry args={[4.5, 4.85, 6, 1, 0, Math.PI / 3]} /><meshBasicMaterial color="#e8fbff" {...additive} opacity={0} side={THREE.DoubleSide} /></mesh>
+      <mesh rotation={[-Math.PI / 2, 0, Math.PI]} userData={{ o: .6 }}><ringGeometry args={[4.5, 4.85, 6, 1, 0, Math.PI / 3]} /><meshBasicMaterial color="#e8fbff" {...additive} opacity={0} side={THREE.DoubleSide} /></mesh>
+    </group>
+  </group>;
 }
 
 function Satellites({ sim }: { sim: Sim }) {
@@ -340,7 +387,10 @@ function LocalShip({ ctl, color, hull }: { ctl: Control; color: string; hull: Hu
     const lateral = (-Math.sin(s.a) * s.vx + Math.cos(s.a) * s.vz) / 46;
     body.current.rotation.x += (-lateral * .7 - body.current.rotation.x) * .15;
     if (flame.current) { flame.current.visible = s.thrust > .05; flame.current.scale.set(1, .5 + s.thrust * (.8 + Math.random() * .5), 1); }
-    if (shield.current) shield.current.visible = s.inv > .2 && Math.floor(ctl.sim.t * 10) % 2 === 0;
+    if (shield.current) { // steady soft bubble while docked; blinking after a respawn or star pickup
+      shield.current.visible = !!ctl.docked || (s.inv > .2 && Math.floor(ctl.sim.t * 10) % 2 === 0);
+      (shield.current.material as THREE.MeshBasicMaterial).opacity = ctl.docked ? .12 : .25;
+    }
   });
   return <group ref={g}><group ref={body}><ShipModel color={color} hull={hull} flame={flame} /></group>
     <mesh ref={shield}><sphereGeometry args={[3.2, 20, 14]} /><meshBasicMaterial color="#74e2ff" {...additive} opacity={.25} /></mesh>
@@ -680,6 +730,7 @@ export const GameScene = memo(function GameScene({ ctl, peers, color, hull, pale
     <Meteors sim={sim} />
     <PlanetExtras sim={sim} />
     <Floats sim={sim} />
+    <DockFx ctl={ctl} />
     <LocalShip ctl={ctl} color={color} hull={hull} />
     {peers.map(p => <RemoteShip key={p.id} sim={sim} peer={p} />)}
     <Aliens sim={sim} palette={palette} />

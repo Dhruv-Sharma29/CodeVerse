@@ -183,9 +183,12 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         events.length = 0;
         step(c.sim, c.input, dt, events);
         if (c.docked) {
-          // Parked on the surface on the side facing the ship, riding the planet's orbit.
-          const p = c.docked, s = c.sim.ship, a = Math.atan2(s.z - p.z, s.x - p.x), r = p.R + 3.2;
-          Object.assign(s, { x: p.x + Math.cos(a) * r, z: p.z + Math.sin(a) * r, vx: 0, vz: 0, inv: Math.max(s.inv, .4), a: a + Math.PI });
+          // Glide in over 0.9 s (ease-out), then stay parked on the side facing the ship, riding the planet's orbit.
+          const p = c.docked, s = c.sim.ship, from = c.dockFrom ?? { x: s.x, z: s.z, a: s.a };
+          c.dockT = Math.min(1, (c.dockT ?? 0) + dt / .9);
+          const e = 1 - (1 - c.dockT) ** 3, a = Math.atan2(from.z - p.z, from.x - p.x) || 0, r = p.R + 6;
+          const turn = Math.atan2(Math.sin(a + Math.PI - from.a), Math.cos(a + Math.PI - from.a)); // shortest way round
+          Object.assign(s, { x: from.x + (p.x + Math.cos(a) * r - from.x) * e, z: from.z + (p.z + Math.sin(a) * r - from.z) * e, vx: 0, vz: 0, inv: Math.max(s.inv, .4), a: from.a + turn * e });
         }
         if (events.length) handleEvents(c.sim, events);
         c.input.nova = false;
@@ -392,7 +395,8 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   function dockAt(planet: Planet) {
     const c = ctl.current; if (!c || c.attract) return;
     dockAbort.current?.abort(); const abort = dockAbort.current = new AbortController();
-    c.docked = planet; sfx.grab();
+    const s = c.sim.ship;
+    c.docked = planet; c.dockT = 0; c.dockFrom = { x: s.x, z: s.z, a: s.a }; sfx.grab();
     setDock({ planet, readme: null, contributors: null, error: "" });
     Promise.allSettled([fetchReadme(planet.repo, abort.signal), fetchContributors(planet.repo, abort.signal)]).then(([readme, people]) => {
       if (abort.signal.aborted) return;
@@ -403,7 +407,16 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       } : d);
     });
   }
-  function undock() { dockAbort.current?.abort(); if (ctl.current) ctl.current.docked = null; setDock(null); }
+  function undock() {
+    dockAbort.current?.abort();
+    const c = ctl.current, p = c?.docked;
+    if (c && p) { // push off, nose out
+      const s = c.sim.ship, a = Math.atan2(s.z - p.z, s.x - p.x);
+      Object.assign(s, { vx: Math.cos(a) * 24, vz: Math.sin(a) * 24, a });
+      c.docked = null;
+    }
+    setDock(null);
+  }
 
   /* ---- pings ---- */
   const lastPing = useRef(-9);

@@ -264,9 +264,18 @@
 .orbit-dock { position: absolute; right: var(--o-gr); top: calc(var(--o-gt) + 60px); width: min(380px, calc(100vw - 32px)); max-height: calc(100dvh - 120px); overflow-y: auto; z-index: 7;
   display: grid; gap: 8px; padding: 14px 16px; background: var(--o-panel); border: 1px solid rgba(159,232,255,.35); border-radius: var(--o-r);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.orbit-dock { animation: orbit-dock-in .45s cubic-bezier(.2,.8,.2,1) .35s both; border-top-color: rgba(159,232,255,.7); }
+.orbit-dock::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; border-radius: var(--o-r) var(--o-r) 0 0;
+  background: linear-gradient(90deg, transparent, #74e2ff, transparent); animation: orbit-dock-scan 2.4s ease-in-out infinite; }
+@keyframes orbit-dock-in { from { opacity: 0; transform: translateX(24px); } }
+@keyframes orbit-dock-scan { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .orbit-dock, .orbit-dock::before { animation: none; } }
 .orbit-dock > strong { font-size: 18px; overflow-wrap: anywhere; }
 .orbit-dock-desc { margin: 0; color: var(--o-ink); line-height: 1.45; }
 .orbit-dock-readme { margin: 0; color: var(--o-muted); line-height: 1.5; font-size: 12px; }
+p.orbit-dock-readme { padding: 8px 10px; border-left: 2px solid rgba(159,232,255,.35); background: rgba(159,232,255,.04); border-radius: 0 8px 8px 0; }
+.orbit-crew button { transition: border-color .15s, transform .15s; }
+.orbit-crew button:hover:not(:disabled) { transform: translateY(-1px); }
 .orbit-crew { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .orbit-crew button { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 5px 8px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid var(--o-line); text-align: left; }
 .orbit-crew button:hover:not(:disabled) { border-color: var(--o-gold); }
