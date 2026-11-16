@@ -35,6 +35,39 @@ function glow() {
 }
 const additive = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false } as const;
 
+/** A faceted five-point star, centred, facing +Z. Shared by commit satellites and star-shield pickups. */
+let starGeo: THREE.ExtrudeGeometry | null = null;
+function starGeometry() {
+  if (starGeo) return starGeo;
+  const s = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 ? .42 : 1, a = Math.PI / 2 + i * Math.PI / 5;
+    if (i) s.lineTo(Math.cos(a) * r, Math.sin(a) * r); else s.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  starGeo = new THREE.ExtrudeGeometry(s, { depth: .12, bevelEnabled: true, bevelThickness: .18, bevelSize: .08, bevelSegments: 1, steps: 1 });
+  return starGeo.center();
+}
+/** Soft additive glow points; brightness per point (vertex colour) makes them twinkle. */
+function makeHalo(max: number, size: number) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(max * 3), 3));
+  g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(max * 3), 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ map: glow(), size, vertexColors: true, ...additive }));
+  pts.frustumCulled = false;
+  return pts;
+}
+function setHalo(h: THREE.Points, i: number, x: number, y: number, z: number, c: THREE.Color, b: number) {
+  const g = h.geometry; (g.attributes.position as THREE.BufferAttribute).setXYZ(i, x, y, z);
+  (g.attributes.color as THREE.BufferAttribute).setXYZ(i, c.r * b, c.g * b, c.b * b);
+}
+function commitHalo(h: THREE.Points, n: number) {
+  const g = h.geometry; g.setDrawRange(0, n);
+  g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true;
+}
+/** Face the camera, then spin in the screen plane. */
+function billboard(q: THREE.Quaternion, spin: number) { tmp.quaternion.copy(q); tmp.rotateZ(spin); }
+const GOLD = new THREE.Color("#ffb83d"), SHIELD = new THREE.Color("#fff0b8");
+
 function Driver({ ctl }: { ctl: Control }) {
   useFrame((_, dt) => ctl.onStep(Math.min(dt, .05)), -1);
   return null;
@@ -172,20 +205,25 @@ function Planets({ sim }: { sim: Sim }) {
 }
 
 function Satellites({ sim }: { sim: Sim }) {
-  const ref = useRef<THREE.InstancedMesh>(null);
-  useFrame(() => {
+  const ref = useRef<THREE.InstancedMesh>(null), halo = useMemo(() => makeHalo(400, 7.5), []);
+  useFrame(({ camera }) => {
     const m = ref.current; if (!m) return;
     let n = 0;
     for (const p of sim.planets) for (const s of p.sats) {
       if (s.done || n >= 400) continue;
-      tmp.position.set(p.x + Math.cos(s.a) * s.r, Math.sin(s.a * 2) * .8, p.z + Math.sin(s.a) * s.r);
-      tmp.rotation.set(sim.t * 2, s.a * 3, 0); tmp.scale.setScalar(1); tmp.updateMatrix(); m.setMatrixAt(n++, tmp.matrix);
+      const x = p.x + Math.cos(s.a) * s.r, y = Math.sin(s.a * 2) * .8 + .6, z = p.z + Math.sin(s.a) * s.r;
+      tmp.position.set(x, y, z); billboard(camera.quaternion, s.a * 5 + sim.t * .8);
+      tmp.scale.setScalar(.85 + Math.sin(sim.t * 3 + s.a * 7) * .08); tmp.updateMatrix(); m.setMatrixAt(n, tmp.matrix);
+      setHalo(halo, n++, x, y, z, GOLD, .7 + .3 * Math.sin(sim.t * 4.3 + s.a * 11));
     }
-    m.count = n; m.instanceMatrix.needsUpdate = true;
+    m.count = n; m.instanceMatrix.needsUpdate = true; commitHalo(halo, n);
   });
-  return <instancedMesh ref={ref} args={[undefined, undefined, 400]} frustumCulled={false}>
-    <octahedronGeometry args={[.75, 0]} /><meshStandardMaterial color="#ffcf6e" emissive="#ffb547" emissiveIntensity={1.6} toneMapped={false} />
-  </instancedMesh>;
+  return <>
+    <instancedMesh ref={ref} args={[starGeometry(), undefined, 400]} frustumCulled={false}>
+      <meshStandardMaterial color="#ffd04f" emissive="#ff9d1a" emissiveIntensity={1.7} metalness={.3} roughness={.3} flatShading toneMapped={false} />
+    </instancedMesh>
+    <primitive object={halo} />
+  </>;
 }
 
 function Portal({ ctl }: { ctl: Control }) {
@@ -246,7 +284,7 @@ function Comet({ sim }: { sim: Sim }) {
   </group>;
 }
 
-const metal = { metalness: .65, roughness: .3 } as const;
+const metal = { metalness: .3, roughness: .35 } as const; // no env map here, so high metalness renders near-black
 const glass = (c: string) => <meshStandardMaterial color={c} emissive={c} emissiveIntensity={.9} metalness={.2} roughness={.05} />;
 const paint = (c: string) => <meshStandardMaterial color={c} emissive={c} emissiveIntensity={.3} metalness={.5} roughness={.35} />;
 const Flame = ({ x, z = 0, s = 1 }: { x: number; z?: number; s?: number }) => <group position={[x, 0, z]}>
@@ -261,8 +299,8 @@ function ShipModel({ color, hull, flame }: { color: string; hull: HullId; flame?
     <mesh position={[.9, .3, 0]} scale={[1.4, .4, .4]}><sphereGeometry args={[.6, 14, 10]} />{glass("#7dffb4")}</mesh>
     {[-1, 1].map(side => <group key={side}>
       {/* forward-swept blades */}
-      <mesh position={[-.3, 0, side * 1.5]} rotation={[0, side * -.55, 0]}><boxGeometry args={[2.6, .1, .7]} />{paint(color)}</mesh>
-      <mesh position={[.65, 0, side * 2.55]}><sphereGeometry args={[.16, 8, 6]} /><meshBasicMaterial color={color} toneMapped={false} /></mesh>
+      <mesh position={[-.3, 0, side * 1.05]} rotation={[0, side * -.55, 0]}><boxGeometry args={[2.8, .1, .8]} />{paint(color)}</mesh>
+      <mesh position={[.75, 0, side * 1.75]}><sphereGeometry args={[.16, 8, 6]} /><meshBasicMaterial color={color} toneMapped={false} /></mesh>
       <mesh position={[-1.6, .35, side * .5]} rotation={[side * .5, 0, 0]}><boxGeometry args={[.9, .7, .08]} /><meshStandardMaterial color="#c8cde6" {...metal} /></mesh>
     </group>)}
     <mesh position={[-2.1, 0, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[.45, .55, .7, 12]} /><meshStandardMaterial color="#5b6178" {...metal} /></mesh>
@@ -361,9 +399,10 @@ function Floats({ sim }: { sim: Sim }) {
 /** Real-data extras around planets: issue asteroids, star-shield pickups and an activity glow. */
 const ROCK_POOL = 220, STAR_POOL = 24, GLOW_POOL = 24;
 function PlanetExtras({ sim }: { sim: Sim }) {
-  const rocks = useRef<THREE.InstancedMesh>(null), stars = useRef<THREE.InstancedMesh>(null);
+  const rocks = useRef<THREE.InstancedMesh>(null), stars = useRef<THREE.InstancedMesh>(null), shields = useRef<THREE.InstancedMesh>(null);
+  const halo = useMemo(() => makeHalo(STAR_POOL, 13), []);
   const glows = useRef<(THREE.Sprite | null)[]>([]);
-  useFrame(({ clock }) => {
+  useFrame(({ clock, camera }) => {
     let nr = 0, ns = 0, ng = 0;
     const t = clock.elapsedTime;
     for (const p of sim.planets) {
@@ -373,20 +412,26 @@ function PlanetExtras({ sim }: { sim: Sim }) {
         tmp.rotation.set(t + rock.a, t * .7, 0); tmp.scale.setScalar(.9); tmp.updateMatrix(); rocks.current?.setMatrixAt(nr++, tmp.matrix);
       }
       if (p.star && p.star.cool <= 0 && ns < STAR_POOL) {
-        tmp.position.set(p.x + Math.cos(p.star.a) * p.star.r, 1.8 + Math.sin(t * 2 + p.i) * .3, p.z + Math.sin(p.star.a) * p.star.r);
-        tmp.rotation.set(0, t * 2, 0); tmp.scale.setScalar(1.2); tmp.updateMatrix(); stars.current?.setMatrixAt(ns++, tmp.matrix);
+        const x = p.x + Math.cos(p.star.a) * p.star.r, y = 1.8 + Math.sin(t * 2 + p.i) * .3, z = p.z + Math.sin(p.star.a) * p.star.r;
+        tmp.position.set(x, y, z); billboard(camera.quaternion, Math.sin(t * 1.5 + p.i) * .35);
+        tmp.scale.setScalar(1.35); tmp.updateMatrix(); stars.current?.setMatrixAt(ns, tmp.matrix);
+        billboard(camera.quaternion, -t * 1.2); tmp.scale.setScalar(2.2 + Math.sin(t * 3 + p.i) * .2); tmp.updateMatrix(); shields.current?.setMatrixAt(ns, tmp.matrix);
+        setHalo(halo, ns++, x, y, z, SHIELD, .8 + .2 * Math.sin(t * 5 + p.i));
       }
       if (p.fresh && ng < GLOW_POOL) {
         const g = glows.current[ng++];
         if (g) { g.visible = true; g.position.set(p.x, 0, p.z); g.scale.setScalar(p.R * (4.2 + Math.sin(t * 2 + p.i) * .5)); (g.material as THREE.SpriteMaterial).color.set(p.glow); }
       }
     }
-    for (const [m, n] of [[rocks, nr], [stars, ns]] as const) if (m.current) { m.current.count = n; m.current.instanceMatrix.needsUpdate = true; }
+    for (const [m, n] of [[rocks, nr], [stars, ns], [shields, ns]] as const) if (m.current) { m.current.count = n; m.current.instanceMatrix.needsUpdate = true; }
+    commitHalo(halo, ns);
     for (let i = ng; i < GLOW_POOL; i++) { const g = glows.current[i]; if (g) g.visible = false; }
   });
   return <>
     <instancedMesh ref={rocks} args={[undefined, undefined, ROCK_POOL]} frustumCulled={false}><dodecahedronGeometry args={[1, 0]} /><meshStandardMaterial color="#6b1d2a" emissive="#ff4f6a" emissiveIntensity={.7} flatShading /></instancedMesh>
-    <instancedMesh ref={stars} args={[undefined, undefined, STAR_POOL]} frustumCulled={false}><octahedronGeometry args={[1, 0]} /><meshStandardMaterial color="#fff1b0" emissive="#ffc23d" emissiveIntensity={2} flatShading toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={stars} args={[starGeometry(), undefined, STAR_POOL]} frustumCulled={false}><meshStandardMaterial color="#fff4c4" emissive="#ffc23d" emissiveIntensity={1.6} metalness={.3} roughness={.25} flatShading toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={shields} args={[undefined, undefined, STAR_POOL]} frustumCulled={false}><ringGeometry args={[.86, 1, 48]} /><meshBasicMaterial color="#ffe08a" {...additive} opacity={.55} side={THREE.DoubleSide} /></instancedMesh>
+    <primitive object={halo} />
     {Array.from({ length: GLOW_POOL }, (_, i) => <sprite key={i} ref={el => { glows.current[i] = el; }} visible={false}><spriteMaterial map={glow()} opacity={.22} {...additive} /></sprite>)}
   </>;
 }
@@ -470,15 +515,15 @@ function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
     for (let i = nm; i < motherships.current.length; i++) { const g = motherships.current[i]; if (g) g.visible = false; }
   });
   return <>
-    <instancedMesh ref={disc} args={[undefined, undefined, 40]} frustumCulled={false}><cylinderGeometry args={[2.2, 2.6, .55, 28]} /><meshStandardMaterial color="#9aa3b8" metalness={.85} roughness={.25} /></instancedMesh>
+    <instancedMesh ref={disc} args={[undefined, undefined, 40]} frustumCulled={false}><cylinderGeometry args={[2.2, 2.6, .55, 28]} /><meshStandardMaterial color="#9aa3b8" metalness={.4} roughness={.3} /></instancedMesh>
     <instancedMesh ref={dome} args={[undefined, undefined, 40]} frustumCulled={false}><sphereGeometry args={[1, 18, 10, 0, TAU, 0, Math.PI / 2]} /><meshStandardMaterial color={palette.saucer} emissive={palette.saucer} emissiveIntensity={1.4} transparent opacity={.85} toneMapped={false} /></instancedMesh>
     <instancedMesh ref={lights} args={[undefined, undefined, 40]} frustumCulled={false}><torusGeometry args={[2.45, .13, 6, 18]} /><meshBasicMaterial color="#ff4fd8" toneMapped={false} /></instancedMesh>
     <instancedMesh ref={hunter} args={[undefined, undefined, 40]} frustumCulled={false}><octahedronGeometry args={[1.4, 0]} /><meshStandardMaterial color="#2a1010" emissive={palette.hunter} emissiveIntensity={1.2} flatShading toneMapped={false} /></instancedMesh>
     <instancedMesh ref={blades} args={[undefined, undefined, 40]} frustumCulled={false}><torusGeometry args={[1.5, .08, 4, 3]} /><meshBasicMaterial color="#ff8a9a" toneMapped={false} /></instancedMesh>
     <instancedMesh ref={swarm} args={[undefined, undefined, 60]} frustumCulled={false}><tetrahedronGeometry args={[.9, 0]} /><meshStandardMaterial color="#5c4300" emissive={palette.swarmer} emissiveIntensity={1.6} flatShading toneMapped={false} /></instancedMesh>
     {[0, 1].map(i => <group key={i} ref={el => { motherships.current[i] = el; }} visible={false}>
-      <mesh><cylinderGeometry args={[5.4, 6.6, 1.3, 40]} /><meshStandardMaterial color="#5d5a78" metalness={.85} roughness={.3} /></mesh>
-      <mesh position={[0, -.9, 0]}><cylinderGeometry args={[3.4, 2.2, .8, 32]} /><meshStandardMaterial color="#3a3650" metalness={.8} roughness={.35} /></mesh>
+      <mesh><cylinderGeometry args={[5.4, 6.6, 1.3, 40]} /><meshStandardMaterial color="#5d5a78" metalness={.4} roughness={.35} /></mesh>
+      <mesh position={[0, -.9, 0]}><cylinderGeometry args={[3.4, 2.2, .8, 32]} /><meshStandardMaterial color="#3a3650" metalness={.4} roughness={.4} /></mesh>
       <mesh position={[0, .6, 0]}><sphereGeometry args={[3, 24, 14, 0, TAU, 0, Math.PI / 2]} /><meshStandardMaterial color={palette.mothership} emissive={palette.mothership} emissiveIntensity={1.5} transparent opacity={.85} toneMapped={false} /></mesh>
       <mesh><torusGeometry args={[6.4, .2, 8, 48]} /><meshBasicMaterial color="#ff4fd8" toneMapped={false} /></mesh>
       {Array.from({ length: 8 }, (_, k) => <mesh key={k} position={[Math.cos(k / 8 * TAU) * 7.2, 0, Math.sin(k / 8 * TAU) * 7.2]} rotation={[0, -k / 8 * TAU, 0]}>
