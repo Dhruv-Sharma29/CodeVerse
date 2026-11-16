@@ -183,11 +183,13 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         events.length = 0;
         step(c.sim, c.input, dt, events);
         if (c.docked) {
-          // Glide in over 0.9 s (ease-out), then stay parked on the side facing the ship, riding the planet's orbit.
+          // Glide in over 0.9 s (ease-out), then circle the planet slowly (3 units/s, about 20-40 s a lap), nose along the orbit.
           const p = c.docked, s = c.sim.ship, from = c.dockFrom ?? { x: s.x, z: s.z, a: s.a };
           c.dockT = Math.min(1, (c.dockT ?? 0) + dt / .9);
-          const e = 1 - (1 - c.dockT) ** 3, a = Math.atan2(from.z - p.z, from.x - p.x) || 0, r = p.R + 6;
-          const turn = Math.atan2(Math.sin(a + Math.PI - from.a), Math.cos(a + Math.PI - from.a)); // shortest way round
+          const e = 1 - (1 - c.dockT) ** 3, r = p.R + 6;
+          c.dockSpin = (c.dockSpin ?? 0) + dt * 3 / r * e; // speeds up as the glide ends
+          const a = (Math.atan2(from.z - p.z, from.x - p.x) || 0) + c.dockSpin, head = a + Math.PI / 2;
+          const turn = Math.atan2(Math.sin(head - from.a), Math.cos(head - from.a)); // shortest way round
           Object.assign(s, { x: from.x + (p.x + Math.cos(a) * r - from.x) * e, z: from.z + (p.z + Math.sin(a) * r - from.z) * e, vx: 0, vz: 0, inv: Math.max(s.inv, .4), a: from.a + turn * e });
         }
         if (events.length) handleEvents(c.sim, events);
@@ -396,7 +398,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     const c = ctl.current; if (!c || c.attract) return;
     dockAbort.current?.abort(); const abort = dockAbort.current = new AbortController();
     const s = c.sim.ship;
-    c.docked = planet; c.dockT = 0; c.dockFrom = { x: s.x, z: s.z, a: s.a }; sfx.grab();
+    c.docked = planet; c.dockT = c.dockSpin = 0; c.dockFrom = { x: s.x, z: s.z, a: s.a }; sfx.grab();
     setDock({ planet, readme: null, contributors: null, error: "" });
     Promise.allSettled([fetchReadme(planet.repo, abort.signal), fetchContributors(planet.repo, abort.signal)]).then(([readme, people]) => {
       if (abort.signal.aborted) return;

@@ -21,6 +21,8 @@ export interface Control {
   /** Docking approach: 0 at the moment of docking, 1 once parked; and where the ship started from. */
   dockT?: number;
   dockFrom?: { x: number; z: number; a: number };
+  /** Angle the docked ship has travelled round its planet. */
+  dockSpin?: number;
   pointer: { x: number; y: number; mouse: boolean };
   onStep: (dt: number) => void;
 }
@@ -95,8 +97,8 @@ function CameraRig({ ctl }: { ctl: Control }) {
     // Follow-cam: while waiting to respawn, watch the pilot who shot you down.
     const dk = ctl.docked, wide = size.width > 760;
     if (killer) look.current.lerp(hit.set(killer.x, 0, killer.z), Math.min(1, dt * 3));
-    // Docked: frame ship and planet together, clear of the dock panel (right on wide screens, bottom on phones).
-    else if (dk) look.current.lerp(hit.set(s.x * .6 + dk.x * .4 + (wide ? 10 * ctl.zoom : 0), 0, s.z * .6 + dk.z * .4 + (wide ? 0 : 12 * ctl.zoom)), Math.min(1, dt * 3));
+    // Docked: hold the planet steady while the ship circles it, clear of the dock panel (right on wide screens, bottom on phones).
+    else if (dk) look.current.lerp(hit.set(dk.x + (wide ? 10 * ctl.zoom : 0), 0, dk.z + (wide ? 0 : 12 * ctl.zoom)), Math.min(1, dt * 3));
     else look.current.lerp(hit.set(s.x + Math.cos(s.a) * lead + s.vx * .12, 0, s.z + Math.sin(s.a) * lead + s.vz * .12), Math.min(1, dt * 5));
     dock.current += ((dk ? 1 : 0) - dock.current) * Math.min(1, dt * 2.5); // docked: ease the camera in closer
     const d = ctl.zoom * portrait * (1 - dock.current * .4), w = ctl.warp, ax = Math.cos(s.a), az = Math.sin(s.a);
@@ -234,7 +236,7 @@ function DockFx({ ctl }: { ctl: Control }) {
       tether.current.children.forEach(m => { ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = (m.userData.o as number) * k; });
     }
     if (pad.current) {
-      pad.current.position.set(s.x, .15, s.z); pad.current.rotation.y = t * .8; pad.current.scale.setScalar(.8 + k * .4);
+      pad.current.position.set(s.x, .15, s.z); pad.current.rotation.y = t * .8; pad.current.scale.setScalar(.55 + k * .3);
       pad.current.children.forEach(m => { ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = (m.userData.o as number) * k; });
     }
   });

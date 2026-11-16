@@ -61,8 +61,8 @@ top of the screen.
 ## Docking
 
 Fly close to a planet and press **Enter** (or **Dock** on its card). The ship glides in over about a
-second and parks just above the surface, held by a tractor beam on a spinning landing ring, shielded and
-with weapons off. The camera eases in and frames the ship and planet clear of the panel, which shows the repository: description, stars, forks,
+second, then circles the planet slowly just above the surface, held by a tractor beam, shielded and
+with weapons off. The camera eases in and holds the planet clear of the panel, which shows the repository: description, stars, forks,
 a short excerpt of its README, and its top contributors (bots left out). Each contributor is a
 hyperjump: pick one to warp into their universe. That is the way to walk GitHub's real social graph:
 repository → person → their repositories → their collaborators.
