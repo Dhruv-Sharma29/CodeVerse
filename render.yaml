@@ -14,6 +14,8 @@ services:
       paths:
         - viewer/server/multiplayer.mjs
         - viewer/server/relay.mjs
+        - viewer/server/board.mjs
+        - viewer/server/keepWarm.mjs
         - viewer/package.json
         - viewer/package-lock.json
     envVars:
@@ -21,3 +23,9 @@ services:
         value: https://codeverse-orbit.vercel.app
       - key: NODE_VERSION
         value: "22"
+      # Leaderboard store (Upstash Redis, free tier). Without these the boards live in memory and
+      # are lost whenever the relay restarts or sleeps.
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
