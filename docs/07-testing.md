@@ -1,6 +1,6 @@
 # 07 — Testing
 
-**109 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
+**110 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
 (22.6+, native TypeScript stripping) or `pytest`. CI runs all of them, plus type-checking, lint and
 the production build, on every push and pull request.
 
@@ -14,7 +14,7 @@ $ cd ../analyzer && uv run pytest tests -q
 
 | Suite | Tests | What it pins down |
 |---|---|---|
-| `orbitSim.test.mjs` | 13 | The game rules: shooting and aim assist, gravity grab and fling, gate placement and triggering, comet path and once-per-crossing bonus, supernova, ship-relative thrust, hull firepower, the mothership's capped damage, aliens not passing through planets, the ship never entering a held planet, dogfight damage from any other pilot, kill credit, the respawn shield, and ping labels, per-pilot caps and expiry |
+| `orbitSim.test.mjs` | 14 | The game rules: saucers and motherships being solid to the ship, shooting and aim assist, gravity grab and fling, gate placement and triggering, comet path and once-per-crossing bonus, supernova, ship-relative thrust, hull firepower, the mothership's capped damage, aliens not passing through planets, the ship never entering a held planet, dogfight damage from any other pilot, kill credit, the respawn shield, and ping labels, per-pilot caps and expiry |
 | `multiplayer.test.mjs` | 5 | The relay: rooms are separate, names and colours are cleaned, invalid rooms are refused, leaving is broadcast, hulls fall back, the origin allow-list refuses other sites, dogfight state, kill announcements, emotes and pings are relayed and validated, and `/stats` counts sessions, company and hyperjumps without pilot data |
 | `events.test.mjs` | 6 | World events: storm schedule and determinism, meteor hits and shooting, the bounty pick, hold-the-gate scoring and contesting, the daily challenge, and evenly spread seeded randomness |
 | `traits.test.mjs` | 5 | Real-data planets: language physics, issue-rock counts, activity glow, closing an issue, star shields, and bouncy planets ricocheting |

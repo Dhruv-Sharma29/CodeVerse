@@ -558,6 +558,21 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
         const vn = a.vx * px + a.vz * pz; if (vn < 0) { a.vx -= 1.6 * vn * px; a.vz -= 1.6 * vn * pz; }
       }
     }
+    // Saucers and the mothership are solid to your ship: bounce off (hunters and swarmers explode on contact instead).
+    if ((a.kind === "saucer" || a.kind === "mothership") && alive && !a.held) {
+      const ds = dist(a, s) || .001, min = ar + 1.6;
+      if (ds < min) {
+        const ux = (s.x - a.x) / ds, uz = (s.z - a.z) / ds, mine = a.kind === "mothership" ? 1 : .6; // share of the push the ship takes
+        s.x += ux * (min - ds) * mine; s.z += uz * (min - ds) * mine;
+        a.x -= ux * (min - ds) * (1 - mine); a.z -= uz * (min - ds) * (1 - mine);
+        const vn = (s.vx - a.vx) * ux + (s.vz - a.vz) * uz;
+        if (vn < 0) {
+          s.vx -= 1.5 * vn * ux * mine; s.vz -= 1.5 * vn * uz * mine;
+          a.vx += 1.5 * vn * ux * (1 - mine); a.vz += 1.5 * vn * uz * (1 - mine);
+          if (vn < -15) hurt(sim, a.kind === "mothership" ? 8 : 4, ev); // ramming at speed scrapes the hull
+        }
+      }
+    }
   }
   sim.aliens = sim.aliens.filter(a => a.hp > -99);
 

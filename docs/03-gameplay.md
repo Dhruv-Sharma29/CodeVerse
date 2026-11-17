@@ -43,7 +43,9 @@ Waves begin a few seconds after the previous one is cleared.
 | **Swarmer** | Packs of six from wave 3 | Weaves toward you; pops on contact for 8 damage | 1 | 40 |
 | **Mothership** | Every fifth wave | Orbits at range, fires rings of 16 shots (faster below half health), launches swarmers | 40 + 3 × wave | 1,500 |
 
-Planets are solid: aliens steer around them and cannot pass through.
+Planets are solid: aliens steer around them and cannot pass through. Saucers and the mothership are
+solid to your ship too: you bounce off them, and ramming one at speed scrapes a little hull (4, or 8
+for the mothership).
 
 ### Perks
 

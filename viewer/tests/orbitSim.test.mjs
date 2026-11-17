@@ -166,3 +166,21 @@ test('pings are labelled from the world, capped per pilot, and expire', async ()
   for (let i = 0; i < (PING.life + 1) * 60; i++) step(sim, emptyInput(), 1 / 60, []);
   assert.equal(sim.pings.length, 0);
 });
+
+test('saucers and motherships are solid: the ship bounces off instead of passing through', () => {
+  for (const kind of ['saucer', 'mothership']) {
+    const sim = createSim(universe);
+    sim.waveTimer = 999; sim.planets.length = 0;
+    Object.assign(sim.ship, { x: 100, z: 100, vx: 45, vz: 0, inv: 0 });
+    sim.aliens.push({ id: 1, kind, x: 112, z: 100, vx: 0, vz: 0, hp: 40, max: 40, cool: 99, held: false, flung: 0, spin: 0, orbitDir: 1, t: 0, hitCool: 0 });
+    const min = (kind === 'saucer' ? 2.6 : 6.5) + 1.6;
+    let closest = Infinity;
+    for (let i = 0; i < 60; i++) {
+      step(sim, { ...emptyInput(), move: { x: 1, z: 0 } }, 1 / 60, []);
+      const a = sim.aliens[0];
+      closest = Math.min(closest, Math.hypot(sim.ship.x - a.x, sim.ship.z - a.z));
+    }
+    assert.ok(closest > min - .01, `${kind}: ship got within ${closest.toFixed(2)} (min ${min})`);
+    assert.ok(sim.ship.hp < 100, `${kind}: ramming at speed costs hull`);
+  }
+});
