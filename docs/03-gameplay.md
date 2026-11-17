@@ -97,7 +97,8 @@ Release to fling it at your ship's velocity plus 85 units per second along your 
 
 ## Commits and supernova
 
-Each commit collected gives 25 score and 12% charge; each kill gives 3–60% depending on the alien.
+Each commit collected gives 25 score and 12% charge; each kill gives 3–60% depending on the alien. Kills made by your own supernova score
+as usual but add no charge, so a nova that clears a wave cannot refill itself.
 At 100%, press **Q** (or **NOVA**): a shockwave spreads to a radius of 100 over 0.9 seconds,
 destroying aliens and pushing planets outward. Other pilots in the universe see it.
 

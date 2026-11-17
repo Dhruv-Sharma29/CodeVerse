@@ -215,19 +215,21 @@ function hurt(sim: Sim, amount: number, ev: SimEvent[], by?: number) {
   }
 }
 
-function killAlien(sim: Sim, a: Alien, ev: SimEvent[], credit = true) {
+/** credit: true = points and nova charge; "score" = points only (supernova kills, so a nova can't refill itself); false = nothing. */
+type Credit = boolean | "score";
+function killAlien(sim: Sim, a: Alien, ev: SimEvent[], credit: Credit = true) {
   if (a.hp <= -99) return;
   a.hp = -99;
   const k = ALIENS[a.kind];
   explode(sim, a.x, a.z, k.color, a.kind === "mothership" ? 160 : 46, k.boom);
   if (a.kind === "mothership") { sim.shake = 1; for (let i = 0; i < 6; i++) explode(sim, a.x + (Math.random() - .5) * 14, a.z + (Math.random() - .5) * 14, "#ffb547", 30, 12); }
   if (credit) {
-    sim.score += k.pts; sim.kills++; addCharge(sim, k.charge);
+    sim.score += k.pts; sim.kills++; if (credit === true) addCharge(sim, k.charge);
     ev.push({ type: "kill", kind: a.kind, points: k.pts });
   }
 }
 /** Bullets chip away; "instant kill" sources (planets, novas, blasts) pass a big number. The boss takes those as capped, spaced-out hits. */
-function damageAlien(sim: Sim, a: Alien, dmg: number, ev: SimEvent[], credit = true) {
+function damageAlien(sim: Sim, a: Alien, dmg: number, ev: SimEvent[], credit: Credit = true) {
   if (a.hp <= 0) return;
   if (a.kind === "mothership" && dmg > 2) {
     if (a.hitCool > 0) return;
@@ -630,7 +632,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   for (const n of sim.novas) {
     n.t += dt;
     const radius = novaRadius(n.t);
-    for (const a of sim.aliens) if (!n.hit.has(a) && a.hp > 0 && dist(n, a) < radius) { n.hit.add(a); damageAlien(sim, a, 99, ev, n.mine); }
+    for (const a of sim.aliens) if (!n.hit.has(a) && a.hp > 0 && dist(n, a) < radius) { n.hit.add(a); damageAlien(sim, a, 99, ev, n.mine && "score"); }
     if (!n.mine && alive && pvpWith(sim, n.owner) && !n.hit.has(s) && dist(n, s) < radius) { n.hit.add(s); hurt(sim, PVP.nova, ev, n.owner); }
     if (n.mine) for (const bot of sim.bots) if (bot.hp > 0 && !n.hit.has(bot) && dist(n, bot) < radius) { n.hit.add(bot); damageBot(sim, bot, PVP.nova, ev); }
     for (const p of sim.planets) if (!n.hit.has(p) && dist(n, p) < radius) {

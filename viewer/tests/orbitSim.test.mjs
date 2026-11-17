@@ -184,3 +184,16 @@ test('saucers and motherships are solid: the ship bounces off instead of passing
     assert.ok(sim.ship.hp < 100, `${kind}: ramming at speed costs hull`);
   }
 });
+
+test('a supernova that wipes out a wave scores the kills but cannot refill itself', () => {
+  const sim = createSim(universe);
+  sim.waveTimer = 999; sim.perks.nova = 3;                 // even with the nova capacitor maxed
+  Object.assign(sim.ship, { x: 200, z: 200, vx: 0, vz: 0 });
+  for (let i = 0; i < 14; i++) sim.aliens.push({ id: i, kind: 'saucer', x: 200 + Math.cos(i) * 30, z: 200 + Math.sin(i) * 30, vx: 0, vz: 0, hp: 3, max: 3, cool: 99, held: false, flung: 0, spin: 0, orbitDir: 1, t: 0, hitCool: 0 });
+  sim.charge = 100;
+  run(sim, { ...emptyInput(), nova: true }, 1 / 60);
+  run(sim, emptyInput(), 1.5);
+  assert.equal(sim.kills, 14);
+  assert.equal(sim.score, 1400);
+  assert.equal(sim.charge, 0);
+});
