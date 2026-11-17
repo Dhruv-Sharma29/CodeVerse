@@ -11,8 +11,8 @@ export const ACTION_LABELS: Record<Action, string> = {
   up: "Thrust", down: "Reverse", left: "Strafe left", right: "Strafe right", fire: "Fire", grab: "Gravity beam", boost: "Boost",
   nova: "Supernova", ping: "Ping", dock: "Dock / undock", board: "Pilots board", controls: "Controls", fullscreen: "Full screen", music: "Music",
 };
-/** Always-on keys that can't be rebound: arrows (second set for flying), emotes, Escape. */
-export const RESERVED = new Set(["arrowup", "arrowdown", "arrowleft", "arrowright", "1", "2", "3", "4", "5", "6", "escape"]);
+/** Always-on keys that can't be rebound: arrows (second set for flying), emotes (1-6), perk picks (7-9), Escape. */
+export const RESERVED = new Set(["arrowup", "arrowdown", "arrowleft", "arrowright", "1", "2", "3", "4", "5", "6", "7", "8", "9", "escape"]);
 
 export function keyLabel(k: string): string {
   const names: Record<string, string> = { " ": "Space", shift: "Shift", enter: "Enter", tab: "Tab", control: "Ctrl", alt: "Alt", meta: "Cmd", backspace: "Backspace" };

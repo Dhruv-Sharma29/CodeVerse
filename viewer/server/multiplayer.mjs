@@ -7,10 +7,11 @@ import { createBoard, dayOf } from './board.mjs';
 export const PLAY_PATH = '/api/play';
 export const BOARD_PATH = '/board';
 const HULL_HP = { dart: 100, wasp: 70, titan: 160 }; // matches HULLS in src/game/sim.ts
+const PLATING_MAX = 1.6; // hull plating perk at its top level; matches PLATING_MAX in src/game/sim.ts
 /**
  * Server checks on self-reported state, so the leaderboards can't simply be typed in. Score may grow
  * by `rate` points a second on average with bursts up to `burst` (a mothership, a daily reward);
- * speed above `speed` (boost tops out near 95) and HP above the hull's maximum are impossible.
+ * speed above `speed` (boost tops out near 95) and HP above the hull's maximum (with full hull plating) are impossible.
  * A pilot who fails a check keeps playing but is left off the boards for the rest of the connection.
  * ponytail: limits are estimates from the score table; tune them with the `flagged` count in /stats.
  */
@@ -56,7 +57,7 @@ export function createRelay({ board = createBoard() } = {}) {
       if (c.stintBase == null) c.stintBase = c.last;
       c.bucket = Math.min(CHECK.burst, c.bucket + (now - c.lastAt) / 1000 * CHECK.rate) - (st.s - c.last);
     }
-    const bad = c.bucket < 0 || Math.hypot(st.vx, st.vz) > CHECK.speed || st.hp > (HULL_HP[c.hull] ?? 100) + 1;
+    const bad = c.bucket < 0 || Math.hypot(st.vx, st.vz) > CHECK.speed || st.hp > (HULL_HP[c.hull] ?? 100) * PLATING_MAX + 1;
     if (bad && !c.cheat) { c.cheat = true; counters.flagged++; }
     c.last = st.s; c.lastAt = now;
   }

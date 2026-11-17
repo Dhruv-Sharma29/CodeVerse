@@ -64,6 +64,33 @@ export const HULLS: Record<HullId, { name: string; blurb: string; hp: number; ac
   titan: { name: "Titan", blurb: "Armoured. Three-way heavy cannon.", hp: 160, acc: 58, max: 38, boost: 60, fire: .3, guns: 3, dmg: 2, spread: .17, trail: "#ffb547" },
 };
 export const isHull = (h: unknown): h is HullId => typeof h === "string" && h in HULLS;
+
+/** Upgrades offered after each cleared wave: pick one of three. Each stacks up to `max` levels. */
+export const PERKS = {
+  rapid: { name: "Rapid fire", blurb: "15% less time between shots", max: 3 },
+  beam: { name: "Tractor beam", blurb: "Grab from 25% farther, throw 20% harder", max: 3 },
+  nova: { name: "Nova capacitor", blurb: "Supernova charges 30% faster", max: 3 },
+  hull: { name: "Hull plating", blurb: "+20% hull, fully repaired", max: 3 },
+  engine: { name: "Afterburner", blurb: "8% more thrust and top speed", max: 3 },
+};
+export type PerkId = keyof typeof PERKS;
+/** Most hull plating can add; the relay's hull check allows for it. */
+export const PLATING_MAX = 1 + .2 * PERKS.hull.max;
+export const maxHp = (sim: Sim) => HULLS[sim.ship.hull].hp * (1 + .2 * sim.perks.hull);
+const addCharge = (sim: Sim, n: number) => { sim.charge = Math.min(100, sim.charge + n * 1.3 ** sim.perks.nova); };
+/** Three different perks that still have levels left (fewer once most are maxed). */
+export function offerPerks(sim: Sim, rnd = Math.random): PerkId[] {
+  const open = (Object.keys(PERKS) as PerkId[]).filter(k => sim.perks[k] < PERKS[k].max);
+  for (let i = open.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [open[i], open[j]] = [open[j], open[i]]; }
+  return open.slice(0, 3);
+}
+/** Take a perk from the current offer. Returns false if it was not on offer. */
+export function choosePerk(sim: Sim, id: PerkId) {
+  if (!sim.offer?.includes(id) || sim.perks[id] >= PERKS[id].max) return false;
+  sim.perks[id]++; sim.offer = null;
+  if (id === "hull") sim.ship.hp = maxHp(sim);
+  return true;
+}
 export interface Bullet { x: number; z: number; vx: number; vz: number; life: number; from: "me" | "ally" | "alien"; dmg?: number; big?: boolean; owner?: number }
 export interface Particle { x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; max: number; r: number; g: number; b: number }
 export interface Flash { x: number; z: number; t: number; max: number; size: number; color: string }
@@ -80,7 +107,7 @@ export interface Input { move: { x: number; z: number }; aim: { x: number; z: nu
 export type SimEvent =
   | { type: "commit"; planet: Planet; commit: GitCommit }
   | { type: "kill"; kind: Alien["kind"]; points: number }
-  | { type: "hurt" } | { type: "dead"; by?: number } | { type: "storm"; phase: StormPhase } | { type: "meteor" } | { type: "issue"; planet: Planet } | { type: "star"; planet: Planet } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean }
+  | { type: "hurt" } | { type: "dead"; by?: number } | { type: "storm"; phase: StormPhase } | { type: "meteor" } | { type: "issue"; planet: Planet } | { type: "star"; planet: Planet } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean } | { type: "perks" }
   | { type: "load"; planet: Planet } | { type: "shot"; x: number; z: number; a: number }
   | { type: "nova"; x: number; z: number } | { type: "grab" } | { type: "fling" } | { type: "boom"; x: number; z: number };
 
@@ -123,6 +150,9 @@ export function createSim(universe: Universe) {
     floats: [] as { x: number; z: number; text: string; color: string; t: number }[],
     killedBy: null as number | null,
     grab: null as null | { planet?: Planet; alien?: Alien },
+    /** Perk levels, and the three on offer after a cleared wave (null when none). */
+    perks: { rapid: 0, beam: 0, nova: 0, hull: 0, engine: 0 } as Record<PerkId, number>,
+    offer: null as PerkId[] | null, offeredWave: 0,
     score: 0, charge: 0, wave: 0, waveTimer: 4, kills: 0, deaths: 0, commits: 0, shake: 0, portalCool: 2.5, nextAlien: 1,
     near: null as Planet | null,
   };
@@ -189,7 +219,7 @@ function killAlien(sim: Sim, a: Alien, ev: SimEvent[], credit = true) {
   explode(sim, a.x, a.z, k.color, a.kind === "mothership" ? 160 : 46, k.boom);
   if (a.kind === "mothership") { sim.shake = 1; for (let i = 0; i < 6; i++) explode(sim, a.x + (Math.random() - .5) * 14, a.z + (Math.random() - .5) * 14, "#ffb547", 30, 12); }
   if (credit) {
-    sim.score += k.pts; sim.kills++; sim.charge = Math.min(100, sim.charge + k.charge);
+    sim.score += k.pts; sim.kills++; addCharge(sim, k.charge);
     ev.push({ type: "kill", kind: a.kind, points: k.pts });
   }
 }
@@ -300,11 +330,11 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   // ---- ship
   if (!alive) {
     s.dead -= dt;
-    if (s.dead <= 0) { Object.assign(s, { x: SPAWN.x, z: SPAWN.z, vx: 0, vz: 12, hp: HULLS[s.hull].hp, inv: 2.5, dead: 0 }); sim.killedBy = null; }
+    if (s.dead <= 0) { Object.assign(s, { x: SPAWN.x, z: SPAWN.z, vx: 0, vz: 12, hp: maxHp(sim), inv: 2.5, dead: 0 }); sim.killedBy = null; }
   } else {
     s.inv = Math.max(0, s.inv - dt);
     const hull = HULLS[s.hull];
-    if (sim.t - s.lastHit > 4) s.hp = Math.min(hull.hp, s.hp + hull.hp * .04 * dt);
+    if (sim.t - s.lastHit > 4) s.hp = Math.min(maxHp(sim), s.hp + hull.hp * .04 * dt);
     // Facing first, so ship-relative thrust uses this frame's nose direction.
     const sp0 = Math.hypot(s.vx, s.vz);
     if (input.aim) s.a = Math.atan2(input.aim.z - s.z, input.aim.x - s.x);
@@ -324,10 +354,10 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     }
     const ml = Math.hypot(ix, iz);
     const mx = ml > 1 ? ix / ml : ix, mz = ml > 1 ? iz / ml : iz;
-    const acc = hull.acc * (input.boost ? 1.9 : 1);
+    const engine = 1.08 ** sim.perks.engine, acc = hull.acc * engine * (input.boost ? 1.9 : 1);
     s.vx += mx * acc * dt; s.vz += mz * acc * dt;
     const drag = Math.exp(-1.4 * dt); s.vx *= drag; s.vz *= drag;
-    const max = input.boost ? hull.boost : hull.max, sp = Math.hypot(s.vx, s.vz);
+    const max = (input.boost ? hull.boost : hull.max) * engine, sp = Math.hypot(s.vx, s.vz);
     if (sp > max) { s.vx *= max / sp; s.vz *= max / sp; }
     s.thrust = Math.min(1, ml) * (input.boost ? 1.6 : 1);
     s.x += s.vx * dt; s.z += s.vz * dt;
@@ -353,7 +383,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
 
     s.fireCool -= dt;
     if (input.fire && s.fireCool <= 0 && !sim.grab) {
-      s.gun = -s.gun; s.fireCool = hull.fire;
+      s.gun = -s.gun; s.fireCool = hull.fire * .85 ** sim.perks.rapid;
       // Light aim assist: snap to an alien's lead point when the shot is already within ~8°.
       let fa = s.a;
       for (const a of sim.aliens) {
@@ -382,7 +412,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
         if (sat.done) continue;
         const sx = p.x + Math.cos(sat.a) * sat.r, sz2 = p.z + Math.sin(sat.a) * sat.r;
         if (Math.hypot(s.x - sx, s.z - sz2) < 2.6) {
-          sat.done = true; sim.score += 25; sim.commits++; sim.charge = Math.min(100, sim.charge + 12);
+          sat.done = true; sim.score += 25; sim.commits++; addCharge(sim, 12);
           explode(sim, sx, sz2, "#ffcf6e", 18, 5); ev.push({ type: "commit", planet: p, commit: sat.c });
         }
       }
@@ -392,7 +422,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     sim.nearComet = dc < 28;
     if (dc < COMET_CATCH && sim.cometCaught !== sim.comet.epoch) {
       // Catching the comet: once per crossing, a burst of score and supernova charge.
-      sim.cometCaught = sim.comet.epoch; sim.score += 250; sim.charge = Math.min(100, sim.charge + 25);
+      sim.cometCaught = sim.comet.epoch; sim.score += 250; addCharge(sim, 25);
       explode(sim, sim.comet.x, sim.comet.z, "#e8fbff", 60, 14); ev.push({ type: "comet" });
     }
     if (dist(s, sim.portal) < sim.portal.r && sim.portalCool <= 0) { sim.portalCool = 1e9; s.vx = s.vz = 0; ev.push({ type: "portal" }); }
@@ -400,7 +430,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     for (const p of sim.planets) {
       const st = p.star; if (!st || st.cool > 0) continue;
       if (Math.hypot(s.x - (p.x + Math.cos(st.a) * st.r), s.z - (p.z + Math.sin(st.a) * st.r)) < STAR.catch) {
-        st.cool = STAR.respawn; s.inv = Math.max(s.inv, STAR.shield); s.hp = Math.min(HULLS[s.hull].hp, s.hp + STAR.heal);
+        st.cool = STAR.respawn; s.inv = Math.max(s.inv, STAR.shield); s.hp = Math.min(maxHp(sim), s.hp + STAR.heal);
         explode(sim, s.x, s.z, "#ffd76e", 30, 9); ev.push({ type: "star", planet: p });
       }
     }
@@ -422,14 +452,15 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   if (sim.grab && (!input.grab || !alive)) {
     const dx = Math.cos(s.a), dz = Math.sin(s.a), g = sim.grab;
     const target = g.planet ?? g.alien!;
-    const throwSpeed = 85 * (g.planet?.trait.fling ?? 1);
+    const throwSpeed = 85 * (g.planet?.trait.fling ?? 1) * 1.2 ** sim.perks.beam;
     target.vx = s.vx + dx * throwSpeed; target.vz = s.vz + dz * throwSpeed;
     if (g.planet) { g.planet.mode = "flung"; g.planet.modeT = 0; }
     if (g.alien) { g.alien.held = false; g.alien.flung = 2.4; }
     sim.grab = null; sim.shake = Math.min(1, sim.shake + .3); ev.push({ type: "fling" });
   } else if (!sim.grab && input.grab && alive) {
     let best: { planet?: Planet; alien?: Alien; d: number } | null = null;
-    const consider = (o: { x: number; z: number }, d: number) => d < 18 || (d < 55 && angleDiff(Math.atan2(o.z - s.z, o.x - s.x), s.a) < .55);
+    const reach = 1.25 ** sim.perks.beam;
+    const consider = (o: { x: number; z: number }, d: number) => d < 18 * reach || (d < 55 * reach && angleDiff(Math.atan2(o.z - s.z, o.x - s.x), s.a) < .55);
     for (const p of sim.planets) { const d = dist(s, p) - p.R; if ((p.mode === "orbit" || p.mode === "return") && consider(p, d) && (!best || d < best.d)) best = { planet: p, d }; }
     for (const a of sim.aliens) { const d = dist(s, a); if (a.hp > 0 && a.kind !== "mothership" && a.flung <= 0 && consider(a, d) && (!best || d < best.d)) best = { alien: a, d }; }
     if (best) {
@@ -453,7 +484,11 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   }
 
   // ---- aliens
-  if (!sim.aliens.length) { sim.waveTimer -= dt; if (sim.waveTimer <= 0) { spawnWave(sim, ev); sim.waveTimer = 5; } }
+  if (!sim.aliens.length) {
+    // Wave cleared: offer perks once (the offer stays until taken or the next wave is cleared).
+    if (sim.wave > 0 && sim.offeredWave < sim.wave) { sim.offeredWave = sim.wave; const o = offerPerks(sim); sim.offer = o.length ? o : null; if (sim.offer) ev.push({ type: "perks" }); }
+    sim.waveTimer -= dt; if (sim.waveTimer <= 0) { spawnWave(sim, ev); sim.waveTimer = 5; }
+  }
   const target = alive ? s : SPAWN;
   for (const a of sim.aliens) {
     if (a.hp <= -99) continue;
@@ -541,7 +576,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
       let closed = false;
       for (const p of sim.planets) {
         for (const rock of p.rocks) if (rock.alive && Math.hypot(b.x - (p.x + Math.cos(rock.a) * rock.r), b.z - (p.z + Math.sin(rock.a) * rock.r)) < ISSUE.r + .7) {
-          rock.alive = false; b.life = 0; closed = true; sim.score += ISSUE.points; sim.charge = Math.min(100, sim.charge + ISSUE.charge); floatText(sim, b.x, b.z, `+${ISSUE.points}`, "#7dffb4");
+          rock.alive = false; b.life = 0; closed = true; sim.score += ISSUE.points; addCharge(sim, ISSUE.charge); floatText(sim, b.x, b.z, `+${ISSUE.points}`, "#7dffb4");
           explode(sim, b.x, b.z, "#ff6f7f", 16, 5); ev.push({ type: "issue", planet: p }); break;
         }
         if (closed) break;

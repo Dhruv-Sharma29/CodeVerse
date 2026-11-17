@@ -90,7 +90,7 @@ export function SettingsPanel({ touch, quality, resolved, onQuality, palette, on
           </button>
         </div>)}
       </div>
-      <p className="orbit-pad-hint">Arrow keys, 1 to 6 (emotes) and Esc always work and can't be rebound. A key already in use swaps places.</p>
+      <p className="orbit-pad-hint">Arrow keys, 1 to 6 (emotes), 7 to 9 (perk picks) and Esc always work and can't be rebound. A key already in use swaps places.</p>
     </>}
   </aside>;
 }

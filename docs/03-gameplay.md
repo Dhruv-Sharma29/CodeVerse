@@ -45,6 +45,20 @@ Waves begin a few seconds after the previous one is cleared.
 
 Planets are solid: aliens steer around them and cannot pass through.
 
+### Perks
+
+Clearing a wave offers three upgrades; pick one with a click or tap, or **7**, **8** or **9**. The game
+doesn't pause, and the offer stays until you take one or clear the next wave. Each perk stacks to level 3,
+and perks carry through hyperjumps along with your score.
+
+| Perk | Each level |
+|---|---|
+| **Rapid fire** | 15% less time between shots |
+| **Tractor beam** | Grab from 25% farther, throw 20% harder |
+| **Nova capacitor** | Supernova charges 30% faster |
+| **Hull plating** | +20% hull, and a full repair when taken |
+| **Afterburner** | 8% more thrust and top speed |
+
 The mothership can't be grabbed. Planets, supernovas and blasts deal it a capped 12 damage, at most
 once every 0.6 seconds, so it takes several big hits or sustained fire. Its health bar shows at the
 top of the screen.

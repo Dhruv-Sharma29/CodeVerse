@@ -1,6 +1,6 @@
 # 07 — Testing
 
-**105 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
+**107 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
 (22.6+, native TypeScript stripping) or `pytest`. CI runs all of them, plus type-checking, lint and
 the production build, on every push and pull request.
 
@@ -22,6 +22,7 @@ $ cd ../analyzer && uv run pytest tests -q
 | `tilt.test.mjs` | 3 | Tilt-to-steer: portrait and both landscape orientations map to the same screen directions; dead zone and linear ramp |
 | `invite.test.mjs` | 1 | Invite links: a valid GitHub login opens that universe; anything else falls back to the trending hub |
 | `board.test.mjs` | 4 | Leaderboards and checks: honest runs reach both boards (the daily board counts only points earned in that universe), invalid rooms are refused, score jumps, speed and hull hacks are flagged and left off, the Upstash pipeline commands, and the keep-warm window |
+| `perks.test.mjs` | 2 | Perks: a cleared wave offers three different perks once, only offered perks can be taken, hull plating raises and refills the hull, maxed perks are never offered, and rapid fire shortens the gun cooldown |
 | `settings.test.mjs` | 3 | Settings: rebinding swaps a taken key and refuses reserved keys, saved bindings fall back safely, and Auto quality picks Low only on small touch devices |
 | `net.test.mjs` | 2 | The client connection: a sleeping hosted relay reports "waking" without flicker and then goes online; a refused local server reports "offline" |
 | `orbitalPhysics.test.mjs` | 2 | Explorer orbits and collision separation |

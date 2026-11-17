@@ -7,7 +7,7 @@ import { startMusic } from "./music";
 import { BOUNTY, DAILY_REWARD, STORM, bountyHolder, dailyChallenge } from "./events";
 import { GameScene, ShipPreview, type Control, type Peer } from "./GameScene";
 import { boardUrl, connectNet, type Leader, type NetMessage, type NetStatus } from "./net";
-import { EMOTES, HULLS, PING, PVP, SPAWN, addPing, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
+import { EMOTES, HULLS, PERKS, PING, PVP, SPAWN, addPing, choosePerk, maxHp, type PerkId, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
 import { loadUniverse, ownerOf } from "./universe";
 import { invitePath, inviteTarget } from "./invite";
 import { screenTilt, tiltToMove, type Tilt } from "./tilt";
@@ -58,7 +58,7 @@ const sfx = {
 };
 
 interface Toast { id: number; text: string; kind: "" | "good" | "bad" | "commit" }
-interface Hud { score: number; hp: number; charge: number; wave: number; aliens: number; kills: number; dead: boolean; near: Planet | null; grabbing: boolean; comet: boolean; gate: { a: number; d: number }; boss: { hp: number; max: number } | null; board: BoardRow[]; holding: null | "holding" | "contested"; bounty: number | null; storm: string; meteors: number; daily: { done: number; n: number; text: string; complete: boolean } | null }
+interface Hud { offer: PerkId[] | null; perks: Record<PerkId, number>; score: number; hp: number; charge: number; wave: number; aliens: number; kills: number; dead: boolean; near: Planet | null; grabbing: boolean; comet: boolean; gate: { a: number; d: number }; boss: { hp: number; max: number } | null; board: BoardRow[]; holding: null | "holding" | "contested"; bounty: number | null; storm: string; meteors: number; daily: { done: number; n: number; text: string; complete: boolean } | null }
 interface BoardRow { id: number; name: string; color: string; hull: HullId; score: number; kills: number; me: boolean }
 
 export default function OrbitGame({ onExit }: { onExit: () => void }) {
@@ -146,6 +146,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         if (e.by != null) net.current?.send({ t: "killed", by: e.by }); // the kill feed comes back from the relay
         else toast("Ship destroyed. Respawning near the sun.", "bad");
       }
+      else if (e.type === "perks") { tone(660, .09, "triangle", .04); setTimeout(() => tone(880, .12, "triangle", .04), 90); }
       else if (e.type === "wave") { sfx.wave(); toast(e.boss ? `Wave ${e.n}: a MOTHERSHIP is coming` : `Wave ${e.n}: alien ships inbound`, "bad"); }
       else if (e.type === "grab") sfx.grab();
       else if (e.type === "fling") sfx.fling();
@@ -171,7 +172,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const makeControl = useCallback((u: Universe, carry?: Sim): Control => {
     const sim = createSim(u);
     sim.ship.hull = hull; sim.ship.hp = HULLS[hull].hp;
-    if (carry) Object.assign(sim, { score: carry.score, kills: carry.kills, charge: carry.charge, commits: carry.commits, deaths: carry.deaths });
+    if (carry) Object.assign(sim, { score: carry.score, kills: carry.kills, charge: carry.charge, commits: carry.commits, deaths: carry.deaths, perks: { ...carry.perks } });
     const events: SimEvent[] = [];
     const c: Control = {
       sim, input: emptyInput(), zoom: ctl.current?.zoom ?? 1, warp: 0, color, reduceMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -304,7 +305,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         if (!doneToday && got >= today.goal.n) { store.set(`daily:${today.day}`, true); s.score += DAILY_REWARD; sfx.wave(); toast(`Daily challenge complete! +${DAILY_REWARD}`, "good"); }
         daily = { done: Math.min(today.goal.n, got), n: today.goal.n, text: today.goal.text, complete: doneToday || got >= today.goal.n };
       }
-      setHud({ board: rows, holding: s.holding, bounty: s.bountyId, storm: s.stormPhase, meteors: s.meteors.length, daily, boss: boss ? { hp: boss.hp, max: boss.max } : null, score: s.score, hp: s.ship.hp / HULLS[s.ship.hull].hp * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, comet: s.nearComet, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
+      setHud({ board: rows, holding: s.holding, bounty: s.bountyId, storm: s.stormPhase, meteors: s.meteors.length, daily, boss: boss ? { hp: boss.hp, max: boss.max } : null, offer: s.offer, perks: { ...s.perks }, score: s.score, hp: s.ship.hp / maxHp(s) * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, comet: s.nearComet, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
       drawRadar(radar.current, s, paletteRef.current);
     }, 100);
     return () => clearInterval(id);
@@ -338,6 +339,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       if (act === "controls" && !e.repeat) setSheet(v => !v);
       if (act === "board") { e.preventDefault(); if (!e.repeat) setBoard(v => !v); return; }
       if (/^[1-6]$/.test(k) && !e.repeat) { sendEmote(Number(k) - 1); return; }
+      if (/^[7-9]$/.test(k) && !e.repeat) { pickPerk(Number(k) - 7); return; }
       if (act === "fire" || act === "dock" || k.startsWith("arrow") || k === " ") e.preventDefault();
       keys.add(k); syncInput();
     };
@@ -418,6 +420,13 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       c.docked = null;
     }
     setDock(null);
+  }
+
+  /* ---- perks ---- */
+  function pickPerk(i: number) {
+    const sim = ctl.current?.sim, id = sim?.offer?.[i];
+    if (!sim || !id || !choosePerk(sim, id)) return;
+    tone(990, .1, "triangle", .045); toast(`${PERKS[id].name} ${sim.perks[id]}/${PERKS[id].max}`, "good");
   }
 
   /* ---- pings ---- */
@@ -617,11 +626,21 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       </div>
     </header>
 
+    {hud?.offer && !hud.dead && <section className="orbit-perks" aria-label="Pick an upgrade">
+      <span className="orbit-eyebrow">WAVE {hud.wave} CLEARED · PICK AN UPGRADE</span>
+      {hud.offer.map((id, i) => <button type="button" key={id} onClick={() => pickPerk(i)}>
+        {!touch && <kbd>{7 + i}</kbd>}
+        <span><strong>{PERKS[id].name}</strong><small>{PERKS[id].blurb}</small></span>
+        <i aria-label={`Level ${hud.perks[id] + 1} of ${PERKS[id].max}`}>{Array.from({ length: PERKS[id].max }, (_, l) => <b key={l} className={l < hud.perks[id] ? "have" : l === hud.perks[id] ? "next" : ""} />)}</i>
+      </button>)}
+    </section>}
+
     {hud && <section className="orbit-hud" aria-label="Ship status">
       <div className="orbit-score">{hud.score.toLocaleString()}</div>
       <div className="orbit-bar" aria-label={`Hull ${Math.round(hud.hp)} percent`}><span>HULL</span><i style={{ width: `${hud.hp}%`, background: hud.hp < 30 ? "var(--o-bad)" : "var(--o-cyan)" }} /></div>
       <div className={`orbit-bar ${hud.charge >= 100 ? "ready" : ""}`} aria-label={`Supernova charge ${Math.round(hud.charge)} percent`}><span>{hud.charge >= 100 ? "NOVA READY · Q" : "NOVA"}</span><i style={{ width: `${hud.charge}%`, background: "var(--o-amber)" }} /></div>
       <div className="orbit-meta">Wave {hud.wave} · {hud.aliens} alien{hud.aliens === 1 ? "" : "s"} · {hud.kills} down</div>
+      {(Object.keys(PERKS) as PerkId[]).some(k => hud.perks[k]) && <div className="orbit-meta">{(Object.keys(PERKS) as PerkId[]).filter(k => hud.perks[k]).map(k => `${PERKS[k].name} ${hud.perks[k]}`).join(" · ")}</div>}
       {hud.grabbing && <div className="orbit-meta beam">Gravity beam locked. Release to fling.</div>}
     </section>}
 

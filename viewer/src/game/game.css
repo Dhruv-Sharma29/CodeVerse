@@ -324,3 +324,20 @@ p.orbit-dock-readme { padding: 8px 10px; border-left: 2px solid rgba(159,232,255
 /* Hyperjump: world labels fade out while the ship is in the tunnel. */
 .orbit-canvas span { transition: opacity .3s; }
 .orbit-game.warping .orbit-canvas span { opacity: 0; }
+/* perks offered after a cleared wave */
+.orbit-perks { position: absolute; left: var(--o-gl); bottom: calc(var(--o-gb) + 215px); /* above the HUD and the nearby-planet card */ width: min(300px, calc(100vw - 32px)); z-index: 6; display: grid; gap: 6px;
+  padding: 10px; background: var(--o-panel); border: 1px solid rgba(255,207,110,.45); border-radius: var(--o-r); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 10px 30px rgba(0,0,0,.35); animation: orbit-dock-in .35s cubic-bezier(.2,.8,.2,1) both; }
+.orbit-perks .orbit-eyebrow { color: var(--o-amber); }
+.orbit-perks button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid var(--o-line); text-align: left; transition: border-color .15s, transform .15s; }
+.orbit-perks button:hover { border-color: var(--o-amber); transform: translateY(-1px); }
+.orbit-perks kbd { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; border: 1px solid var(--o-line); font-family: var(--o-mono); font-size: 11px; color: var(--o-amber); }
+.orbit-perks button > span { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.orbit-perks strong { font-size: 13px; }
+.orbit-perks small { color: var(--o-muted); font-size: 11px; line-height: 1.35; }
+.orbit-perks i { flex: none; display: flex; gap: 3px; }
+.orbit-perks b { width: 6px; height: 6px; border-radius: 50%; border: 1px solid rgba(255,207,110,.5); }
+.orbit-perks b.have { background: var(--o-amber); border-color: var(--o-amber); }
+.orbit-perks b.next { border-color: var(--o-amber); box-shadow: 0 0 6px var(--o-amber); }
+@media (max-width: 760px) { .orbit-perks { top: calc(var(--o-gt) + 140px); bottom: auto; width: min(270px, calc(100vw - 32px)); } } /* under the bar and status line, above the planet card and stick */
+@media (prefers-reduced-motion: reduce) { .orbit-perks { animation: none; } }

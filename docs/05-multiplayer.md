@@ -107,7 +107,7 @@ or throw any planet in its room. For the leaderboards the relay checks every `st
 - **Score growth:** a budget of 80 points a second, with bursts up to 4,000 (a mothership, a
   daily reward). A larger jump fails.
 - **Speed:** above 130 fails (boost tops out near 95).
-- **Hull:** above the hull's maximum fails.
+- **Hull:** above the hull's maximum with full hull plating (160%) fails.
 
 A pilot who fails is still relayed but is left off the boards for the rest of the connection.
 These checks stop typed-in scores and obvious speed or health hacks. They do not stop a client
