@@ -6,7 +6,7 @@ import { readPad, type PadState } from "./gamepad";
 import { startMusic } from "./music";
 import { BOUNTY, DAILY_REWARD, STORM, bountyHolder, dailyChallenge } from "./events";
 import { GameScene, ShipPreview, type Control, type Peer } from "./GameScene";
-import { clearBots, spawnBots, stepBots } from "./bots";
+import { BOT_KILL, clearBots, spawnBots, stepBots } from "./bots";
 import { boardUrl, connectNet, type Leader, type NetMessage, type NetStatus } from "./net";
 import { EMOTES, HULLS, PERKS, PING, PVP, SPAWN, addPing, choosePerk, maxHp, type PerkId, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
 import { loadUniverse, ownerOf } from "./universe";
@@ -134,6 +134,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     for (const e of events) {
       if (e.type === "shot" || e.type === "fling" || e.type === "commit" || e.type === "nova" || e.type === "portal") learn(e.type);
       if (e.type === "shot") { sfx.shot(); net.current?.send({ t: "shot", x: e.x, z: e.z, a: e.a, d: HULLS[sim.ship.hull].dmg }); }
+      else if (e.type === "botDown") { sfx.kill(); toast(`You shot down ${e.name} (bot) +${BOT_KILL}`, "good"); }
       else if (e.type === "pvpHit") { tone(1900, .05, "square", .03, .6); tone(2600, .03, "sine", .02); }
       else if (e.type === "kill") { sfx.kill(); if (e.kind === "mothership") toast(`Mothership destroyed! +${e.points}`, "good"); }
       else if (e.type === "storm") {
@@ -146,7 +147,9 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       else if (e.type === "hurt") { sfx.hurt(); pulse("hurt"); }
       else if (e.type === "dead") {
         net.current?.send({ t: "boom", x: sim.ship.x, z: sim.ship.z });
-        if (e.by != null) net.current?.send({ t: "killed", by: e.by }); // the kill feed comes back from the relay
+        const bot = e.by != null && e.by < 0 ? sim.bots.find(b => b.id === e.by) : undefined;
+        if (bot) toast(`${bot.name} (bot) shot you down`, "bad"); // bots are local: nothing for the relay
+        else if (e.by != null) net.current?.send({ t: "killed", by: e.by }); // the kill feed comes back from the relay
         else toast("Ship destroyed. Respawning near the sun.", "bad");
       }
       else if (e.type === "perks") { tone(660, .09, "triangle", .04); setTimeout(() => tone(880, .12, "triangle", .04), 90); }
@@ -300,6 +303,12 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         ...[...s.remotes.values()].map(r => ({ id: r.id, name: r.name, color: r.color, hull: r.hull ?? "dart", score: r.score ?? 0, kills: r.kills ?? 0, me: false })),
         ...s.bots.map(b => ({ id: b.id, name: `${b.name} (bot)`, color: b.color, hull: b.hull, score: b.score, kills: b.kills, me: false }))]; // negative ids: never the bounty
       rows.sort((a, b) => b.score - a.score);
+      // Racing the bots: say when the lead changes hands between you and a bot.
+      const lead = rows[0], was = leader.current; leader.current = lead.id;
+      if (s.bots.length && was != null && was !== lead.id && lead.score > 0) {
+        if (lead.me) toast("You took the lead back", "good");
+        else if (lead.id < 0 && was === myId.current) toast(`${lead.name} took the lead`, "bad");
+      }
       s.bountyId = bountyHolder(rows.filter(r => r.id >= 0 || r.me));
       // Daily challenge progress, counted from when you arrived in today's universe.
       let daily: Hud["daily"] = null;
@@ -429,7 +438,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   }
 
   /* ---- bot pilots: company while nobody else is here, gone as soon as someone joins ---- */
-  const botsSeen = useRef(false);
+  const botsSeen = useRef(false), leader = useRef<number | null>(null);
   useEffect(() => {
     const c = ctl.current; if (phase !== "play" || !c || c.attract) return;
     const asPeers = () => c.sim.bots.map(b => ({ id: b.id, name: b.name, color: b.color, hull: b.hull, bot: true }));
@@ -442,7 +451,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     const t = setTimeout(() => {
       if (ctl.current !== c || c.sim.remotes.size) return;
       spawnBots(c.sim, 2); setBots(asPeers());
-      if (!botsSeen.current) { botsSeen.current = true; toast("Two bot pilots are flying with you until other pilots arrive"); }
+      if (!botsSeen.current) { botsSeen.current = true; toast("Two rival bots are racing you for commits until other pilots arrive"); }
     }, 4000);
     return () => clearTimeout(t);
   }, [phase, peers.length, universe, toast]);
@@ -612,7 +621,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
 
   const c = control;
   const near = hud?.near;
-  const killerName = hud?.dead && c?.sim.killedBy != null ? c.sim.remotes.get(c.sim.killedBy)?.name : undefined;
+  const killerName = hud?.dead && c?.sim.killedBy != null ? c.sim.remotes.get(c.sim.killedBy)?.name ?? c.sim.bots.find(b => b.id === c.sim.killedBy)?.name : undefined;
   const nearOwner = near ? ownerOf(near.repo) : "";
   const showOwnerJump = near && nearOwner.toLowerCase() !== (universe?.owner ?? "").toLowerCase();
   const occupied = rooms.filter(r => r.room !== universe?.room);

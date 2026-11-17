@@ -142,12 +142,19 @@ shared; aliens are separate for each pilot.
 
 ### Bot pilots
 
-While nobody else is in your universe, two bot pilots join you after a few seconds. They are marked
-**BOT** on their name tags, show as smaller dots on the radar and as "(bot)" on the pilots board.
-They fly to commits and fight the aliens near them, but they never shoot you, never contest the
-gate, never take the bounty and never reach the relay or the leaderboards. Commits they fly through
-stay for you, because every pilot collects their own. The moment a real pilot arrives the bots
-leave; if everyone else leaves, new ones turn up.
+While nobody else is in your universe, two rival bots join you after a few seconds. They are marked
+**BOT** on red dashed name tags, show as smaller dots on the radar and as "(bot)" on the pilots board.
+
+- They **race you for commits**: a commit a bot reaches first is gone.
+- They **hunt aliens** for points, and **pick fights** with you when you are closer than any alien,
+  or for eight seconds after you shoot them. Their aim wobbles and they fire slower than you, so a
+  moving pilot can dodge.
+- You can **shoot them down** for +150 (a real pilot is worth 300); they come back five seconds later.
+- A pop-up tells you when a bot takes the lead, and when you take it back.
+
+They leave you alone while you are docked or shielded, and never contest the gate, take the bounty or
+reach the relay and the leaderboards. The moment a real pilot arrives the bots leave; if everyone else
+leaves, new ones turn up.
 
 ## Feel
 

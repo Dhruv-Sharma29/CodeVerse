@@ -1,7 +1,7 @@
 // Orbit game simulation: plain mutable state stepped once per frame, outside React.
 // The game plays on the x/z plane; the renderer adds height and effects.
 import { planetStyle, seedFor } from "../github/planetStyle.ts";
-import { creditBot, type Bot } from "./bots.ts";
+import { creditBot, damageBot, liveBot, type Bot } from "./bots.ts";
 import { HOLD, STORM, stormMeteors, stormPhase, type Meteor, type StormPhase } from "./events.ts";
 import { ISSUE, STAR, isFresh, issueRockCount, planetTrait, type Trait } from "./traits.ts";
 import type { GitCommit, Repository } from "../github/api";
@@ -108,7 +108,7 @@ export interface Input { move: { x: number; z: number }; aim: { x: number; z: nu
 export type SimEvent =
   | { type: "commit"; planet: Planet; commit: GitCommit }
   | { type: "kill"; kind: Alien["kind"]; points: number }
-  | { type: "hurt" } | { type: "dead"; by?: number } | { type: "storm"; phase: StormPhase } | { type: "meteor" } | { type: "issue"; planet: Planet } | { type: "star"; planet: Planet } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean } | { type: "perks" }
+  | { type: "hurt" } | { type: "dead"; by?: number } | { type: "storm"; phase: StormPhase } | { type: "meteor" } | { type: "issue"; planet: Planet } | { type: "star"; planet: Planet } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean } | { type: "perks" } | { type: "botDown"; name: string }
   | { type: "load"; planet: Planet } | { type: "shot"; x: number; z: number; a: number }
   | { type: "nova"; x: number; z: number } | { type: "grab" } | { type: "fling" } | { type: "boom"; x: number; z: number };
 
@@ -587,7 +587,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
       continue;
     }
     // Dogfights: the pilot who gets hit detects it and applies the damage (each client owns its ship).
-    if (b.from === "ally" && alive && pvpWith(sim, b.owner) && dist(b, s) < 1.8) {
+    if (b.from === "ally" && alive && (pvpWith(sim, b.owner) || liveBot(sim, b.owner)) && dist(b, s) < 1.8) {
       b.life = 0; explode(sim, b.x, b.z, "#ff6f7f", 6, 3); hurt(sim, PVP.bullet * (b.dmg ?? 1), ev, b.owner); continue;
     }
     if (b.from === "me") {
@@ -608,6 +608,8 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
         b.life = 0; explode(sim, b.x, b.z, "#ffffff", 6, 3); floatText(sim, r.x, r.z, `−${PVP.bullet * (b.dmg ?? 1)}`, "#ff8a9a"); ev.push({ type: "pvpHit", id: r.id }); hitShip = true; break;
       }
       if (hitShip) continue;
+      const bot = sim.bots.find(x => x.hp > 0 && dist(b, x) < 1.8);
+      if (bot) { b.life = 0; explode(sim, b.x, b.z, "#ffffff", 6, 3); damageBot(sim, bot, PVP.bullet * (b.dmg ?? 1), ev); continue; }
     }
     for (const a of sim.aliens) {
       if (a.hp > 0 && dist(b, a) < ALIENS[a.kind].r) {
@@ -630,6 +632,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     const radius = novaRadius(n.t);
     for (const a of sim.aliens) if (!n.hit.has(a) && a.hp > 0 && dist(n, a) < radius) { n.hit.add(a); damageAlien(sim, a, 99, ev, n.mine); }
     if (!n.mine && alive && pvpWith(sim, n.owner) && !n.hit.has(s) && dist(n, s) < radius) { n.hit.add(s); hurt(sim, PVP.nova, ev, n.owner); }
+    if (n.mine) for (const bot of sim.bots) if (bot.hp > 0 && !n.hit.has(bot) && dist(n, bot) < radius) { n.hit.add(bot); damageBot(sim, bot, PVP.nova, ev); }
     for (const p of sim.planets) if (!n.hit.has(p) && dist(n, p) < radius) {
       n.hit.add(p);
       const d = dist(n, p) || 1, k = 14 * (1 - d / 100);
