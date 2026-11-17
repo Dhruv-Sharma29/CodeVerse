@@ -57,7 +57,7 @@ const sfx = {
   wave: () => [392, 330, 262].forEach((f, i) => setTimeout(() => tone(f, .18, "square", .03), i * 140)),
 };
 
-interface Toast { id: number; text: string; kind: "" | "good" | "bad" }
+interface Toast { id: number; text: string; kind: "" | "good" | "bad" | "commit" }
 interface Hud { score: number; hp: number; charge: number; wave: number; aliens: number; kills: number; dead: boolean; near: Planet | null; grabbing: boolean; comet: boolean; gate: { a: number; d: number }; boss: { hp: number; max: number } | null; board: BoardRow[]; holding: null | "holding" | "contested"; bounty: number | null; storm: string; meteors: number; daily: { done: number; n: number; text: string; complete: boolean } | null }
 interface BoardRow { id: number; name: string; color: string; hull: HullId; score: number; kills: number; me: boolean }
 
@@ -156,7 +156,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       else if (e.type === "portal") { setJumpTarget(""); setJumpOpen(true); net.current?.send({ t: "rooms" }); }
       else if (e.type === "commit") {
         sfx.commit();
-        toast(`${e.commit.sha.slice(0, 7)} · ${clip(firstLine(e.commit.commit.message), 70)}`, "good");
+        toast(`${e.commit.sha.slice(0, 7)} · ${clip(firstLine(e.commit.commit.message), 70)}`, "commit"); // hidden where the commit log shows
         setLog(l => [{ planet: e.planet, commit: e.commit }, ...l].slice(0, 30));
       } else if (e.type === "load") {
         const p = e.planet;
@@ -605,6 +605,8 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         <span className="orbit-sub">{universe?.subtitle}</span>
         <span className={`orbit-net ${status}`}>{status === "online" ? `${peers.length + 1} pilot${peers.length ? "s" : ""} here` : status === "waking" ? "Waking multiplayer server (up to a minute)…" : status === "connecting" ? "Connecting…" : "Solo: multiplayer server offline"}</span>
       </div>
+      {/* In the bar itself, so pop-ups only ever use the gap between the card and the buttons. */}
+      <div className={`orbit-toasts ${hud?.boss ? "below-boss" : ""}`} aria-live="polite">{toasts.map(t => <div key={t.id} className={`orbit-toast ${t.kind}`}>{t.text}</div>)}</div>
       <div className="orbit-actions">
         {canFullscreen && <button className="orbit-ghost" onClick={() => void toggleFullscreen()} aria-pressed={fullscreen} title="Full screen (F)">{fullscreen ? "⤡ Exit full screen" : "⛶ Full screen"}</button>}
         <button className="orbit-ghost" onClick={() => { const m = !muted; setMuted(m); store.set("muted", m); }} aria-pressed={!muted}>{muted ? "Sound off" : "Sound on"}</button>
@@ -636,7 +638,6 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     {hud?.boss && <div className="orbit-boss" role="status" aria-label={`Mothership ${Math.round(hud.boss.hp / hud.boss.max * 100)} percent`}>
       <span>MOTHERSHIP</span><div><i style={{ width: `${hud.boss.hp / hud.boss.max * 100}%` }} /></div>
     </div>}
-    <div className={`orbit-toasts ${hud?.boss ? "below-boss" : ""}`} aria-live="polite">{toasts.map(t => <div key={t.id} className={`orbit-toast ${t.kind}`}>{t.text}</div>)}</div>
 
     {log.length > 0 && <aside className="orbit-log" aria-label="Collected commits">
       <span className="orbit-eyebrow">COMMITS COLLECTED</span>

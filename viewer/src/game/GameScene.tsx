@@ -619,23 +619,32 @@ function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
   </>;
 }
 
+/** Bullet bolt laid along +X (direction of travel) and a tail cone whose tip trails behind at -X. */
+let boltGeo: { core: THREE.BufferGeometry; tail: THREE.BufferGeometry } | null = null;
+const bolts = () => boltGeo ??= {
+  core: new THREE.CapsuleGeometry(.17, 1.4, 2, 6).rotateZ(Math.PI / 2),
+  tail: new THREE.ConeGeometry(.3, 1, 6, 1, true).rotateZ(Math.PI / 2).translate(-.5, 0, 0),
+};
 function Bullets({ sim, palette }: { sim: Sim; palette: Palette }) {
-  const ref = useRef<THREE.InstancedMesh>(null);
+  const core = useRef<THREE.InstancedMesh>(null), tail = useRef<THREE.InstancedMesh>(null);
   const colors = useMemo(() => ({ me: new THREE.Color("#7cf2ff").multiplyScalar(2), ally: new THREE.Color(palette.ally).multiplyScalar(2), alien: new THREE.Color(palette.alienShot).multiplyScalar(2) }), [palette]);
   useFrame(() => {
-    const m = ref.current; if (!m) return;
+    const m = core.current, t = tail.current; if (!m || !t) return;
     let n = 0;
     for (const b of sim.bullets) {
       if (n >= 500) break;
+      const w = b.big ? 1.9 : 1, speed = Math.hypot(b.vx, b.vz);
       tmp.position.set(b.x, 1.2, b.z); tmp.rotation.set(0, -Math.atan2(b.vz, b.vx), 0);
-      tmp.scale.set(b.from === "alien" ? 1 : 1.6, b.big ? 1.9 : 1, b.big ? 1.9 : 1); tmp.updateMatrix();
-      m.setMatrixAt(n, tmp.matrix); m.setColorAt(n++, colors[b.from]);
+      tmp.scale.set(b.from === "alien" ? 1 : 1.3, w, w); tmp.updateMatrix(); m.setMatrixAt(n, tmp.matrix);
+      tmp.scale.set(speed * .075, w, w); tmp.updateMatrix(); t.setMatrixAt(n, tmp.matrix); // tail grows with speed
+      m.setColorAt(n, colors[b.from]); t.setColorAt(n++, colors[b.from]);
     }
-    m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    for (const x of [m, t]) { x.count = n; x.instanceMatrix.needsUpdate = true; if (x.instanceColor) x.instanceColor.needsUpdate = true; }
   });
-  return <instancedMesh ref={ref} args={[undefined, undefined, 500]} frustumCulled={false}>
-    <capsuleGeometry args={[.22, 1.3, 2, 6]} /><meshBasicMaterial toneMapped={false} />
-  </instancedMesh>;
+  return <>
+    <instancedMesh ref={tail} args={[bolts().tail, undefined, 500]} frustumCulled={false}><meshBasicMaterial {...additive} opacity={.45} side={THREE.DoubleSide} /></instancedMesh>
+    <instancedMesh ref={core} args={[bolts().core, undefined, 500]} frustumCulled={false}><meshBasicMaterial toneMapped={false} /></instancedMesh>
+  </>;
 }
 
 function Particles({ sim }: { sim: Sim }) {
