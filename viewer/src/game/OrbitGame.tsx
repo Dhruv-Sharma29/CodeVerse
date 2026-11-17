@@ -405,6 +405,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     const c = ctl.current; if (!c || c.attract) return;
     dockAbort.current?.abort(); const abort = dockAbort.current = new AbortController();
     const s = c.sim.ship;
+    setSheet(false); setSettings(false); // one panel on the right at a time
     c.docked = planet; c.dockT = c.dockSpin = 0; c.dockFrom = { x: s.x, z: s.z, a: s.a }; sfx.grab();
     setDock({ planet, readme: null, contributors: null, error: "" });
     Promise.allSettled([fetchReadme(planet.repo, abort.signal), fetchContributors(planet.repo, abort.signal)]).then(([readme, people]) => {
@@ -696,7 +697,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         <a className="orbit-primary small" href={CREATOR.url} target="_blank" rel="noreferrer">Visit @{CREATOR.login} on GitHub</a>
       </div>
     </section>}
-    {dock && !jumpOpen && <aside className="orbit-dock" aria-label={`Docked at ${dock.planet.repo.full_name}`}>
+    {dock && !jumpOpen && !sheet && !settings && <aside className="orbit-dock" aria-label={`Docked at ${dock.planet.repo.full_name}`}>
       <div className="orbit-tut-head"><span className="orbit-eyebrow">DOCKED · {dock.planet.repo.language ?? "MIXED"}</span><button type="button" className="orbit-link" onClick={undock}>Undock{touch ? "" : " · Esc"}</button></div>
       <strong>{dock.planet.repo.full_name}</strong>
       <div className="orbit-facts"><span>★ {compact(dock.planet.repo.stargazers_count)}</span><span>forks {compact(dock.planet.repo.forks_count)}</span>{dock.planet.commits && <span>{dock.planet.commits.length} recent commits</span>}</div>

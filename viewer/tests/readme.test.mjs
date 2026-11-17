@@ -33,3 +33,8 @@ test('the excerpt stops after a solid opening paragraph and skips bullet lists',
   assert.equal(readmeExcerpt(md), 'The Linux kernel is the core of any Linux operating system. It manages hardware and resources.');
 });
 
+
+test('a paragraph wrapped in bold keeps no stray markers', () => {
+  assert.equal(readmeExcerpt('**A design skill for Claude Code, Codex, Cursor and OpenCode that refuses to look AI-generated.**'),
+    'A design skill for Claude Code, Codex, Cursor and OpenCode that refuses to look AI-generated.');
+});
