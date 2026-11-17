@@ -1,6 +1,7 @@
 // Orbit game simulation: plain mutable state stepped once per frame, outside React.
 // The game plays on the x/z plane; the renderer adds height and effects.
 import { planetStyle, seedFor } from "../github/planetStyle.ts";
+import { creditBot, type Bot } from "./bots.ts";
 import { HOLD, STORM, stormMeteors, stormPhase, type Meteor, type StormPhase } from "./events.ts";
 import { ISSUE, STAR, isFresh, issueRockCount, planetTrait, type Trait } from "./traits.ts";
 import type { GitCommit, Repository } from "../github/api";
@@ -136,6 +137,8 @@ export function createSim(universe: Universe) {
     ship: { hull: "dart" as HullId, x: SPAWN.x, z: SPAWN.z, vx: 0, vz: 10, a: Math.PI / 2, hp: 100, inv: 2, dead: 0, fireCool: 0, gun: 1, thrust: 0, lastHit: -9 },
     aliens: [] as Alien[], bullets: [] as Bullet[], particles: [] as Particle[], flashes: [] as Flash[], novas: [] as Nova[],
     remotes: new Map<number, Remote>(),
+    /** Local bot pilots while nobody else is here (see bots.ts). */
+    bots: [] as Bot[],
     /** Dogfights are always on: every pilot can damage every other pilot. */
     pvpKills: 0, emote: "", emoteUntil: 0,
     pings: [] as Ping[],
@@ -598,6 +601,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
         explode(sim, b.x, b.z, "#ffffff", 5, 2);
         if (b.from === "me") floatText(sim, a.x, a.z, a.hp - (b.dmg ?? 1) <= 0 ? `+${ALIENS[a.kind].pts}` : `−${b.dmg ?? 1}`, a.hp - (b.dmg ?? 1) <= 0 ? "#ffd76e" : "#ffffff");
         damageAlien(sim, a, b.dmg ?? 1, ev, b.from === "me");
+        if (b.owner != null && b.owner < 0) creditBot(sim, b.owner, a);
         break;
       }
     }

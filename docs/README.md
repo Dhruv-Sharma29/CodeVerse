@@ -41,7 +41,7 @@ each pilot's own client deciding when it was hit.
 ## Status
 
 **Live and multiplayer on free hosting.** The game is served by Vercel and the relay by Render,
-kept warm during waking hours in India. 107 tests in `viewer/`, 5 in `analyzer/`. See
+kept warm during waking hours in India. 109 tests in `viewer/`, 5 in `analyzer/`. See
 [07](07-testing.md) for what is checked by hand and [`REMAINING.md`](../REMAINING.md) for what is not
 done.
 

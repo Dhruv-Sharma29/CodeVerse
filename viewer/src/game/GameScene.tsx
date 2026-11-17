@@ -26,7 +26,7 @@ export interface Control {
   pointer: { x: number; y: number; mouse: boolean };
   onStep: (dt: number) => void;
 }
-export interface Peer { id: number; name: string; color: string; hull: HullId }
+export interface Peer { id: number; name: string; color: string; hull: HullId; bot?: boolean }
 
 const TAU = Math.PI * 2;
 const tmp = new THREE.Object3D(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3(), chase = new THREE.Vector3(), aim = new THREE.Vector3();
@@ -417,16 +417,16 @@ function showEmote(el: HTMLElement | null, text: string | undefined, until: numb
 function RemoteShip({ sim, peer }: { sim: Sim; peer: Peer }) {
   const g = useRef<THREE.Group>(null), bubble = useRef<HTMLSpanElement>(null), tag = useRef<HTMLSpanElement>(null);
   useFrame(() => {
-    const r = sim.remotes.get(peer.id); if (!g.current || !r) return;
+    const r = peer.bot ? sim.bots.find(b => b.id === peer.id) : sim.remotes.get(peer.id); if (!g.current || !r) return;
     g.current.visible = r.hp > 0;
     g.current.position.set(r.x, 1.2, r.z); g.current.rotation.y = -r.a;
-    showEmote(bubble.current, r.emote, r.emoteUntil);
-    if (tag.current) { const label = sim.bountyId === peer.id ? `${peer.name} · BOUNTY` : peer.name; if (tag.current.textContent !== label) tag.current.textContent = label; }
+    if ("emote" in r) showEmote(bubble.current, r.emote, r.emoteUntil);
+    if (tag.current) { const label = peer.bot ? `${peer.name} · BOT` : sim.bountyId === peer.id ? `${peer.name} · BOUNTY` : peer.name; if (tag.current.textContent !== label) tag.current.textContent = label; }
   });
   return <group ref={g}><ShipModel color={peer.color} hull={peer.hull} />
     <Html center position={[0, 3.4, 0]} zIndexRange={[6, 0]} pointerEvents="none"><div className="orbit-shiplabel">
       <span ref={bubble} className="orbit-emote" style={{ display: "none" }} />
-      <span ref={tag} className="orbit-tag rival" style={{ borderColor: peer.color }}>{peer.name}</span>
+      <span ref={tag} className={`orbit-tag ${peer.bot ? "bot" : "rival"}`} style={{ borderColor: peer.color }}>{peer.name}</span>
     </div></Html>
   </group>;
 }

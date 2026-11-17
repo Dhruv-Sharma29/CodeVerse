@@ -219,6 +219,7 @@
 /* multiplayer: ship labels, emotes, dogfights, pilots board */
 .orbit-shiplabel { display: grid; justify-items: center; gap: 4px; }
 .orbit-tag.rival { background: rgba(80, 8, 20, .8); box-shadow: 0 0 10px rgba(255, 70, 100, .5); }
+.orbit-tag.bot { border-style: dashed; color: var(--o-muted); }
 .orbit-emote { font-size: 12px; font-weight: 700; white-space: nowrap; padding: 3px 9px; border-radius: 999px; color: #0b0820; background: #f1f3ff; box-shadow: 0 4px 14px rgba(0,0,0,.4); animation: orbit-in .2s both; }
 .orbit-board { position: absolute; top: calc(var(--o-gt) + 70px); left: 50%; transform: translateX(-50%); width: min(420px, calc(100vw - 32px)); z-index: 7; display: grid; gap: 10px; padding: 14px 16px;
   background: var(--o-panel); border: 1px solid var(--o-line); border-radius: var(--o-r); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,.35); }

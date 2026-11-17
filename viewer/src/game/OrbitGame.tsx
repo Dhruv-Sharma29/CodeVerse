@@ -6,6 +6,7 @@ import { readPad, type PadState } from "./gamepad";
 import { startMusic } from "./music";
 import { BOUNTY, DAILY_REWARD, STORM, bountyHolder, dailyChallenge } from "./events";
 import { GameScene, ShipPreview, type Control, type Peer } from "./GameScene";
+import { clearBots, spawnBots, stepBots } from "./bots";
 import { boardUrl, connectNet, type Leader, type NetMessage, type NetStatus } from "./net";
 import { EMOTES, HULLS, PERKS, PING, PVP, SPAWN, addPing, choosePerk, maxHp, type PerkId, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
 import { loadUniverse, ownerOf } from "./universe";
@@ -73,6 +74,8 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const [jumpTarget, setJumpTarget] = useState("");
   const [warping, setWarping] = useState(false);
   const [peers, setPeers] = useState<Peer[]>([]);
+  /** Bot pilots shown while no real pilot is here (simulated locally; see bots.ts). */
+  const [bots, setBots] = useState<Peer[]>([]);
   const [rooms, setRooms] = useState<{ room: string; count: number }[]>([]);
   const [status, setStatus] = useState<NetStatus>("connecting");
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -183,6 +186,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         if (c.docked) { c.input.fire = c.input.grab = c.input.boost = c.input.nova = false; c.input.move = { x: 0, z: 0 }; } // docked: no bullets, no nova
         events.length = 0;
         step(c.sim, c.input, dt, events);
+        stepBots(c.sim, dt);
         if (c.docked) {
           // Glide in over 0.9 s (ease-out), then circle the planet slowly (3 units/s, about 20-40 s a lap), nose along the orbit.
           const p = c.docked, s = c.sim.ship, from = c.dockFrom ?? { x: s.x, z: s.z, a: s.a };
@@ -293,7 +297,8 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       if (Math.hypot(s.ship.vx, s.ship.vz) > 14) learn("move");
       const boss = s.aliens.find(a => a.kind === "mothership" && a.hp > 0);
       const rows: BoardRow[] = [{ id: myId.current, name, color, hull: s.ship.hull, score: s.score, kills: s.pvpKills, me: true },
-        ...[...s.remotes.values()].map(r => ({ id: r.id, name: r.name, color: r.color, hull: r.hull ?? "dart", score: r.score ?? 0, kills: r.kills ?? 0, me: false }))];
+        ...[...s.remotes.values()].map(r => ({ id: r.id, name: r.name, color: r.color, hull: r.hull ?? "dart", score: r.score ?? 0, kills: r.kills ?? 0, me: false })),
+        ...s.bots.map(b => ({ id: b.id, name: `${b.name} (bot)`, color: b.color, hull: b.hull, score: b.score, kills: b.kills, me: false }))]; // negative ids: never the bounty
       rows.sort((a, b) => b.score - a.score);
       s.bountyId = bountyHolder(rows.filter(r => r.id >= 0 || r.me));
       // Daily challenge progress, counted from when you arrived in today's universe.
@@ -421,6 +426,25 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     }
     setDock(null);
   }
+
+  /* ---- bot pilots: company while nobody else is here, gone as soon as someone joins ---- */
+  const botsSeen = useRef(false);
+  useEffect(() => {
+    const c = ctl.current; if (phase !== "play" || !c || c.attract) return;
+    const asPeers = () => c.sim.bots.map(b => ({ id: b.id, name: b.name, color: b.color, hull: b.hull, bot: true }));
+    if (peers.length) {
+      if (c.sim.bots.length) { clearBots(c.sim); toast("Bots left: a real pilot is here"); }
+      setBots([]); return;
+    }
+    setBots(asPeers()); // in step with this universe's sim (empty right after a hyperjump)
+    if (c.sim.bots.length) return;
+    const t = setTimeout(() => {
+      if (ctl.current !== c || c.sim.remotes.size) return;
+      spawnBots(c.sim, 2); setBots(asPeers());
+      if (!botsSeen.current) { botsSeen.current = true; toast("Two bot pilots are flying with you until other pilots arrive"); }
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [phase, peers.length, universe, toast]);
 
   /* ---- perks ---- */
   function pickPerk(i: number) {
@@ -601,7 +625,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       onPointerLeave={() => { held.current.delete("mouse0"); held.current.delete("mouse2"); syncInput(); }}
       onWheel={e => { c.zoom = Math.max(.55, Math.min(1.9, c.zoom * (1 + Math.sign(e.deltaY) * .08))); }}>
       <Canvas key={`${universe?.room}:${quality}`} camera={{ fov: 50, near: .5, far: 5000, position: [0, 70, 70] }} gl={{ antialias: QUALITY[quality].antialias }} dpr={QUALITY[quality].dpr}>
-        <GameScene ctl={c} peers={peers} color={color} hull={hull} palette={palette} quality={quality} />
+        <GameScene ctl={c} peers={bots.length ? [...peers, ...bots] : peers} color={color} hull={hull} palette={palette} quality={quality} />
       </Canvas>
     </div>}
     {settings && <SettingsPanel touch={touch} quality={qualitySetting} resolved={quality} onQuality={setQualitySetting} palette={paletteId} onPalette={setPaletteId} keys={keys} onKeys={setKeys} onControls={() => { setSettings(false); setSheet(true); }} onClose={() => setSettings(false)} />}
@@ -612,7 +636,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         <span className="orbit-eyebrow">{universe?.room === "trending" ? "TRENDING HUB" : "UNIVERSE"}</span>
         <strong>{universe?.title}</strong>
         <span className="orbit-sub">{universe?.subtitle}</span>
-        <span className={`orbit-net ${status}`}>{status === "online" ? `${peers.length + 1} pilot${peers.length ? "s" : ""} here` : status === "waking" ? "Waking multiplayer server (up to a minute)…" : status === "connecting" ? "Connecting…" : "Solo: multiplayer server offline"}</span>
+        <span className={`orbit-net ${status}`}>{status === "online" ? `${peers.length + 1} pilot${peers.length ? "s" : ""} here` : status === "waking" ? "Waking multiplayer server (up to a minute)…" : status === "connecting" ? "Connecting…" : "Solo: multiplayer server offline"}{bots.length ? ` · ${bots.length} bots` : ""}</span>
       </div>
       {/* In the bar itself, so pop-ups only ever use the gap between the card and the buttons. */}
       <div className={`orbit-toasts ${hud?.boss ? "below-boss" : ""}`} aria-live="polite">{toasts.map(t => <div key={t.id} className={`orbit-toast ${t.kind}`}>{t.text}</div>)}</div>
@@ -841,5 +865,6 @@ function drawRadar(cv: HTMLCanvasElement | null, sim: Sim, pal: Palette) {
     g.fillStyle = "#b18cff"; g.beginPath(); g.arc(R + dx * m, R + dz * m, l * m < R - 7 ? 5 : 4, 0, Math.PI * 2); g.fill(); }
   for (const a of sim.aliens) dot(a.x, a.z, pal[a.kind], a.kind === "mothership" ? 6 : a.kind === "swarmer" ? 1.5 : 2.2);
   for (const r of sim.remotes.values()) dot(r.x, r.z, r.color, 3);
+  for (const b of sim.bots) dot(b.x, b.z, b.color, 2);
   g.save(); g.translate(R, R); g.rotate(s.a); g.fillStyle = "#ffffff"; g.beginPath(); g.moveTo(6, 0); g.lineTo(-4, -4); g.lineTo(-4, 4); g.fill(); g.restore();
 }

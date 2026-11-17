@@ -138,6 +138,15 @@ shared; aliens are separate for each pilot.
 - **Emotes.** Press **1–6** (or use the buttons on the board): Hi, GG, Nice!, Help!,
   Fight me, Truce. They appear above your ship for every pilot. Emotes are preset only.
 
+### Bot pilots
+
+While nobody else is in your universe, two bot pilots join you after a few seconds. They are marked
+**BOT** on their name tags, show as smaller dots on the radar and as "(bot)" on the pilots board.
+They fly to commits and fight the aliens near them, but they never shoot you, never contest the
+gate, never take the bounty and never reach the relay or the leaderboards. Commits they fly through
+stay for you, because every pilot collects their own. The moment a real pilot arrives the bots
+leave; if everyone else leaves, new ones turn up.
+
 ## Feel
 
 - **Damage numbers.** Your hits leave small floating numbers: white damage on aliens, gold points
