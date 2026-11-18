@@ -17,10 +17,16 @@ export function boardUrl(room: string, relay = relayUrl()) {
 }
 export interface Leader { name: string; score: number }
 
+/** One id per browser (shared by its tabs), so the relay can replace a stale or duplicate connection of the same pilot. */
+function pilotId() {
+  const fresh = () => globalThis.crypto?.randomUUID?.() ?? `p-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  try { const v = localStorage.getItem("orbit:pilot") || fresh(); localStorage.setItem("orbit:pilot", v); return v; } catch { return fresh(); }
+}
+
 export function connectNet(onMessage: (m: NetMessage) => void, onStatus: (s: NetStatus) => void,
   { url = relayUrl() || `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/play`, hosted = !!relayUrl() } = {}) {
   let ws: WebSocket | null = null, closed = false, retry = 0, join: NetMessage | null = null, everOnline = false, wakingShown = false;
-  let hint: ReturnType<typeof setTimeout> | undefined;
+  let hint: ReturnType<typeof setTimeout> | undefined, pid: string | undefined;
   const started = Date.now();
   // Only a separately hosted relay can be asleep; a local server that refuses is simply offline.
   const mayBeWaking = () => hosted && !everOnline && Date.now() - started < WAKE_MS;
@@ -36,7 +42,11 @@ export function connectNet(onMessage: (m: NetMessage) => void, onStatus: (s: Net
     hint = setTimeout(() => { if (ws?.readyState !== WebSocket.OPEN && mayBeWaking()) report("waking"); }, WAKE_HINT_MS);
     ws = new WebSocket(url);
     ws.onopen = () => { everOnline = true; retry = 0; clearTimeout(hint); onStatus("online"); if (join) ws?.send(JSON.stringify(join)); };
-    ws.onmessage = e => { try { onMessage(JSON.parse(String(e.data))); } catch { /* ignore malformed */ } };
+    ws.onmessage = e => {
+      let m: NetMessage; try { m = JSON.parse(String(e.data)); } catch { return; } // ignore malformed
+      if (m.t === "replaced") { closed = true; clearTimeout(hint); onStatus("offline"); } // playing in another tab now: don't fight it
+      onMessage(m);
+    };
     ws.onclose = () => {
       if (closed) return;
       if (mayBeWaking()) { report("waking"); setTimeout(open, 3_000); return; } // keep knocking while it boots
@@ -46,7 +56,7 @@ export function connectNet(onMessage: (m: NetMessage) => void, onStatus: (s: Net
   }
   open();
   return {
-    send(m: NetMessage) { if (m.t === "join") join = m; if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m)); },
+    send(m: NetMessage) { if (m.t === "join") join = m = { ...m, pid: pid ??= pilotId() }; if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m)); },
     close() { closed = true; clearTimeout(hint); ws?.close(); },
   };
 }

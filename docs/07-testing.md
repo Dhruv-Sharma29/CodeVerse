@@ -1,6 +1,6 @@
 # 07 — Testing
 
-**117 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
+**119 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
 (22.6+, native TypeScript stripping) or `pytest`. CI runs all of them, plus type-checking, lint and
 the production build, on every push and pull request.
 
@@ -15,7 +15,7 @@ $ cd ../analyzer && uv run pytest tests -q
 | Suite | Tests | What it pins down |
 |---|---|---|
 | `orbitSim.test.mjs` | 15 | The game rules: a supernova never refilling itself, saucers and motherships being solid to the ship, shooting and aim assist, gravity grab and fling, gate placement and triggering, comet path and once-per-crossing bonus, supernova, ship-relative thrust, hull firepower, the mothership's capped damage, aliens not passing through planets, the ship never entering a held planet, dogfight damage from any other pilot, kill credit, the respawn shield, and ping labels, per-pilot caps and expiry |
-| `multiplayer.test.mjs` | 5 | The relay: rooms are separate, names and colours are cleaned, invalid rooms are refused, leaving is broadcast, hulls fall back, the origin allow-list refuses other sites, dogfight state, kill announcements, emotes and pings are relayed and validated, and `/stats` counts sessions, company and hyperjumps without pilot data |
+| `multiplayer.test.mjs` | 6 | The relay: a newer connection of the same pilot replaces the old one, waves are relayed, rooms are separate, names and colours are cleaned, invalid rooms are refused, leaving is broadcast, hulls fall back, the origin allow-list refuses other sites, dogfight state, kill announcements, emotes and pings are relayed and validated, and `/stats` counts sessions, company and hyperjumps without pilot data |
 | `events.test.mjs` | 6 | World events: storm schedule and determinism, meteor hits and shooting, the bounty pick, hold-the-gate scoring and contesting, the daily challenge, and evenly spread seeded randomness |
 | `traits.test.mjs` | 5 | Real-data planets: language physics, issue-rock counts, activity glow, closing an issue, star shields, and bouncy planets ricocheting |
 | `feel.test.mjs` | 3 | Gamepad mapping and dead zone, music tuning, floating damage numbers, and the follow-cam's memory of who shot you down |
@@ -23,7 +23,7 @@ $ cd ../analyzer && uv run pytest tests -q
 | `invite.test.mjs` | 1 | Invite links: a valid GitHub login opens that universe; anything else falls back to the trending hub |
 | `board.test.mjs` | 4 | Leaderboards and checks: honest runs reach both boards (the daily board counts only points earned in that universe), invalid rooms are refused, score jumps, speed and hull hacks are flagged and left off, the Upstash pipeline commands, and the keep-warm window |
 | `bots.test.mjs` | 3 | Rival bots: a commit a bot reaches is gone, bots shoot aliens for points, a bot near you picks a fight, and shooting one down scores and it comes back |
-| `difficulty.test.mjs` | 4 | Difficulty: tougher aliens and shielded saucers after wave 5, shields soaking bullets but not novas, repairs only between waves, and a perk level lost on death |
+| `difficulty.test.mjs` | 5 | Difficulty: catching up to the room's highest wave, tougher aliens and shielded saucers after wave 5, shields soaking bullets but not novas, repairs only between waves, and a perk level lost on death |
 | `perks.test.mjs` | 2 | Perks: a cleared wave offers three different perks once, only offered perks can be taken, hull plating raises and refills the hull, maxed perks are never offered, and rapid fire shortens the gun cooldown |
 | `settings.test.mjs` | 3 | Settings: rebinding swaps a taken key and refuses reserved keys, saved bindings fall back safely, and Auto quality picks Low only on small touch devices |
 | `net.test.mjs` | 2 | The client connection: a sleeping hosted relay reports "waking" without flicker and then goes online; a refused local server reports "offline" |

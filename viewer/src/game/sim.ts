@@ -166,6 +166,8 @@ export function createSim(universe: Universe) {
     /** Perk levels, and the three on offer after a cleared wave (null when none). */
     perks: { rapid: 0, beam: 0, nova: 0, hull: 0, engine: 0 } as Record<PerkId, number>,
     offer: null as PerkId[] | null, offeredWave: 0,
+    /** Highest wave any pilot in this universe has reached; your next wave catches up to it. */
+    waveFloor: 0,
     score: 0, charge: 0, wave: 0, waveTimer: 4, kills: 0, deaths: 0, commits: 0, shake: 0, portalCool: 2.5, nextAlien: 1,
     near: null as Planet | null,
   };
@@ -266,7 +268,7 @@ function addAlien(sim: Sim, kind: AlienKind, x: number, z: number, hp = ALIENS[k
 }
 
 function spawnWave(sim: Sim, ev: SimEvent[]) {
-  sim.wave++;
+  sim.wave = Math.max(sim.wave + 1, sim.waveFloor);
   const around = (d: number) => { const a = Math.random() * TAU, r = d + Math.random() * 25; return [sim.ship.x + Math.cos(a) * r, sim.ship.z + Math.sin(a) * r] as const; };
   const boss = sim.wave % 5 === 0;
   if (boss) {
@@ -519,6 +521,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   if (!sim.aliens.length) {
     // Wave cleared: offer perks once (the offer stays until taken or the next wave is cleared).
     if (sim.wave > 0 && sim.offeredWave < sim.wave) { sim.offeredWave = sim.wave; const o = offerPerks(sim); sim.offer = o.length ? o : null; if (sim.offer) ev.push({ type: "perks" }); }
+    if (sim.waveFloor > sim.wave) sim.waveTimer = Math.min(sim.waveTimer, 2); // someone here is ahead: catch up soon
     sim.waveTimer -= dt; if (sim.waveTimer <= 0) { spawnWave(sim, ev); sim.waveTimer = 5; }
   }
   const target = alive ? s : SPAWN;

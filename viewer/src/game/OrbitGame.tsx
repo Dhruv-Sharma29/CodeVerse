@@ -213,11 +213,13 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   useEffect(() => {
     const n = connectNet((m: NetMessage) => {
       if (m.t === "rooms") { setRooms(m.rooms as { room: string; count: number }[]); return; }
+      if (m.t === "replaced") { toast("You're flying in another tab now. Reload this one to fly here instead.", "bad"); return; }
       const sim = ctl.current?.sim; if (!sim) return;
       const id = Number(m.id);
       if (m.t === "welcome") {
         sim.remotes.clear(); myId.current = Number(m.id); sim.myId = myId.current;
-        const list = (m.peers as (Peer & { state?: { x: number; z: number; a: number; s?: number; k?: number } | null })[]);
+        const list = (m.peers as (Peer & { state?: { x: number; z: number; a: number; s?: number; k?: number; w?: number } | null })[]);
+        sim.waveFloor = Math.max(sim.waveFloor, ...list.map(p => Number(p.state?.w) || 0));
         for (const p of list) sim.remotes.set(p.id, { ...p, hull: isHull(p.hull) ? p.hull : "dart", x: p.state?.x ?? SPAWN.x, z: p.state?.z ?? SPAWN.z, a: p.state?.a ?? 0, vx: 0, vz: 0, hp: 100, tx: p.state?.x ?? SPAWN.x, tz: p.state?.z ?? SPAWN.z, seen: sim.t, score: p.state?.s ?? 0, kills: p.state?.k ?? 0 });
         setPeers(list.map(({ id, name, color, hull }) => ({ id, name, color, hull: isHull(hull) ? hull : "dart" })));
       } else if (m.t === "joined") {
@@ -232,6 +234,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       } else if (m.t === "state") {
         const r = sim.remotes.get(id); if (!r) return;
         Object.assign(r, { tx: m.x, tz: m.z, vx: m.vx, vz: m.vz, a: m.a, hp: m.hp, seen: sim.t, score: Number(m.s) || 0, kills: Number(m.k) || 0 });
+        sim.waveFloor = Math.max(sim.waveFloor, Number(m.w) || 0); // everyone here plays the highest wave
       } else if (m.t === "shot") {
         const a = Number(m.a);
         const d = Number(m.d) === 2 ? 2 : 1;
@@ -263,7 +266,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     const tick = setInterval(() => {
       const c = ctl.current; if (!c || c.attract) return;
       const s = c.sim.ship;
-      n.send({ t: "state", x: s.x, z: s.z, a: s.a, vx: s.vx, vz: s.vz, hp: s.dead > 0 ? 0 : s.hp, s: c.sim.score, k: c.sim.pvpKills });
+      n.send({ t: "state", x: s.x, z: s.z, a: s.a, vx: s.vx, vz: s.vz, hp: s.dead > 0 ? 0 : s.hp, s: c.sim.score, k: c.sim.pvpKills, w: c.sim.wave });
       for (const p of c.sim.planets) if (p.mode === "held" || p.mode === "flung") n.send({ t: "grab", planet: p.i, x: p.x, z: p.z, vx: p.vx, vz: p.vz, held: p.mode === "held" });
     }, 100);
     return () => { clearInterval(tick); n.close(); net.current = null; };

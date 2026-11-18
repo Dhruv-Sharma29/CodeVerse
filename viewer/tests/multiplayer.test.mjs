@@ -100,3 +100,25 @@ test('relay stats count sessions, company and hyperjumps without any pilot data'
   assert.ok(!JSON.stringify(st).includes('Ada') && !JSON.stringify(st).includes('Lin'), 'no pilot names');
   a.ws.close(); b.ws.close(); lobby.ws.close(); await new Promise(r => server.close(r));
 });
+
+test('a newer connection of the same pilot replaces the old one, so nobody sees a double; waves are relayed', async () => {
+  const server = createServer(); attachMultiplayer(server);
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const url = `ws://127.0.0.1:${server.address().port}${PLAY_PATH}`;
+  const friend = client(url), me1 = client(url);
+  await Promise.all([friend.open, me1.open]);
+  friend.send({ t: 'join', room: 'trending', name: 'Lin', pid: 'friend-browser-1' });
+  await friend.next('welcome');
+  me1.send({ t: 'join', room: 'trending', name: 'Ada', pid: 'ada-browser-123' });
+  const first = (await friend.next('joined')).id;
+  const me2 = client(url); await me2.open;                       // reconnect, or a second tab
+  me2.send({ t: 'join', room: 'trending', name: 'Ada', pid: 'ada-browser-123' });
+  await me1.next('replaced');
+  assert.equal((await friend.next('left')).id, first);            // the old copy is gone for the friend
+  const welcome = await me2.next('welcome');
+  assert.deepEqual(welcome.peers.map(p => p.name), ['Lin']);      // and I don't see myself
+  me2.send({ t: 'state', x: 1, z: 2, a: 0, vx: 0, vz: 0, hp: 90, w: 5 });
+  assert.equal((await friend.next('state')).w, 5);
+  for (const c of [friend, me2]) c.ws.close();
+  await new Promise(r => server.close(r));
+});

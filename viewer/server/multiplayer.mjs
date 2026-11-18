@@ -30,6 +30,7 @@ const cleanColor = v => /^#[\da-f]{6}$/i.test(v) ? v : '#74e2ff';
 
 export function createRelay({ board = createBoard() } = {}) {
   const rooms = new Map(); // room -> Set<client>
+  const byPilot = new Map(); // pilot id (one per browser) -> its current connection
   let nextId = 1;
   const send = (c, msg) => { if (c.ws.readyState === 1) c.ws.send(JSON.stringify(msg)); };
   const cast = (room, msg, except) => { for (const c of rooms.get(room) ?? []) if (c !== except) send(c, msg); };
@@ -93,6 +94,12 @@ export function createRelay({ board = createBoard() } = {}) {
       const room = String(m.room ?? '').toLowerCase();
       if (!ROOM.test(room)) return send(c, { t: 'error', message: 'That universe name is not valid.' });
       if ((rooms.get(room)?.size ?? 0) >= MAX_PER_ROOM) return send(c, { t: 'error', message: 'This universe is full. Try another one.' });
+      // One pilot per browser: a newer connection with the same pilot id replaces the old one
+      // (a dropped connection the heartbeat hasn't caught yet, or the game open in another tab).
+      const pid = typeof m.pid === 'string' && /^[\w-]{8,64}$/.test(m.pid) ? m.pid : null;
+      const old = pid ? byPilot.get(pid) : null;
+      if (old && old !== c) { send(old, { t: 'replaced' }); leave(old); old.ws.close(4000, 'replaced'); }
+      if (pid) { byPilot.set(pid, c); c.pid = pid; }
       leave(c);
       c.name = cleanName(m.name); c.color = cleanColor(m.color); c.hull = HULLS.has(m.hull) ? m.hull : 'dart'; c.room = room; c.state = null;
       if (!rooms.has(room)) rooms.set(room, new Set());
@@ -110,7 +117,7 @@ export function createRelay({ board = createBoard() } = {}) {
     if (!c.room) return;
     if (m.t === 'state') {
       // s: score, k: dogfight wins. Self-reported; `check` decides whether the score may be ranked.
-      c.state = { x: num(m.x), z: num(m.z), a: num(m.a, 10), vx: num(m.vx), vz: num(m.vz), hp: num(m.hp, 1000), s: num(m.s, 1e9) | 0, k: num(m.k, 1e6) | 0 };
+      c.state = { x: num(m.x), z: num(m.z), a: num(m.a, 10), vx: num(m.vx), vz: num(m.vz), hp: num(m.hp, 1000), s: num(m.s, 1e9) | 0, k: num(m.k, 1e6) | 0, w: num(m.w, 1e4) | 0 };
       check(c, c.state, now);
       cast(c.room, { t: 'state', id: c.id, ...c.state }, c);
     } else if (m.t === 'shot') {
@@ -139,7 +146,7 @@ export function createRelay({ board = createBoard() } = {}) {
     counters.connections++;
     ws.on('message', data => handle(c, String(data)));
     ws.on('pong', () => { c.alive = true; });
-    ws.on('close', () => leave(c));
+    ws.on('close', () => { leave(c); if (c.pid && byPilot.get(c.pid) === c) byPilot.delete(c.pid); });
     ws.on('error', () => ws.terminate());
     return c;
   }

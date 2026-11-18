@@ -17,15 +17,19 @@ A client is in at most one room. Joining another room leaves the previous one.
 
 | Shared with the room | Local to each pilot |
 |---|---|
-| Ship position, heading, velocity, hull points (10 Hz) | Aliens and waves |
+| Ship position, heading, velocity, hull points (10 Hz) | Aliens |
 | Shots (as they are fired), with damage | Charge, commits |
-| Score and dogfight wins (10 Hz, self-reported) | |
+| Score, dogfight wins and wave number (10 Hz, self-reported) | |
 | Dogfight kill announcements, emotes, pings | |
 | Held and flung planets (10 Hz while active) | Tutorial progress |
 | Supernovas, explosions | Particles and effects |
 | Name, colour, hull | |
 
 The gate and the comet need no messages: every client computes them from the room name and the clock.
+
+Each pilot fights their own copy of the aliens, but the wave number is shared: when anyone in the room
+is on a higher wave, your next wave jumps to it (within two seconds if you are between waves), so a
+friend who joins you on wave 5 starts on wave 5, not wave 1.
 
 ## Messages
 
@@ -71,6 +75,7 @@ All messages are JSON objects with a `t` field.
 | Hulls | `dart`, `wasp` or `titan`, otherwise `dart` |
 | Numbers | Finite, clamped, rounded to two decimals |
 | Liveness | Ping every 20 s; silent connections are closed |
+| One pilot per browser | Joins carry a pilot id kept in the browser. A newer connection with the same id replaces the old one at once (a dropped connection not yet timed out, or the game open in another tab), so nobody sees a frozen double; the replaced tab stops reconnecting and says so |
 | Origins | Optional allow-list (`RELAY_ORIGINS` on the standalone relay); other pages get 403 |
 
 Upgrade requests on other paths are ignored, so Vite's hot-reload socket keeps working.

@@ -34,7 +34,8 @@ about 8° of an alien's lead point.
 
 ## Aliens
 
-Waves begin a few seconds after the previous one is cleared.
+Waves begin a few seconds after the previous one is cleared. In multiplayer everyone plays the highest
+wave anyone in the universe has reached (see [05-multiplayer.md](05-multiplayer.md)).
 
 | Alien | Appears | Behaviour | Hits | Score |
 |---|---|---|---|---|

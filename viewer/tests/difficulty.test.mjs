@@ -54,3 +54,10 @@ test('being shot down costs one level of a perk you have', () => {
   assert.ok(dead && dead.lost in PERKS);
   assert.equal(sim.perks.rapid + sim.perks.hull, 2);
 });
+
+test('a pilot who joins catches up to the highest wave in the room', () => {
+  const sim = createSim(universe);
+  Object.assign(sim, { wave: 1, waveTimer: 5, waveFloor: 5 });   // a friend here is on wave 5
+  run(sim, 2.1);
+  assert.equal(sim.wave, 5);
+});
