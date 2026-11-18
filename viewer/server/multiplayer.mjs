@@ -1,5 +1,6 @@
 // Orbit multiplayer relay. Each universe ("trending" or "u:<login>") is a room; the server only
-// validates and relays. Aliens are simulated per client, so the server holds no game state.
+// validates and relays. It names one pilot per room (the host) whose client runs the aliens for
+// everyone; the server itself holds no game state.
 // ponytail: single-process rooms in memory. Scaling past one instance needs a shared pub/sub.
 import { WebSocketServer } from 'ws';
 import { createBoard, dayOf } from './board.mjs';
@@ -22,14 +23,18 @@ const ROOM = /^(?:trending|u:[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?)$/;
 const MAX_PER_ROOM = 24;
 const MAX_CLIENTS = 400;
 const MAX_MESSAGE = 1024;
-const RATE = 40; // messages per second per client
+const MAX_SNAPSHOT = 8192; // the host's alien snapshot
+const RATE = 60; // messages per second per client
 
 const num = (v, lim = 1e5) => Number.isFinite(v) ? Math.max(-lim, Math.min(lim, Math.round(v * 100) / 100)) : 0;
 const cleanName = v => String(v ?? '').replace(/[^\w .-]/g, '').trim().slice(0, 18) || 'Pilot';
 const cleanColor = v => /^#[\da-f]{6}$/i.test(v) ? v : '#74e2ff';
+/** A flat number list of whole `stride`-sized entries, at most `max` entries. */
+const list = (v, stride, max) => Array.isArray(v) ? v.slice(0, Math.min(v.length - v.length % stride, stride * max)).map(x => num(x)) : [];
 
 export function createRelay({ board = createBoard() } = {}) {
   const rooms = new Map(); // room -> Set<client>
+  const hosts = new Map(); // room -> the client running its aliens (the earliest pilot still there)
   const byPilot = new Map(); // pilot id (one per browser) -> its current connection
   let nextId = 1;
   const send = (c, msg) => { if (c.ws.readyState === 1) c.ws.send(JSON.stringify(msg)); };
@@ -78,13 +83,14 @@ export function createRelay({ board = createBoard() } = {}) {
     record(c); c.stintBase = null;
     const set = rooms.get(c.room);
     set?.delete(c);
-    if (set && !set.size) rooms.delete(c.room);
+    if (set && !set.size) { rooms.delete(c.room); hosts.delete(c.room); }
     cast(c.room, { t: 'left', id: c.id });
+    if (set?.size && hosts.get(c.room) === c) { const next = set.values().next().value; hosts.set(c.room, next); cast(c.room, { t: 'host', id: next.id }); }
     c.room = null;
   }
 
   function handle(c, raw) {
-    if (raw.length > MAX_MESSAGE) return;
+    if (raw.length > (c.room && hosts.get(c.room) === c ? MAX_SNAPSHOT : MAX_MESSAGE)) return;
     const now = Date.now();
     if (now - c.windowStart > 1000) { c.windowStart = now; c.count = 0; }
     if (++c.count > RATE) return;
@@ -106,10 +112,11 @@ export function createRelay({ board = createBoard() } = {}) {
       const peers = [...rooms.get(room)].map(p => ({ id: p.id, name: p.name, color: p.color, hull: p.hull, state: p.state }));
       if (rooms.get(room).size > 0) counters.joinsWithCompany++;
       rooms.get(room).add(c);
+      if (!hosts.has(room)) hosts.set(room, c);
       counters.joins++; if (!c.joined) { c.joined = true; counters.sessions++; }
       const total = online(); if (total > counters.peakPilots) counters.peakPilots = total;
       if (rooms.get(room).size > counters.peakRoom.pilots) counters.peakRoom = { room, pilots: rooms.get(room).size };
-      send(c, { t: 'welcome', id: c.id, room, peers });
+      send(c, { t: 'welcome', id: c.id, room, peers, host: hosts.get(room).id });
       cast(room, { t: 'joined', id: c.id, name: c.name, color: c.color, hull: c.hull }, c);
       return;
     }
@@ -132,6 +139,14 @@ export function createRelay({ board = createBoard() } = {}) {
       // The shot-down pilot announces who got them; only ids of pilots in this room are passed on.
       const by = num(m.by, 1e9) | 0;
       if ([...rooms.get(c.room) ?? []].some(p => p.id === by && p !== c)) cast(c.room, { t: 'killed', id: c.id, by });
+    } else if (m.t === 'aliens') {
+      // Only the host's aliens count: [id, kind, x, z, vx, vz, hp, max, shield] per alien, new shots, deaths.
+      if (hosts.get(c.room) !== c) return;
+      cast(c.room, { t: 'aliens', w: num(m.w, 1e4) | 0, a: list(m.a, 9, 60), b: list(m.b, 5, 48), d: list(m.d, 4, 60) }, c);
+    } else if (m.t === 'ahit') {
+      // A guest's hits on the shared aliens go to the host alone, which decides kills and credit.
+      const host = hosts.get(c.room);
+      if (host && host !== c) send(host, { t: 'ahit', id: c.id, h: list(m.h, 2, 40) });
     } else if (m.t === 'ping') {
       cast(c.room, { t: 'ping', id: c.id, x: num(m.x), z: num(m.z) }, c);
     } else if (m.t === 'emote') {
@@ -157,7 +172,7 @@ export function createRelay({ board = createBoard() } = {}) {
 /** @param {{ origins?: string[], board?: ReturnType<typeof createBoard> }} [options] origins: when non-empty, only pages from these origins may connect. */
 export function attachMultiplayer(httpServer, { origins = [], board } = {}) {
   if (!httpServer) return null;
-  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE * 2 });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_SNAPSHOT * 2 });
   const relay = createRelay({ board });
   const clients = new Set();
   httpServer.on('upgrade', (req, socket, head) => {

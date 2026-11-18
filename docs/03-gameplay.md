@@ -34,8 +34,10 @@ about 8° of an alien's lead point.
 
 ## Aliens
 
-Waves begin a few seconds after the previous one is cleared. In multiplayer everyone plays the highest
-wave anyone in the universe has reached (see [05-multiplayer.md](05-multiplayer.md)).
+Waves begin a few seconds after the previous one is cleared. In multiplayer everyone in a universe
+fights the same aliens: they chase whichever pilot is nearest, and whoever lands the killing blow gets
+the points (see [05-multiplayer.md](05-multiplayer.md)). Grabbing an alien with the gravity beam works
+only for the pilot running the aliens; everyone else can still grab planets.
 
 | Alien | Appears | Behaviour | Hits | Score |
 |---|---|---|---|---|
@@ -132,8 +134,8 @@ of the gate it entered.
 
 ## Multiplayer
 
-Everyone in the same universe flies together. Ships, shots, thrown planets and supernovas are
-shared; aliens are separate for each pilot.
+Everyone in the same universe flies together. Ships, shots, thrown planets, supernovas and aliens are
+shared.
 
 - **Dogfights, always on.** There is no peace mode: every pilot in a universe can shoot every other
   pilot. 8 damage per shot (16 for the Titan), 45 from a supernova. Shooting someone down gives +300

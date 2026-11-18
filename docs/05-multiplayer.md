@@ -17,7 +17,8 @@ A client is in at most one room. Joining another room leaves the previous one.
 
 | Shared with the room | Local to each pilot |
 |---|---|
-| Ship position, heading, velocity, hull points (10 Hz) | Aliens |
+| Ship position, heading, velocity, hull points (10 Hz) | Perks and upgrades |
+| Aliens, their shots and kills (10 Hz, from the host) | |
 | Shots (as they are fired), with damage | Charge, commits |
 | Score, dogfight wins and wave number (10 Hz, self-reported) | |
 | Dogfight kill announcements, emotes, pings | |
@@ -27,9 +28,24 @@ A client is in at most one room. Joining another room leaves the previous one.
 
 The gate and the comet need no messages: every client computes them from the room name and the clock.
 
-Each pilot fights their own copy of the aliens, but the wave number is shared: when anyone in the room
-is on a higher wave, your next wave jumps to it (within two seconds if you are between waves), so a
-friend who joins you on wave 5 starts on wave 5, not wave 1.
+## Shared aliens
+
+The relay names one pilot per room the **host**: the first pilot in, then the longest-staying one when
+the host leaves. The host's client runs the aliens for everyone:
+
+- Waves spawn on the host, and aliens chase whichever live pilot is nearest.
+- Ten times a second the host sends an `aliens` snapshot: every alien, the shots aliens fired since the
+  last one, and the aliens that died with who killed them.
+- Everyone else draws the host's aliens and moves them on between snapshots. Their own hits (bullets,
+  held or flung planets, and an alien ramming them) go to the host as `ahit`. A hit alien pops at once on
+  the shooter's screen; the host decides the kill and the snapshot credits the pilot who landed it, so a
+  kill is never counted twice. Supernovas need no report: every client already sees them.
+- Each pilot still owns their ship: alien shots and rams are checked against your own ship by your client.
+- When the host leaves, the next host carries on with the aliens it was already drawing.
+
+A friend who joins you on wave 5 is on wave 5 at once. On a relay without hosts (an older deploy),
+each pilot runs their own aliens and the wave number alone is shared: your next wave jumps to the
+highest wave anyone in the room has reached.
 
 ## Messages
 
@@ -48,13 +64,16 @@ All messages are JSON objects with a `t` field.
 | `grab` | `planet`, `x`, `z`, `vx`, `vz`, `held` | Planet throw, relayed as `grab` |
 | `nova` | `x`, `z` | Relayed as `nova` |
 | `boom` | `x`, `z` | Relayed as `boom` |
+| `aliens` | `w` (wave), `a`, `b`, `d` (flat number lists, see below) | From the host only; relayed as `aliens`. `a`: `[id, kind, x, z, vx, vz, hp, max, shield]` per alien (at most 60); `b`: `[x, z, vx, vz, life]` per new alien shot (at most 48); `d`: `[id, kind, by, charge]` per death (at most 60). Kinds: 0 saucer, 1 hunter, 2 swarmer, 3 mothership |
+| `ahit` | `h`: `[alienId, damage]` pairs, at most 40 (damage −1: it rammed you) | Sent to the host alone, as `ahit` with the sender's `id` |
 | `rooms` | — | Replies with `rooms`; allowed before joining (the lobby uses it) |
 
 ### Server → client
 
 | `t` | Fields |
 |---|---|
-| `welcome` | `id`, `room`, `peers: [{ id, name, color, hull, state }]` |
+| `welcome` | `id`, `room`, `peers: [{ id, name, color, hull, state }]`, `host` (who runs the aliens) |
+| `host` | `id`: the new host, after the old one left |
 | `joined` | `id`, `name`, `color`, `hull` |
 | `left` | `id` |
 | `state`, `shot`, `grab`, `nova`, `boom`, `emote`, `ping` | The sender's fields plus `id` |
@@ -66,8 +85,8 @@ All messages are JSON objects with a `t` field.
 
 | Rule | Value |
 |---|---|
-| Message size | 1,024 bytes; larger messages are dropped |
-| Rate | 40 messages per second per client; extra messages are dropped |
+| Message size | 1,024 bytes (8,192 for the host, whose alien snapshots are larger); larger messages are dropped |
+| Rate | 60 messages per second per client; extra messages are dropped |
 | Pilots per room | 24 |
 | Connections per server | 400 |
 | Names | Letters, digits, space, `_ . -`; at most 18 characters; default `Pilot` |

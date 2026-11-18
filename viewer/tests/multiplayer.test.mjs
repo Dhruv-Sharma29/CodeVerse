@@ -122,3 +122,26 @@ test('a newer connection of the same pilot replaces the old one, so nobody sees 
   for (const c of [friend, me2]) c.ws.close();
   await new Promise(r => server.close(r));
 });
+
+test('the first pilot in hosts the aliens; only the host may send them; hits go to the host; the next pilot takes over', async () => {
+  const server = createServer(); attachMultiplayer(server);
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const url = `ws://127.0.0.1:${server.address().port}${PLAY_PATH}`;
+  const a = client(url), b = client(url), c = client(url);
+  await Promise.all([a.open, b.open, c.open]);
+  a.send({ t: 'join', room: 'trending', name: 'Ada' }); const wa = await a.next('welcome');
+  assert.equal(wa.host, wa.id);
+  b.send({ t: 'join', room: 'trending', name: 'Lin' }); const wb = await b.next('welcome'); await a.next('joined');
+  c.send({ t: 'join', room: 'trending', name: 'Sam' }); const wc = await c.next('welcome');
+  assert.equal(wb.host, wa.id); assert.equal(wc.host, wa.id);
+  b.send({ t: 'aliens', w: 9, a: [1, 0, 0, 0, 0, 0, 3, 3, 0], b: [], d: [] });       // not the host: dropped
+  a.send({ t: 'aliens', w: 3, a: [7, 0, 1.25, 2, 0, 0, 3, 3, 0, 8, 1], b: [0, 0, 1, 1, 2], d: [] });
+  const snap = await b.next('aliens');
+  assert.equal(snap.w, 3); assert.deepEqual(snap.a, [7, 0, 1.25, 2, 0, 0, 3, 3, 0]); // partial entry trimmed
+  b.send({ t: 'ahit', h: [7, 1] });
+  assert.deepEqual(await a.next('ahit'), { t: 'ahit', id: wb.id, h: [7, 1] });
+  a.ws.close();
+  assert.equal((await b.next('host')).id, wb.id);
+  assert.equal((await c.next('host')).id, wb.id);
+  b.ws.close(); c.ws.close(); await new Promise(r => server.close(r));
+});
