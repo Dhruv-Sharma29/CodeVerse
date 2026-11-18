@@ -61,3 +61,19 @@ test('a bot near you picks a fight, and shooting it down scores and it comes bac
   for (let t = 0; t < 5.2; t += 1 / 60) stepBots(sim, 1 / 60, still);
   assert.equal(b.hp, 100);                                            // back in the race
 });
+
+test('bots are solid: flying into one pushes you back instead of passing through', () => {
+  const sim = createSim(universe);
+  sim.waveTimer = 999; sim.planets.length = 0;
+  spawnBots(sim, 1, still);
+  const b = sim.bots[0];
+  Object.assign(b, { x: 100, z: 100, vx: 0, vz: 0, a: 0 });
+  Object.assign(sim.ship, { x: 90, z: 100, vx: 40, vz: 0, inv: 9 });
+  let closest = Infinity;
+  for (let t = 0; t < 1; t += 1 / 60) {
+    Object.assign(b, { vx: 0, vz: 0 });
+    tick(sim); closest = Math.min(closest, Math.hypot(b.x - sim.ship.x, b.z - sim.ship.z));
+  }
+  assert.ok(closest > 3, `got within ${closest.toFixed(2)}`);
+  assert.ok(sim.ship.x < b.x, 'still on your side of the bot');
+});

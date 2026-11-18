@@ -110,6 +110,16 @@ export function stepBots(sim: Sim, dt: number, rnd = Math.random) {
     const max = hull.max * (.6 + .4 * slow), sp = Math.hypot(b.vx, b.vz);
     if (sp > max) { b.vx *= max / sp; b.vz *= max / sp; }
     b.x += b.vx * dt; b.z += b.vz * dt;
+    // Solid to your ship: push apart half each and bounce, like two hulls meeting.
+    if (s.dead <= 0) {
+      const d = dist(b, s) || .001, min = 3.2;
+      if (d < min) {
+        const ux = (s.x - b.x) / d, uz = (s.z - b.z) / d, over = (min - d) / 2;
+        s.x += ux * over; s.z += uz * over; b.x -= ux * over; b.z -= uz * over;
+        const vn = (s.vx - b.vx) * ux + (s.vz - b.vz) * uz;
+        if (vn < 0) { s.vx -= .75 * vn * ux; s.vz -= .75 * vn * uz; b.vx += .75 * vn * ux; b.vz += .75 * vn * uz; }
+      }
+    }
     if (sp > 1 || duel || foe) b.a += Math.max(-5 * dt, Math.min(5 * dt, wrap(face - b.a)));
   }
 }
