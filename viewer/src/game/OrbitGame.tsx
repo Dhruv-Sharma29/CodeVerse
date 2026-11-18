@@ -146,6 +146,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       else if (e.type === "star") { sfx.commit(); toast(`Star shield from ${e.planet.repo.name}: shielded and repaired`, "good"); }
       else if (e.type === "hurt") { sfx.hurt(); pulse("hurt"); }
       else if (e.type === "dead") {
+        if (e.lost) toast(`Lost a level of ${PERKS[e.lost].name} (now ${sim.perks[e.lost]})`, "bad");
         net.current?.send({ t: "boom", x: sim.ship.x, z: sim.ship.z });
         const bot = e.by != null && e.by < 0 ? sim.bots.find(b => b.id === e.by) : undefined;
         if (bot) toast(`${bot.name} (bot) shot you down`, "bad"); // bots are local: nothing for the relay

@@ -49,7 +49,7 @@ export interface Planet {
   trait: Trait; rocks: { a: number; r: number; alive: boolean }[]; star: { a: number; r: number; cool: number } | null; fresh: boolean;
 }
 export type AlienKind = "saucer" | "hunter" | "swarmer" | "mothership";
-export interface Alien { id: number; kind: AlienKind; x: number; z: number; vx: number; vz: number; hp: number; max: number; cool: number; held: boolean; flung: number; spin: number; orbitDir: number; t: number; hitCool: number }
+export interface Alien { id: number; kind: AlienKind; x: number; z: number; vx: number; vz: number; hp: number; max: number; cool: number; held: boolean; flung: number; spin: number; orbitDir: number; t: number; hitCool: number; shield?: number }
 /** Per-kind tuning: hit radius, score, charge reward, explosion colour/size. */
 export const ALIENS: Record<AlienKind, { hp: number; r: number; pts: number; charge: number; color: string; boom: number }> = {
   saucer: { hp: 3, r: 2.6, pts: 100, charge: 6, color: "#7dffb4", boom: 10 },
@@ -85,6 +85,16 @@ export function offerPerks(sim: Sim, rnd = Math.random): PerkId[] {
   for (let i = open.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [open[i], open[j]] = [open[j], open[i]]; }
   return open.slice(0, 3);
 }
+/**
+ * Difficulty after wave 5: each later wave adds 15% alien hull, and 4% speed and saucer fire rate
+ * (capped at +40%). From wave 6 every third saucer, from wave 11 every second, carries a shield
+ * that soaks SHIELD_HP of bullet damage first.
+ */
+export const HARDER_FROM = 5, SHIELD_HP = 4;
+export const waveHeat = (wave: number) => Math.max(0, wave - HARDER_FROM);
+export const alienHp = (kind: AlienKind, wave: number) => Math.max(ALIENS[kind].hp, Math.round(ALIENS[kind].hp * (1 + .15 * waveHeat(wave))));
+const pace = (sim: Sim) => Math.min(1.4, 1 + .04 * waveHeat(sim.wave));
+
 /** Take a perk from the current offer. Returns false if it was not on offer. */
 export function choosePerk(sim: Sim, id: PerkId) {
   if (!sim.offer?.includes(id) || sim.perks[id] >= PERKS[id].max) return false;
@@ -108,7 +118,7 @@ export interface Input { move: { x: number; z: number }; aim: { x: number; z: nu
 export type SimEvent =
   | { type: "commit"; planet: Planet; commit: GitCommit }
   | { type: "kill"; kind: Alien["kind"]; points: number }
-  | { type: "hurt" } | { type: "dead"; by?: number } | { type: "storm"; phase: StormPhase } | { type: "meteor" } | { type: "issue"; planet: Planet } | { type: "star"; planet: Planet } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean } | { type: "perks" } | { type: "botDown"; name: string }
+  | { type: "hurt" } | { type: "dead"; by?: number; lost?: PerkId } | { type: "storm"; phase: StormPhase } | { type: "meteor" } | { type: "issue"; planet: Planet } | { type: "star"; planet: Planet } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean } | { type: "perks" } | { type: "botDown"; name: string }
   | { type: "load"; planet: Planet } | { type: "shot"; x: number; z: number; a: number }
   | { type: "nova"; x: number; z: number } | { type: "grab" } | { type: "fling" } | { type: "boom"; x: number; z: number };
 
@@ -211,7 +221,11 @@ function hurt(sim: Sim, amount: number, ev: SimEvent[], by?: number) {
   s.hp -= amount; s.inv = .12; s.lastHit = sim.t; sim.shake = Math.min(1, sim.shake + .45); ev.push({ type: "hurt" });
   if (s.hp <= 0) {
     s.hp = 0; s.dead = 2.6; sim.deaths++; sim.grab = null; sim.shake = 1; sim.killedBy = by ?? null;
-    explode(sim, s.x, s.z, "#74e2ff", 90, 16); ev.push(by == null ? { type: "dead" } : { type: "dead", by });
+    explode(sim, s.x, s.z, "#74e2ff", 90, 16);
+    // Dying costs one level of a random perk you have.
+    const owned = (Object.keys(sim.perks) as PerkId[]).filter(k => sim.perks[k] > 0), lost = owned[Math.floor(Math.random() * owned.length)];
+    if (lost) sim.perks[lost]--;
+    ev.push({ type: "dead", ...(by == null ? {} : { by }), ...(lost ? { lost } : {}) });
   }
 }
 
@@ -231,6 +245,12 @@ function killAlien(sim: Sim, a: Alien, ev: SimEvent[], credit: Credit = true) {
 /** Bullets chip away; "instant kill" sources (planets, novas, blasts) pass a big number. The boss takes those as capped, spaced-out hits. */
 function damageAlien(sim: Sim, a: Alien, dmg: number, ev: SimEvent[], credit: Credit = true) {
   if (a.hp <= 0) return;
+  // Shields soak bullets; planets, novas and blasts (big hits) go straight through.
+  if (a.shield && dmg <= 2) {
+    a.shield = Math.max(0, a.shield - dmg);
+    if (!a.shield) { explode(sim, a.x, a.z, "#9fe8ff", 24, 6); floatText(sim, a.x, a.z, "Shield down", "#9fe8ff"); }
+    return;
+  }
   if (a.kind === "mothership" && dmg > 2) {
     if (a.hitCool > 0) return;
     a.hitCool = .6; dmg = 12; sim.shake = Math.min(1, sim.shake + .4); explode(sim, a.x, a.z, "#ffb547", 40, 14);
@@ -240,7 +260,9 @@ function damageAlien(sim: Sim, a: Alien, dmg: number, ev: SimEvent[], credit: Cr
 }
 function addAlien(sim: Sim, kind: AlienKind, x: number, z: number, hp = ALIENS[kind].hp) {
   const r = Math.hypot(x, z); if (r > sim.edge) { x *= sim.edge / r; z *= sim.edge / r; }
-  sim.aliens.push({ id: sim.nextAlien++, kind, x, z, vx: 0, vz: 0, hp, max: hp, cool: 1.5 + Math.random() * 2, held: false, flung: 0, spin: Math.random() * TAU, orbitDir: Math.random() < .5 ? -1 : 1, t: Math.random() * 10, hitCool: 0 });
+  const a: Alien = { id: sim.nextAlien++, kind, x, z, vx: 0, vz: 0, hp, max: hp, cool: 1.5 + Math.random() * 2, held: false, flung: 0, spin: Math.random() * TAU, orbitDir: Math.random() < .5 ? -1 : 1, t: Math.random() * 10, hitCool: 0 };
+  sim.aliens.push(a);
+  return a;
 }
 
 function spawnWave(sim: Sim, ev: SimEvent[]) {
@@ -254,10 +276,14 @@ function spawnWave(sim: Sim, ev: SimEvent[]) {
   } else {
     const n = Math.min(14, 2 + Math.floor(sim.wave * 1.6));
     const hunters = Math.min(n - 1, Math.floor(sim.wave / 2));
-    for (let i = 0; i < n; i++) addAlien(sim, i < hunters ? "hunter" : "saucer", ...around(70));
+    const shieldEvery = sim.wave > 10 ? 2 : 3;
+    for (let i = 0; i < n; i++) {
+      const kind = i < hunters ? "hunter" : "saucer", a = addAlien(sim, kind, ...around(70), alienHp(kind, sim.wave));
+      if (kind === "saucer" && sim.wave > HARDER_FROM && (i - hunters) % shieldEvery === 0) a.shield = SHIELD_HP;
+    }
     // From wave 3: packs of swarmer drones arriving together.
     const packs = sim.wave >= 3 ? 1 + Math.floor((sim.wave - 3) / 3) : 0;
-    for (let p = 0; p < packs; p++) { const [x, z] = around(85); for (let i = 0; i < 6; i++) addAlien(sim, "swarmer", x + (Math.random() - .5) * 8, z + (Math.random() - .5) * 8); }
+    for (let p = 0; p < packs; p++) { const [x, z] = around(85); for (let i = 0; i < 6; i++) addAlien(sim, "swarmer", x + (Math.random() - .5) * 8, z + (Math.random() - .5) * 8, alienHp("swarmer", sim.wave)); }
   }
   ev.push({ type: "wave", n: sim.wave, boss });
 }
@@ -339,7 +365,8 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   } else {
     s.inv = Math.max(0, s.inv - dt);
     const hull = HULLS[s.hull];
-    if (sim.t - s.lastHit > 4) s.hp = Math.min(maxHp(sim), s.hp + hull.hp * .04 * dt);
+    // Repairs only between waves (8% a second once no alien is left), so damage taken in a fight sticks.
+    if (sim.t - s.lastHit > 4 && !sim.aliens.some(a => a.hp > 0)) s.hp = Math.min(maxHp(sim), s.hp + hull.hp * .08 * dt);
     // Facing first, so ship-relative thrust uses this frame's nose direction.
     const sp0 = Math.hypot(s.vx, s.vz);
     if (input.aim) s.a = Math.atan2(input.aim.z - s.z, input.aim.x - s.x);
@@ -516,22 +543,22 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     if (a.kind === "saucer") {
       const radial = Math.max(-1, Math.min(1, (d - 24) / 10));
       a.vx += (nx * radial - nz * a.orbitDir * .9) * 34 * dt; a.vz += (nz * radial + nx * a.orbitDir * .9) * 34 * dt;
-      const sp = Math.hypot(a.vx, a.vz); if (sp > 22) { a.vx *= 22 / sp; a.vz *= 22 / sp; }
+      const sp = Math.hypot(a.vx, a.vz), cap = 22 * pace(sim); if (sp > cap) { a.vx *= cap / sp; a.vz *= cap / sp; }
       a.cool -= dt;
       if (alive && a.cool <= 0 && d < 62) {
         const lead = d / 48, tx = s.x + s.vx * lead * .7 - a.x, tz = s.z + s.vz * lead * .7 - a.z, tl = Math.hypot(tx, tz) || 1;
         sim.bullets.push({ x: a.x, z: a.z, vx: tx / tl * 48, vz: tz / tl * 48, life: 2.4, from: "alien" });
-        a.cool = 1.3 + Math.random() * 1.3;
+        a.cool = (1.3 + Math.random() * 1.3) / pace(sim);
       }
     } else if (a.kind === "hunter") {
       a.vx += nx * 52 * dt; a.vz += nz * 52 * dt;
-      const sp = Math.hypot(a.vx, a.vz); if (sp > 34) { a.vx *= 34 / sp; a.vz *= 34 / sp; }
+      const sp = Math.hypot(a.vx, a.vz), cap = 34 * pace(sim); if (sp > cap) { a.vx *= cap / sp; a.vz *= cap / sp; }
       if (alive && d < 2.8) { hurt(sim, 15, ev); killAlien(sim, a, ev, false); continue; }
     } else if (a.kind === "swarmer") {
       // Weaving dive: hard to hit head-on, pops on contact.
       const weave = Math.sin(a.t * 5 + a.spin) * .9;
       a.vx += (nx - nz * weave) * 70 * dt; a.vz += (nz + nx * weave) * 70 * dt;
-      const sp = Math.hypot(a.vx, a.vz); if (sp > 40) { a.vx *= 40 / sp; a.vz *= 40 / sp; }
+      const sp = Math.hypot(a.vx, a.vz), cap = 40 * pace(sim); if (sp > cap) { a.vx *= cap / sp; a.vz *= cap / sp; }
       if (alive && d < 2.2) { hurt(sim, 8, ev); killAlien(sim, a, ev, false); continue; }
     } else {
       // Mothership: slow orbit at range, rings of fire, launches swarmers.

@@ -28,7 +28,7 @@ Choose a hull and colour in the lobby hangar. Other pilots see your choice.
 | **Wasp** | 70 | 58 / 90 | 0.085 s | Twin blasters, 1 damage |
 | **Titan** | 160 | 38 / 60 | 0.30 s | Three-way spread, 2 damage per shot |
 
-All hulls regenerate 4% of their hull per second after four seconds without damage, and respawn
+Hulls repair only between waves: 8% of the hull per second, four seconds after the last hit, once no alien is left, and respawn
 near the sun 2.6 seconds after being destroyed. Shots get a light aim assist when already within
 about 8° of an alien's lead point.
 
@@ -46,6 +46,16 @@ Waves begin a few seconds after the previous one is cleared.
 Planets are solid: aliens steer around them and cannot pass through. Saucers and the mothership are
 solid to your ship too: you bounce off them, and ramming one at speed scrapes a little hull (4, or 8
 for the mothership).
+
+### Getting harder
+
+After wave 5 each wave adds 15% alien hull and 4% alien speed and saucer fire rate (capped at
++40%). From wave 6 every third saucer carries a shield (every second one from wave 11): a wireframe
+bubble that soaks 4 damage from bullets before the hull takes any. Planets, supernovas and blasts go
+straight through it.
+
+Your hull only repairs between waves, so damage taken in a fight stays until the wave is cleared, and
+being shot down costs one level of a random perk you have.
 
 ### Perks
 

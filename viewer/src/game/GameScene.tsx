@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { Sun, World } from "../scene/World";
 import { seedFor } from "../github/planetStyle";
-import { PORTAL_R, SUN_R, novaRadius, type HullId, type Input, type Planet, type Sim } from "./sim";
+import { PORTAL_R, SHIELD_HP, SUN_R, novaRadius, type HullId, type Input, type Planet, type Sim } from "./sim";
 import { HOLD, STORM } from "./events";
 import { QUALITY, type Palette } from "./settings";
 
@@ -556,13 +556,13 @@ function alienGeometry() {
 }
 const RIM_BULBS = 8;
 function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
-  const hull = useRef<THREE.InstancedMesh>(null), dome = useRef<THREE.InstancedMesh>(null), bulbs = useRef<THREE.InstancedMesh>(null);
+  const hull = useRef<THREE.InstancedMesh>(null), dome = useRef<THREE.InstancedMesh>(null), bulbs = useRef<THREE.InstancedMesh>(null), shields = useRef<THREE.InstancedMesh>(null);
   const hunter = useRef<THREE.InstancedMesh>(null), core = useRef<THREE.InstancedMesh>(null), swarm = useRef<THREE.InstancedMesh>(null), swarmCore = useRef<THREE.InstancedMesh>(null);
   const motherships = useRef<(THREE.Group | null)[]>([]);
   const geo = alienGeometry(), halo = useMemo(() => makeHalo(140, 9), []);
   const tint = useMemo(() => ({ saucer: new THREE.Color(palette.saucer), hunter: new THREE.Color(palette.hunter), swarmer: new THREE.Color(palette.swarmer), mothership: new THREE.Color(palette.mothership) }), [palette]);
   useFrame(() => {
-    let ns = 0, nb = 0, nh = 0, nw = 0, nm = 0, ng = 0;
+    let ns = 0, nb = 0, nh = 0, nw = 0, nm = 0, ng = 0, nsh = 0;
     for (const a of sim.aliens) {
       const bob = Math.sin(a.spin * .7) * .4 + 1.5, yaw = -Math.atan2(a.vz, a.vx);
       if (a.kind === "saucer") {
@@ -570,6 +570,9 @@ function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
         tmp.position.set(a.x, bob, a.z); tmp.rotation.set(tilt, a.spin * .3, 0); tmp.scale.setScalar(1); tmp.updateMatrix();
         hull.current?.setMatrixAt(ns, tmp.matrix);
         tmp.position.y = bob + .3; tmp.updateMatrix(); dome.current?.setMatrixAt(ns++, tmp.matrix);
+        if (a.shield) { // a bubble that thins as the shield is shot down
+          tmp.position.y = bob; tmp.rotation.set(0, a.spin, 0); tmp.scale.setScalar(.75 + .25 * a.shield / SHIELD_HP); tmp.updateMatrix(); shields.current?.setMatrixAt(nsh++, tmp.matrix);
+        }
         // Rim lights chase around the hull.
         for (let k = 0; k < RIM_BULBS && nb < 40 * RIM_BULBS; k++) {
           const ang = k / RIM_BULBS * TAU + a.spin * .3;
@@ -593,7 +596,7 @@ function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
       }
       if (ng < 140) setHalo(halo, ng++, a.x, .6, a.z, tint[a.kind], a.kind === "swarmer" ? .45 : .6);
     }
-    for (const [m, n] of [[hull, ns], [dome, ns], [bulbs, nb], [hunter, nh], [core, nh], [swarm, nw], [swarmCore, nw]] as const) if (m.current) { m.current.count = n; m.current.instanceMatrix.needsUpdate = true; }
+    for (const [m, n] of [[hull, ns], [dome, ns], [bulbs, nb], [shields, nsh], [hunter, nh], [core, nh], [swarm, nw], [swarmCore, nw]] as const) if (m.current) { m.current.count = n; m.current.instanceMatrix.needsUpdate = true; }
     commitHalo(halo, ng);
     for (let i = nm; i < motherships.current.length; i++) { const g = motherships.current[i]; if (g) g.visible = false; }
   });
@@ -601,6 +604,7 @@ function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
     <primitive object={halo} />
     <instancedMesh ref={hull} args={[geo.saucer, undefined, 40]} frustumCulled={false}><meshStandardMaterial color="#b9c2da" metalness={.35} roughness={.35} /></instancedMesh>
     <instancedMesh ref={dome} args={[undefined, undefined, 40]} frustumCulled={false}><sphereGeometry args={[1.15, 20, 10, 0, TAU, 0, Math.PI / 2]} /><meshStandardMaterial color={palette.saucer} emissive={palette.saucer} emissiveIntensity={1.3} roughness={.1} transparent opacity={.9} toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={shields} args={[undefined, undefined, 40]} frustumCulled={false}><icosahedronGeometry args={[3.9, 2]} /><meshBasicMaterial color="#9fe8ff" {...additive} opacity={.22} wireframe /></instancedMesh>
     <instancedMesh ref={bulbs} args={[undefined, undefined, 40 * RIM_BULBS]} frustumCulled={false}><sphereGeometry args={[.22, 8, 6]} /><meshBasicMaterial color={palette.alienShot} toneMapped={false} /></instancedMesh>
     <instancedMesh ref={hunter} args={[geo.hunter, undefined, 40]} frustumCulled={false}><meshStandardMaterial color="#4a4f63" emissive={palette.hunter} emissiveIntensity={.18} metalness={.35} roughness={.35} flatShading /></instancedMesh>
     <instancedMesh ref={core} args={[undefined, undefined, 40]} frustumCulled={false}><octahedronGeometry args={[.6, 0]} /><meshBasicMaterial color={palette.hunter} toneMapped={false} /></instancedMesh>
