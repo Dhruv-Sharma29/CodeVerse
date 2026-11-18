@@ -443,11 +443,12 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
 
   /* ---- bot pilots: company while nobody else is here, gone as soon as someone joins ---- */
   const botsSeen = useRef(false), leader = useRef<number | null>(null);
+  const learning = lessons.length < LESSONS.length; // first flight: no rivals until it is done or skipped
   useEffect(() => {
     const c = ctl.current; if (phase !== "play" || !c || c.attract) return;
     const asPeers = () => c.sim.bots.map(b => ({ id: b.id, name: b.name, color: b.color, hull: b.hull, bot: true }));
-    if (peers.length) {
-      if (c.sim.bots.length) { clearBots(c.sim); toast("Bots left: a real pilot is here"); }
+    if (peers.length || learning) {
+      if (c.sim.bots.length) { clearBots(c.sim); if (peers.length) toast("Bots left: a real pilot is here"); }
       setBots([]); return;
     }
     setBots(asPeers()); // in step with this universe's sim (empty right after a hyperjump)
@@ -458,7 +459,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       if (!botsSeen.current) { botsSeen.current = true; toast("Two rival bots are racing you for commits until other pilots arrive"); }
     }, 4000);
     return () => clearTimeout(t);
-  }, [phase, peers.length, universe, toast]);
+  }, [phase, peers.length, universe, toast, learning]);
 
   /* ---- perks ---- */
   function pickPerk(i: number) {

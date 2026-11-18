@@ -154,7 +154,7 @@ shared; aliens are separate for each pilot.
 
 ### Bot pilots
 
-While nobody else is in your universe, two rival bots join you after a few seconds. They are marked
+While nobody else is in your universe, two rival bots join you after a few seconds, but not during the first flight: they wait until you finish or skip it. They are marked
 **BOT** on red dashed name tags, show as smaller dots on the radar and as "(bot)" on the pilots board.
 
 - They **race you for commits**: a commit a bot reaches first is gone.
