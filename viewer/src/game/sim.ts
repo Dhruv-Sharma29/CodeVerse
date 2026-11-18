@@ -95,11 +95,14 @@ export const waveHeat = (wave: number) => Math.max(0, wave - HARDER_FROM);
 export const alienHp = (kind: AlienKind, wave: number) => Math.max(ALIENS[kind].hp, Math.round(ALIENS[kind].hp * (1 + .15 * waveHeat(wave))));
 const pace = (sim: Sim) => Math.min(1.4, 1 + .04 * waveHeat(sim.wave));
 
-/** Take a perk from the current offer. Returns false if it was not on offer. */
+/** Take a perk from the current offer. Returns false if it was not on offer. The next unclaimed wave's offer then shows. */
 export function choosePerk(sim: Sim, id: PerkId) {
   if (!sim.offer?.includes(id) || sim.perks[id] >= PERKS[id].max) return false;
-  sim.perks[id]++; sim.offer = null;
+  sim.perks[id]++; sim.owed.shift();
   if (id === "hull") sim.ship.hp = maxHp(sim);
+  const next = sim.owed.length ? offerPerks(sim) : [];
+  sim.offer = next.length ? next : null;
+  if (!sim.offer) sim.owed = [];
   return true;
 }
 export interface Bullet { x: number; z: number; vx: number; vz: number; life: number; from: "me" | "ally" | "alien"; dmg?: number; big?: boolean; owner?: number }
@@ -163,9 +166,9 @@ export function createSim(universe: Universe) {
     floats: [] as { x: number; z: number; text: string; color: string; t: number }[],
     killedBy: null as number | null,
     grab: null as null | { planet?: Planet; alien?: Alien },
-    /** Perk levels, and the three on offer after a cleared wave (null when none). */
+    /** Perk levels; the three on offer (null when none); cleared waves whose upgrade is still unclaimed, oldest first (owed[0] is the one on offer). */
     perks: { rapid: 0, beam: 0, nova: 0, hull: 0, engine: 0 } as Record<PerkId, number>,
-    offer: null as PerkId[] | null, offeredWave: 0,
+    offer: null as PerkId[] | null, owed: [] as number[], offeredWave: 0,
     /** Highest wave any pilot in this universe has reached; your next wave catches up to it. */
     waveFloor: 0,
     score: 0, charge: 0, wave: 0, waveTimer: 4, kills: 0, deaths: 0, commits: 0, shake: 0, portalCool: 2.5, nextAlien: 1,
@@ -519,8 +522,12 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
 
   // ---- aliens
   if (!sim.aliens.length) {
-    // Wave cleared: offer perks once (the offer stays until taken or the next wave is cleared).
-    if (sim.wave > 0 && sim.offeredWave < sim.wave) { sim.offeredWave = sim.wave; const o = offerPerks(sim); sim.offer = o.length ? o : null; if (sim.offer) ev.push({ type: "perks" }); }
+    // Wave cleared: an upgrade is owed. Unclaimed ones stack up and are offered oldest first.
+    if (sim.wave > 0 && sim.offeredWave < sim.wave) {
+      sim.offeredWave = sim.wave;
+      if (sim.offer) { sim.owed.push(sim.wave); ev.push({ type: "perks" }); }
+      else { const o = offerPerks(sim); if (o.length) { sim.offer = o; sim.owed = [sim.wave]; ev.push({ type: "perks" }); } }
+    }
     if (sim.waveFloor > sim.wave) sim.waveTimer = Math.min(sim.waveTimer, 2); // someone here is ahead: catch up soon
     sim.waveTimer -= dt; if (sim.waveTimer <= 0) { spawnWave(sim, ev); sim.waveTimer = 5; }
   }

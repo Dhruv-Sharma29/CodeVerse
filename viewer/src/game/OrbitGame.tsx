@@ -59,7 +59,7 @@ const sfx = {
 };
 
 interface Toast { id: number; text: string; kind: "" | "good" | "bad" | "commit" }
-interface Hud { offer: PerkId[] | null; perks: Record<PerkId, number>; score: number; hp: number; charge: number; wave: number; aliens: number; kills: number; dead: boolean; near: Planet | null; grabbing: boolean; comet: boolean; gate: { a: number; d: number }; boss: { hp: number; max: number } | null; board: BoardRow[]; holding: null | "holding" | "contested"; bounty: number | null; storm: string; meteors: number; daily: { done: number; n: number; text: string; complete: boolean } | null }
+interface Hud { offer: PerkId[] | null; owed: number[]; perks: Record<PerkId, number>; score: number; hp: number; charge: number; wave: number; aliens: number; kills: number; dead: boolean; near: Planet | null; grabbing: boolean; comet: boolean; gate: { a: number; d: number }; boss: { hp: number; max: number } | null; board: BoardRow[]; holding: null | "holding" | "contested"; bounty: number | null; storm: string; meteors: number; daily: { done: number; n: number; text: string; complete: boolean } | null }
 interface BoardRow { id: number; name: string; color: string; hull: HullId; score: number; kills: number; me: boolean }
 
 export default function OrbitGame({ onExit }: { onExit: () => void }) {
@@ -179,7 +179,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const makeControl = useCallback((u: Universe, carry?: Sim): Control => {
     const sim = createSim(u);
     sim.ship.hull = hull; sim.ship.hp = HULLS[hull].hp;
-    if (carry) Object.assign(sim, { score: carry.score, kills: carry.kills, charge: carry.charge, commits: carry.commits, deaths: carry.deaths, perks: { ...carry.perks } });
+    if (carry) Object.assign(sim, { score: carry.score, kills: carry.kills, charge: carry.charge, commits: carry.commits, deaths: carry.deaths, perks: { ...carry.perks }, offer: carry.offer, owed: [...carry.owed] });
     const events: SimEvent[] = [];
     const c: Control = {
       sim, input: emptyInput(), zoom: ctl.current?.zoom ?? 1, warp: 0, color, reduceMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -323,7 +323,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         if (!doneToday && got >= today.goal.n) { store.set(`daily:${today.day}`, true); s.score += DAILY_REWARD; sfx.wave(); toast(`Daily challenge complete! +${DAILY_REWARD}`, "good"); }
         daily = { done: Math.min(today.goal.n, got), n: today.goal.n, text: today.goal.text, complete: doneToday || got >= today.goal.n };
       }
-      setHud({ board: rows, holding: s.holding, bounty: s.bountyId, storm: s.stormPhase, meteors: s.meteors.length, daily, boss: boss ? { hp: boss.hp, max: boss.max } : null, offer: s.offer, perks: { ...s.perks }, score: s.score, hp: s.ship.hp / maxHp(s) * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, comet: s.nearComet, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
+      setHud({ board: rows, holding: s.holding, bounty: s.bountyId, storm: s.stormPhase, meteors: s.meteors.length, daily, boss: boss ? { hp: boss.hp, max: boss.max } : null, offer: s.offer, owed: [...s.owed], perks: { ...s.perks }, score: s.score, hp: s.ship.hp / maxHp(s) * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, comet: s.nearComet, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
       drawRadar(radar.current, s, paletteRef.current);
     }, 100);
     return () => clearInterval(id);
@@ -666,7 +666,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     </header>
 
     {hud?.offer && !hud.dead && <section className="orbit-perks" aria-label="Pick an upgrade">
-      <span className="orbit-eyebrow">WAVE {hud.wave} CLEARED · PICK AN UPGRADE</span>
+      <span className="orbit-eyebrow">WAVE {hud.owed[0] ?? hud.wave} CLEARED · PICK AN UPGRADE{hud.owed.length > 1 ? ` · ${hud.owed.length - 1} MORE WAITING` : ""}</span>
       {hud.offer.map((id, i) => <button type="button" key={id} onClick={() => pickPerk(i)}>
         {!touch && <kbd>{7 + i}</kbd>}
         <span><strong>{PERKS[id].name}</strong><small>{PERKS[id].blurb}</small></span>

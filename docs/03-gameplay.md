@@ -61,7 +61,8 @@ being shot down costs one level of a random perk you have.
 ### Perks
 
 Clearing a wave offers three upgrades; pick one with a click or tap, or **7**, **8** or **9**. The game
-doesn't pause, and the offer stays until you take one or clear the next wave. Each perk stacks to level 3,
+doesn't pause, and the offer stays until you take one. Unclaimed upgrades stack up: clear more waves
+without picking and they wait in line, oldest first, with a count of how many more are waiting. Each perk stacks to level 3,
 and perks carry through hyperjumps along with your score.
 
 | Perk | Each level |
@@ -158,6 +159,7 @@ While nobody else is in your universe, two rival bots join you after a few secon
 **BOT** on red dashed name tags, show as smaller dots on the radar and as "(bot)" on the pilots board.
 
 - They **race you for commits**: a commit a bot reaches first is gone.
+- They are **solid**: fly into one and you bounce off each other.
 - They **hunt aliens** for points, and **pick fights** with you when you are closer than any alien,
   or for eight seconds after you shoot them. Their aim wobbles and they fire slower than you, so a
   moving pilot can dodge.

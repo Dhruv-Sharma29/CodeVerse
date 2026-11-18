@@ -33,3 +33,16 @@ test('maxed perks are never offered, and rapid fire shortens the gun cooldown', 
   step(sim, { ...emptyInput(), fire: true, aim: { x: 50, z: 0 } }, 1 / 60, []);
   assert.ok(Math.abs(sim.ship.fireCool - .13 * .85 ** 2) < 1e-9);
 });
+
+test('unclaimed upgrades stack up and are offered oldest first', () => {
+  const sim = createSim(universe);
+  const clear = wave => { Object.assign(sim, { wave, waveTimer: 99 }); step(sim, emptyInput(), 1 / 60, []); };
+  clear(3); clear(4); clear(5);
+  assert.deepEqual(sim.owed, [3, 4, 5]);
+  assert.equal(choosePerk(sim, sim.offer[0]), true);
+  assert.deepEqual(sim.owed, [4, 5]);
+  assert.equal(sim.offer.length, 3);                        // wave 4's offer shows next
+  choosePerk(sim, sim.offer[0]); choosePerk(sim, sim.offer[0]);
+  assert.deepEqual(sim.owed, []);
+  assert.equal(sim.offer, null);
+});
