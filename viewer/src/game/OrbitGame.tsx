@@ -13,7 +13,7 @@ import { loadUniverse, ownerOf } from "./universe";
 import { invitePath, inviteTarget } from "./invite";
 import { screenTilt, tiltToMove, type Tilt } from "./tilt";
 import { KeySheet, LESSONS, SettingsPanel, Tutorial, type LessonId } from "./Tutorial";
-import { PALETTES, QUALITY, actionFor, loadKeys, resolveQuality, type KeyMap, type Palette, type PaletteId, type QualitySetting } from "./settings";
+import { PALETTES, QUALITY, actionFor, keyLabel, loadKeys, resolveQuality, type KeyMap, type Palette, type PaletteId, type QualitySetting } from "./settings";
 import "./game.css";
 
 /** The creator's GitHub profile, shown by the comet. */
@@ -79,6 +79,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const [rooms, setRooms] = useState<{ room: string; count: number }[]>([]);
   const [status, setStatus] = useState<NetStatus>("connecting");
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [banner, setBanner] = useState<{ id: number; n: number; boss: boolean } | null>(null);
   const [log, setLog] = useState<{ planet: Planet; commit: GitCommit }[]>([]);
   const [hud, setHud] = useState<Hud | null>(null);
   const [muted, setMuted] = useState(() => store.get("muted", false));
@@ -154,7 +155,11 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         else toast("Ship destroyed. Respawning near the sun.", "bad");
       }
       else if (e.type === "perks") { tone(660, .09, "triangle", .04); setTimeout(() => tone(880, .12, "triangle", .04), 90); }
-      else if (e.type === "wave") { sfx.wave(); toast(e.boss ? `Wave ${e.n}: a MOTHERSHIP is coming` : `Wave ${e.n}: alien ships inbound`, "bad"); }
+      else if (e.type === "wave") {
+        sfx.wave();
+        const id = performance.now(); setBanner({ id, n: e.n, boss: e.boss });
+        setTimeout(() => setBanner(b => b?.id === id ? null : b), 2600);
+      }
       else if (e.type === "grab") sfx.grab();
       else if (e.type === "fling") sfx.fling();
       else if (e.type === "gate") toast("The hyperjump gate moved. Follow the violet arrow.");
@@ -672,7 +677,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     </header>
 
     {hud?.offer && !hud.dead && <section className="orbit-perks" aria-label="Pick an upgrade">
-      <span className="orbit-eyebrow">WAVE {hud.owed[0] ?? hud.wave} CLEARED · PICK AN UPGRADE{hud.owed.length > 1 ? ` · ${hud.owed.length - 1} MORE WAITING` : ""}</span>
+      <div className="orbit-perks-head"><span className="orbit-eyebrow">WAVE {hud.owed[0] ?? hud.wave} CLEARED · PICK ONE</span>{hud.owed.length > 1 && <em key={hud.owed.length} title="More cleared waves have an upgrade waiting">{hud.owed.length - 1} MORE</em>}</div>
       {hud.offer.map((id, i) => <button type="button" key={id} onClick={() => pickPerk(i)}>
         {!touch && <kbd>{7 + i}</kbd>}
         <span><strong>{PERKS[id].name}</strong><small>{PERKS[id].blurb}</small></span>
@@ -681,9 +686,15 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     </section>}
 
     {hud && <section className="orbit-hud" aria-label="Ship status">
-      <div className="orbit-score">{hud.score.toLocaleString()}</div>
-      <div className="orbit-bar" aria-label={`Hull ${Math.round(hud.hp)} percent`}><span>HULL</span><i style={{ width: `${hud.hp}%`, background: hud.hp < 30 ? "var(--o-bad)" : "var(--o-cyan)" }} /></div>
-      <div className={`orbit-bar ${hud.charge >= 100 ? "ready" : ""}`} aria-label={`Supernova charge ${Math.round(hud.charge)} percent`}><span>{hud.charge >= 100 ? "NOVA READY · Q" : "NOVA"}</span><i style={{ width: `${hud.charge}%`, background: "var(--o-amber)" }} /></div>
+      <div className="orbit-score" key={hud.score}>{hud.score.toLocaleString()}</div>
+      <div className={`orbit-bar hull ${hud.hp < 30 ? "low" : ""}`} aria-label={`Hull ${Math.round(hud.hp)} percent`}>
+        <span>HULL</span><b>{Math.max(0, Math.round(hud.hp))}%</b>
+        <div><i className="lag" style={{ width: `${hud.hp}%` }} /><i style={{ width: `${hud.hp}%` }} /></div>
+      </div>
+      <div className={`orbit-bar nova ${hud.charge >= 100 ? "ready" : ""}`} aria-label={`Supernova charge ${Math.round(hud.charge)} percent`}>
+        <span>{hud.charge >= 100 ? `NOVA READY${touch ? "" : ` · ${keyLabel(keys.nova)}`}` : "NOVA"}</span><b>{Math.round(hud.charge)}%</b>
+        <div><i style={{ width: `${hud.charge}%` }} /></div>
+      </div>
       <div className="orbit-meta">Wave {hud.wave} · {hud.aliens} alien{hud.aliens === 1 ? "" : "s"} · {hud.kills} down</div>
       {(Object.keys(PERKS) as PerkId[]).some(k => hud.perks[k]) && <div className="orbit-meta">{(Object.keys(PERKS) as PerkId[]).filter(k => hud.perks[k]).map(k => `${PERKS[k].name} ${hud.perks[k]}`).join(" · ")}</div>}
       {hud.grabbing && <div className="orbit-meta beam">Gravity beam locked. Release to fling.</div>}
@@ -747,6 +758,9 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     {hud && hud.gate.d > 55 && !jumpOpen && <div className="orbit-gate-arrow" aria-hidden="true"
       style={{ left: `${50 + Math.cos(hud.gate.a) * 42}%`, top: `${50 + Math.sin(hud.gate.a) * 38}%` }}>
       <i style={{ transform: `rotate(${hud.gate.a}rad)` }}>➤</i><span>HYPERJUMP · {Math.round(hud.gate.d)}</span>
+    </div>}
+    {banner && <div key={banner.id} className={`orbit-banner ${banner.boss ? "boss" : ""}`} aria-hidden="true">
+      <span>{banner.boss ? "Boss wave" : "Incoming"}</span><strong>WAVE {banner.n}</strong><i /><span>{banner.boss ? "A mothership is coming" : "Alien ships inbound"}</span>
     </div>}
     {hud?.dead && <div className="orbit-dead">{killerName ? <>Shot down by {killerName}<small>Watching them until you respawn…</small></> : "Ship destroyed. Rebuilding near the sun…"}</div>}
 
