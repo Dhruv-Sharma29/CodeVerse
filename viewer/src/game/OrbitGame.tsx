@@ -49,7 +49,26 @@ function tone(freq: number, dur = .08, type: OscillatorType = "sine", vol = .05,
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
   o.connect(g).connect(master ?? ac.destination); o.start(t); o.stop(t + dur);
 }
+/** A burst of filtered noise: the crack in a shield breaking. */
+function noise(dur: number, vol: number, freq: number, q = 1) {
+  if (!ac || store.get("muted", false)) return;
+  const t = ac.currentTime, buf = ac.createBuffer(1, Math.ceil(ac.sampleRate * dur), ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; f.Q.value = q;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  src.connect(f).connect(g).connect(master ?? ac.destination); src.start(t); src.stop(t + dur);
+}
 const sfx = {
+  /** Glass cracking: a bright noise burst over two falling glassy tones. */
+  shieldDown: () => { noise(.22, .09, 4200, .8); tone(2600, .16, "triangle", .035, .45); setTimeout(() => tone(1950, .2, "triangle", .03, .5), 40); },
+  /** A bug mending an alien: a soft rising two-note chime. */
+  heal: () => { tone(523, .18, "sine", .028, 1.5); setTimeout(() => tone(784, .22, "sine", .022, 1.25), 80); },
+  /** Wave cleared: a bright rising arpeggio (the wave start is a falling one). */
+  cleared: () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, i === 3 ? .32 : .13, "triangle", .035), i * 90)),
+  /** Hull under 30%: a two-tone alarm when it drops, then a soft beep every few seconds while it stays low. */
+  low: () => { tone(880, .12, "square", .025); setTimeout(() => tone(660, .16, "square", .025), 150); },
+  lowPulse: () => tone(660, .1, "sine", .03),
   ping: () => { tone(1320, .09, "sine", .045); setTimeout(() => tone(1760, .12, "sine", .035), 90); },
   shot: () => tone(1400, .05, "square", .012, .5), kill: () => tone(160, .35, "sawtooth", .05, .3),
   hurt: () => tone(110, .2, "square", .04, .6), commit: () => { tone(880, .08, "triangle"); setTimeout(() => tone(1320, .1, "triangle"), 70); },
@@ -80,7 +99,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const [status, setStatus] = useState<NetStatus>("connecting");
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [banner, setBanner] = useState<{ id: number; n: number; boss: boolean; bug: boolean } | null>(null);
-  const bugSeen = useRef(false);
+  const bugSeen = useRef(false), lastHeal = useRef(0), lowHull = useRef<{ on: boolean; at: number }>({ on: false, at: 0 });
   const [log, setLog] = useState<{ planet: Planet; commit: GitCommit }[]>([]);
   const [hud, setHud] = useState<Hud | null>(null);
   const [muted, setMuted] = useState(() => store.get("muted", false));
@@ -155,7 +174,14 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         else if (e.by != null) net.current?.send({ t: "killed", by: e.by }); // the kill feed comes back from the relay
         else toast("Ship destroyed. Respawning near the sun.", "bad");
       }
-      else if (e.type === "perks") { tone(660, .09, "triangle", .04); setTimeout(() => tone(880, .12, "triangle", .04), 90); }
+      else if (e.type === "perks") { if (!events.some(x => x.type === "cleared")) { tone(660, .09, "triangle", .04); setTimeout(() => tone(880, .12, "triangle", .04), 90); } } // the cleared fanfare covers it
+      else if (e.type === "cleared") sfx.cleared();
+      else if (e.type === "shieldDown") sfx.shieldDown();
+      else if (e.type === "heal") {
+        // Only heals near you, and at most a few a second, so a buggy wave doesn't chime nonstop.
+        const now = performance.now();
+        if (Math.hypot(e.x - sim.ship.x, e.z - sim.ship.z) < 90 && now - lastHeal.current > 400) { lastHeal.current = now; sfx.heal(); }
+      }
       else if (e.type === "wave") {
         sfx.wave();
         const bug = sim.aliens.some(a => a.kind === "bug");
@@ -337,6 +363,11 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         if (!doneToday && got >= today.goal.n) { store.set(`daily:${today.day}`, true); s.score += DAILY_REWARD; sfx.wave(); toast(`Daily challenge complete! +${DAILY_REWARD}`, "good"); }
         daily = { done: Math.min(today.goal.n, got), n: today.goal.n, text: today.goal.text, complete: doneToday || got >= today.goal.n };
       }
+      // Low-hull warning: an alarm as the hull drops under 30%, then a soft beep every 2.5 s until repaired.
+      const pct = s.ship.hp / maxHp(s) * 100, low = s.ship.dead <= 0 && pct < 30, now = performance.now();
+      if (low && !lowHull.current.on) { lowHull.current = { on: true, at: now }; sfx.low(); }
+      else if (low && now - lowHull.current.at > 2500) { lowHull.current.at = now; sfx.lowPulse(); }
+      else if (!low) lowHull.current.on = false;
       setHud({ board: rows, holding: s.holding, bounty: s.bountyId, storm: s.stormPhase, meteors: s.meteors.length, daily, boss: boss ? { hp: boss.hp, max: boss.max } : null, offer: s.offer, owed: [...s.owed], perks: { ...s.perks }, score: s.score, hp: s.ship.hp / maxHp(s) * 100, charge: s.charge, wave: s.wave, aliens: s.aliens.length, kills: s.kills, dead: s.ship.dead > 0, near: s.near, grabbing: !!s.grab, comet: s.nearComet, gate: { a: Math.atan2(s.portal.z - s.ship.z, s.portal.x - s.ship.x), d: Math.hypot(s.portal.x - s.ship.x, s.portal.z - s.ship.z) } });
       drawRadar(radar.current, s, paletteRef.current);
     }, 100);

@@ -45,3 +45,29 @@ test('bugs travel in the shared-alien snapshot', () => {
   guest.snap = takeSnap(host); tick(guest);
   assert.equal(bugs(guest), 1);
 });
+
+test('sound cues: a shield breaking, a wave cleared once, and heals (on the host, and on a guest only for real heals)', () => {
+  const sim = createSim(universe(0)); sim.planets.length = 0;
+  Object.assign(sim, { wave: 6, waveTimer: 999 });
+  Object.assign(sim.ship, { x: 0, z: 0, inv: 999, a: 0 });
+  const saucer = alien('saucer', 14, 0, 6, 6); saucer.shield = 1; sim.aliens.push(saucer);
+  const ev = [];
+  for (let t = 0; t < 1 && saucer.shield; t += 1 / 60) { Object.assign(saucer, { x: 14, z: 0, vx: 0, vz: 0 }); step(sim, { ...emptyInput(), fire: true, aim: { x: 14, z: 0 } }, 1 / 60, ev); }
+  assert.equal(ev.filter(e => e.type === 'shieldDown').length, 1);
+
+  sim.aliens.length = 0; Object.assign(sim, { offeredWave: 0, waveTimer: 999 });
+  const after = []; for (let i = 0; i < 30; i++) step(sim, emptyInput(), 1 / 60, after);
+  assert.deepEqual(after.filter(e => e.type === 'cleared').map(e => e.n), [6]);
+
+  // Host: the bug's heal is an event. Guest: hp rising between snapshots is one; your own shots landing are not.
+  const host = createSim(universe(0)); host.planets.length = 0; Object.assign(host, { wave: 1, waveTimer: 999 });
+  Object.assign(host.ship, { x: -300, z: 0, inv: 999 });
+  const bug = alien('bug', 0, 0, 4, 4), hurt = alien('saucer', 8, 0, 1, 6); bug.cool = 0; host.aliens.push(bug, hurt);
+  assert.ok(tick(host).some(e => e.type === 'heal'));
+  const guest = createSim(universe(0)); guest.myId = 2; setHost(guest, 1);
+  const snap = (hp) => ({ w: 1, a: [5, 0, 50, 0, 0, 0, hp, 6, 0], b: [], d: [] });
+  guest.snap = snap(3); tick(guest);
+  guest.aliens[0].hp = 2;                                  // your shot landed here first
+  guest.snap = snap(3); assert.ok(!tick(guest).some(e => e.type === 'heal'));
+  guest.snap = snap(4); assert.ok(tick(guest).some(e => e.type === 'heal'));
+});

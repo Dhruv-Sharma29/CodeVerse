@@ -49,7 +49,9 @@ export interface Planet {
   trait: Trait; rocks: { a: number; r: number; alive: boolean }[]; star: { a: number; r: number; cool: number } | null; fresh: boolean;
 }
 export type AlienKind = "saucer" | "hunter" | "swarmer" | "mothership" | "bug";
-export interface Alien { id: number; kind: AlienKind; x: number; z: number; vx: number; vz: number; hp: number; max: number; cool: number; held: boolean; flung: number; spin: number; orbitDir: number; t: number; hitCool: number; shield?: number }
+export interface Alien { id: number; kind: AlienKind; x: number; z: number; vx: number; vz: number; hp: number; max: number; cool: number; held: boolean; flung: number; spin: number; orbitDir: number; t: number; hitCool: number; shield?: number;
+  /** Guests only: hp in the last host snapshot, to tell a heal from your own shots landing. */
+  seenHp?: number }
 /** Per-kind tuning: hit radius, score, charge reward, explosion colour/size. */
 export const ALIENS: Record<AlienKind, { hp: number; r: number; pts: number; charge: number; color: string; boom: number }> = {
   saucer: { hp: 3, r: 2.6, pts: 100, charge: 6, color: "#7dffb4", boom: 10 },
@@ -146,6 +148,7 @@ export type SimEvent =
   | { type: "commit"; planet: Planet; commit: GitCommit }
   | { type: "kill"; kind: Alien["kind"]; points: number }
   | { type: "hurt" } | { type: "dead"; by?: number; lost?: PerkId } | { type: "storm"; phase: StormPhase } | { type: "meteor" } | { type: "issue"; planet: Planet } | { type: "star"; planet: Planet } | { type: "pvpHit"; id: number } | { type: "portal" } | { type: "gate" } | { type: "comet" } | { type: "wave"; n: number; boss: boolean } | { type: "perks" } | { type: "botDown"; name: string }
+  | { type: "shieldDown"; x: number; z: number } | { type: "heal"; x: number; z: number } | { type: "cleared"; n: number }
   | { type: "load"; planet: Planet } | { type: "shot"; x: number; z: number; a: number }
   | { type: "nova"; x: number; z: number } | { type: "grab" } | { type: "fling" } | { type: "boom"; x: number; z: number };
 
@@ -290,7 +293,7 @@ function damageAlien(sim: Sim, a: Alien, dmg: number, ev: SimEvent[], credit: Cr
   // Shields soak bullets; planets, novas and blasts (big hits) go straight through.
   if (a.shield && dmg <= 2) {
     a.shield = Math.max(0, a.shield - dmg);
-    if (!a.shield) { explode(sim, a.x, a.z, "#9fe8ff", 24, 6); floatText(sim, a.x, a.z, "Shield down", "#9fe8ff"); }
+    if (!a.shield) { explode(sim, a.x, a.z, "#9fe8ff", 24, 6); floatText(sim, a.x, a.z, "Shield down", "#9fe8ff"); ev.push({ type: "shieldDown", x: a.x, z: a.z }); }
     return;
   }
   if (a.kind === "mothership" && dmg > 2) {
@@ -568,7 +571,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
   if (!sim.aliens.length) {
     // Wave cleared: an upgrade is owed. Unclaimed ones stack up and are offered oldest first.
     if (sim.wave > 0 && sim.offeredWave < sim.wave) {
-      sim.offeredWave = sim.wave;
+      sim.offeredWave = sim.wave; ev.push({ type: "cleared", n: sim.wave });
       if (sim.offer) { sim.owed.push(sim.wave); ev.push({ type: "perks" }); }
       else { const o = offerPerks(sim); if (o.length) { sim.offer = o; sim.owed = [sim.wave]; ev.push({ type: "perks" }); } }
     }
@@ -658,7 +661,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
         if (mend) {
           mend.hp = Math.min(mend.max, mend.hp + (mend.kind === "mothership" ? BUG.bossHeal : BUG.heal));
           floatText(sim, mend.x, mend.z, `+${mend.kind === "mothership" ? BUG.bossHeal : BUG.heal}`, ALIENS.bug.color);
-          explode(sim, mend.x, mend.z, ALIENS.bug.color, 8, 3);
+          explode(sim, mend.x, mend.z, ALIENS.bug.color, 8, 3); ev.push({ type: "heal", x: mend.x, z: mend.z });
         }
       }
     } else {
@@ -840,6 +843,8 @@ function applySnap(sim: Sim, ev: SimEvent[]) {
     seen.add(id);
     if (sim.predicted.has(id)) continue; // you saw it die already; the host will catch up
     const a = sim.aliens.find(x => x.id === id) ?? addAlien(sim, kind, m.a[i + 2], m.a[i + 3]);
+    if (a.seenHp != null && m.a[i + 6] > a.seenHp) ev.push({ type: "heal", x: m.a[i + 2], z: m.a[i + 3] }); // a bug mended it on the host
+    a.seenHp = m.a[i + 6];
     Object.assign(a, { id, kind, x: m.a[i + 2], z: m.a[i + 3], vx: m.a[i + 4], vz: m.a[i + 5], hp: m.a[i + 6], max: m.a[i + 7], shield: m.a[i + 8] || undefined, held: false, flung: 0 });
   }
   sim.aliens = sim.aliens.filter(a => seen.has(a.id) && !sim.predicted.has(a.id));

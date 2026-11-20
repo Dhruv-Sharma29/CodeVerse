@@ -191,6 +191,9 @@ leaves, new ones turn up.
 - **Music.** An ambient track generated live in the browser (pad chords Am–F–C–G and a soft arpeggio;
   no recordings), only while flying. **M** or the Controls sheet turns it off; **Sound off** silences
   everything. Effects and music go through a compressor so they stay full without clipping.
+- **Sound cues.** A wave starting plays a falling alarm and a cleared wave a rising fanfare. A shield
+  breaking cracks like glass. A bug's heal chimes softly (only within 90 units of you, a few a second at
+  most). When your hull drops under 30% an alarm sounds, then a soft beep every 2.5 s until it is repaired.
 
 ## Phones, tablets and full screen
 
