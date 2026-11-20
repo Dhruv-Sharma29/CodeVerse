@@ -70,3 +70,18 @@ test('aliens chase whichever pilot is nearest, and a new host keeps the aliens i
   assert.equal(guest.aliens.length, 1);
   assert.ok(guest.nextAlien > a.id);
 });
+
+test('waves grow with the pilots sharing them: half a wave more per extra pilot, a quarter more boss hull', () => {
+  const wave = (others, n) => {
+    const sim = createSim(universe); sim.planets.length = 0; sim.myId = 1;
+    for (let i = 0; i < others; i++) sim.remotes.set(10 + i, remote(10 + i, 0, 0));
+    setHost(sim, 1); Object.assign(sim, { waveFloor: n, waveTimer: 0 }); tick(sim);
+    return sim.aliens;
+  };
+  assert.equal(wave(0, 4).length, 14);                              // solo: 8 ships + one pack of 6 swarmers
+  assert.equal(wave(1, 4).length, 24);                              // two pilots: 12 ships + two packs (1.5 rounds up)
+  assert.equal(wave(2, 4).length, 28);                              // three: 16 ships + two packs
+  assert.ok(wave(23, 30).length <= 56, 'a crowded late wave still fits one snapshot');
+  const boss = others => wave(others, 10).find(a => a.kind === 'mothership').max;
+  assert.equal(boss(0), 70); assert.equal(boss(1), 88); assert.equal(boss(2), 105);
+});

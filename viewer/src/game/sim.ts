@@ -91,6 +91,13 @@ export function offerPerks(sim: Sim, rnd = Math.random): PerkId[] {
  * that soaks SHIELD_HP of bullet damage first.
  */
 export const HARDER_FROM = 5, SHIELD_HP = 4;
+/**
+ * Company: the host's waves grow with the pilots sharing them. Each extra pilot adds half a wave of
+ * aliens (and a quarter more mothership hull), up to three times the solo wave; a shared wave never
+ * starts with more than MAX_WAVE aliens, so it fits in one snapshot.
+ */
+export const MAX_WAVE = 56;
+export const crowd = (sim: Sim) => hosting(sim) ? Math.min(3, 1 + .5 * sim.remotes.size) : 1;
 export const waveHeat = (wave: number) => Math.max(0, wave - HARDER_FROM);
 export const alienHp = (kind: AlienKind, wave: number) => Math.max(ALIENS[kind].hp, Math.round(ALIENS[kind].hp * (1 + .15 * waveHeat(wave))));
 const pace = (sim: Sim) => Math.min(1.4, 1 + .04 * waveHeat(sim.wave));
@@ -286,21 +293,22 @@ function addAlien(sim: Sim, kind: AlienKind, x: number, z: number, hp = ALIENS[k
 function spawnWave(sim: Sim, ev: SimEvent[]) {
   sim.wave = Math.max(sim.wave + 1, sim.waveFloor);
   const around = (d: number) => { const a = Math.random() * TAU, r = d + Math.random() * 25; return [sim.ship.x + Math.cos(a) * r, sim.ship.z + Math.sin(a) * r] as const; };
-  const boss = sim.wave % 5 === 0;
+  const boss = sim.wave % 5 === 0, more = crowd(sim);
   if (boss) {
     // Every fifth wave: a mothership that rings the area with fire and launches swarmers.
-    const [x, z] = around(90); addAlien(sim, "mothership", x, z, 40 + sim.wave * 3);
-    for (let i = 0; i < 2; i++) addAlien(sim, "saucer", ...around(70));
+    const [x, z] = around(90); addAlien(sim, "mothership", x, z, Math.round((40 + sim.wave * 3) * (1 + (more - 1) / 2)));
+    for (let i = 0; i < Math.round(2 * more); i++) addAlien(sim, "saucer", ...around(70));
   } else {
-    const n = Math.min(14, 2 + Math.floor(sim.wave * 1.6));
-    const hunters = Math.min(n - 1, Math.floor(sim.wave / 2));
+    const n = Math.min(Math.round(14 * more), Math.round((2 + Math.floor(sim.wave * 1.6)) * more));
+    const hunters = Math.min(n - 1, Math.round(Math.floor(sim.wave / 2) * more));
     const shieldEvery = sim.wave > 10 ? 2 : 3;
     for (let i = 0; i < n; i++) {
       const kind = i < hunters ? "hunter" : "saucer", a = addAlien(sim, kind, ...around(70), alienHp(kind, sim.wave));
       if (kind === "saucer" && sim.wave > HARDER_FROM && (i - hunters) % shieldEvery === 0) a.shield = SHIELD_HP;
     }
     // From wave 3: packs of swarmer drones arriving together.
-    const packs = sim.wave >= 3 ? 1 + Math.floor((sim.wave - 3) / 3) : 0;
+    const solo = sim.wave >= 3 ? 1 + Math.floor((sim.wave - 3) / 3) : 0;
+    const packs = more > 1 ? Math.min(Math.round(solo * more), Math.floor((MAX_WAVE - n) / 6)) : solo; // shared waves must fit a snapshot
     for (let p = 0; p < packs; p++) { const [x, z] = around(85); for (let i = 0; i < 6; i++) addAlien(sim, "swarmer", x + (Math.random() - .5) * 8, z + (Math.random() - .5) * 8, alienHp("swarmer", sim.wave)); }
   }
   ev.push({ type: "wave", n: sim.wave, boss });

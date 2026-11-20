@@ -36,7 +36,8 @@ about 8° of an alien's lead point.
 
 Waves begin a few seconds after the previous one is cleared. In multiplayer everyone in a universe
 fights the same aliens: they chase whichever pilot is nearest, and whoever lands the killing blow gets
-the points (see [05-multiplayer.md](05-multiplayer.md)). Grabbing an alien with the gravity beam works
+the points. Waves grow with company: each extra pilot adds about half a wave of aliens and a quarter more
+mothership hull, up to three times the solo wave (see [05-multiplayer.md](05-multiplayer.md)). Grabbing an alien with the gravity beam works
 only for the pilot running the aliens; everyone else can still grab planets.
 
 | Alien | Appears | Behaviour | Hits | Score |

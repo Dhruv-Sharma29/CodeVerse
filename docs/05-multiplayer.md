@@ -33,7 +33,9 @@ The gate and the comet need no messages: every client computes them from the roo
 The relay names one pilot per room the **host**: the first pilot in, then the longest-staying one when
 the host leaves. The host's client runs the aliens for everyone:
 
-- Waves spawn on the host, and aliens chase whichever live pilot is nearest.
+- Waves spawn on the host, and aliens chase whichever live pilot is nearest. Each extra pilot in the
+  room adds half a wave of aliens and a quarter more mothership hull (at most three times the solo wave,
+  and at most 56 aliens when the wave starts, so it fits in one snapshot).
 - Ten times a second the host sends an `aliens` snapshot: every alien, the shots aliens fired since the
   last one, and the aliens that died with who killed them.
 - Everyone else draws the host's aliens and moves them on between snapshots. Their own hits (bullets,
