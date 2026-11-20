@@ -77,3 +77,29 @@ test('bots are solid: flying into one pushes you back instead of passing through
   assert.ok(closest > 3, `got within ${closest.toFixed(2)}`);
   assert.ok(sim.ship.x < b.x, 'still on your side of the bot');
 });
+
+test('bots sharpen with the wave: by wave 15 they fire faster and hit a strafing pilot more often', () => {
+  const duel = wave => {
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647; // seeded wobble
+    const sim = createSim(universe);
+    Object.assign(sim, { waveTimer: 999, wave }); sim.planets.length = 0;
+    spawnBots(sim, 1, rnd);
+    const b = sim.bots[0];
+    Object.assign(sim.ship, { x: 100, z: 100, vx: 0, vz: 30, inv: 0, a: 0 });
+    let shots = 0, hits = 0;
+    for (let t = 0; t < 8; t += 1 / 60) {
+      const side = Math.sin(t * 2) > 0 ? 30 : -30;                                        // you weave up and down
+      Object.assign(b, { x: sim.ship.x + 30, z: sim.ship.z, vx: 0, vz: 0, a: Math.PI });
+      Object.assign(sim.ship, { vx: 0, vz: side, inv: 0, hp: 100 });                     // never shot down mid-test
+      const cool = b.fireCool, hp = sim.ship.hp;
+      step(sim, emptyInput(), 1 / 60, []); stepBots(sim, 1 / 60, rnd);
+      if (b.fireCool > cool) shots++;
+      if (sim.ship.hp < hp) hits++;
+    }
+    return { shots, hits };
+  };
+  const early = duel(1), late = duel(15);
+  assert.ok(late.shots > early.shots * 1.2, `shots ${early.shots} -> ${late.shots}`);
+  assert.ok(late.hits > early.hits, `hits ${early.hits} -> ${late.hits}`);
+  assert.ok(late.hits < late.shots * .8, 'a weaving pilot still dodges some');
+});

@@ -1,6 +1,6 @@
 # 07 — Testing
 
-**126 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
+**127 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
 (22.6+, native TypeScript stripping) or `pytest`. CI runs all of them, plus type-checking, lint and
 the production build, on every push and pull request.
 
@@ -22,7 +22,7 @@ $ cd ../analyzer && uv run pytest tests -q
 | `tilt.test.mjs` | 3 | Tilt-to-steer: portrait and both landscape orientations map to the same screen directions; dead zone and linear ramp |
 | `invite.test.mjs` | 1 | Invite links: a valid GitHub login opens that universe; anything else falls back to the trending hub |
 | `board.test.mjs` | 4 | Leaderboards and checks: honest runs reach both boards (the daily board counts only points earned in that universe), invalid rooms are refused, score jumps, speed and hull hacks are flagged and left off, the Upstash pipeline commands, and the keep-warm window |
-| `bots.test.mjs` | 4 | Rival bots: they are solid to your ship, a commit a bot reaches is gone, bots shoot aliens for points, a bot near you picks a fight, and shooting one down scores and it comes back |
+| `bots.test.mjs` | 5 | Rival bots: they sharpen with the wave (faster fire, more hits on a weaving pilot), they are solid to your ship, a commit a bot reaches is gone, bots shoot aliens for points, a bot near you picks a fight, and shooting one down scores and it comes back |
 | `sharedAliens.test.mjs` | 4 | Shared aliens: waves and boss hull growing with the pilots sharing them, the guest sees the host's wave and never spawns its own, a guest's kill is decided by the host and credited to the guest alone, aliens chase the nearest pilot, and a new host keeps the aliens it mirrored |
 | `difficulty.test.mjs` | 5 | Difficulty: catching up to the room's highest wave, tougher aliens and shielded saucers after wave 5, shields soaking bullets but not novas, repairs only between waves, and a perk level lost on death |
 | `perks.test.mjs` | 3 | Perks: a cleared wave offers three different perks once, unclaimed upgrades stack up and are offered oldest first, only offered perks can be taken, hull plating raises and refills the hull, maxed perks are never offered, and rapid fire shortens the gun cooldown |

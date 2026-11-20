@@ -16,6 +16,8 @@ export interface Bot {
 
 /** Points for shooting a bot down (a real pilot is worth PVP.killScore). */
 export const BOT_KILL = 150;
+/** How sharp the bots are: 0 up to wave 3, rising to 1 at wave 15. Sharper bots lead their shots more, wobble less and fire faster. */
+export const botSkill = (wave: number) => Math.min(1, Math.max(0, (wave - 3) / 12));
 const NAMES = ["Lyra", "Vega", "Orion", "Atlas", "Juno", "Rigel"];
 const COLORS = ["#ffb547", "#7dffb4", "#ff7fbf", "#74e2ff", "#b18cff", "#ff8a5c"];
 const HULL_IDS: HullId[] = ["dart", "wasp", "titan"];
@@ -65,6 +67,7 @@ function fire(sim: Sim, b: Bot, ang: number) {
 
 export function stepBots(sim: Sim, dt: number, rnd = Math.random) {
   const s = sim.ship, youOk = s.dead <= 0 && s.inv <= .3; // no picking on you while docked or shielded
+  const skill = botSkill(sim.wave);
   for (const b of sim.bots) {
     if (b.dead > 0) { b.dead -= dt; if (b.dead <= 0) place(b, rnd); continue; }
     const hull = HULLS[b.hull];
@@ -78,9 +81,10 @@ export function stepBots(sim: Sim, dt: number, rnd = Math.random) {
       const t = duel ? s : foe!, d = duel ? pd : fd, ang = Math.atan2(t.z - b.z, t.x - b.x);
       tx = t.x - Math.cos(ang + .7) * 24; tz = t.z - Math.sin(ang + .7) * 24; face = ang;
       if (b.fireCool <= 0 && Math.abs(wrap(ang - b.a)) < .25) {
-        // Aliens get a full lead; you get half a lead and some wobble, so a moving pilot can dodge.
-        const lead = (duel ? .5 : 1) * d / 115, err = duel ? (rnd() - .5) * .14 : 0;
-        b.fireCool = hull.fire * (duel ? 2.6 : 2.2);
+        // Aliens get a full lead. Against you, early bots lead by half and wobble so a moving pilot can dodge;
+        // by wave 15 they lead further, wobble a little less and fire about 35% faster: tough, still dodgeable.
+        const lead = (duel ? .5 + .25 * skill : 1) * d / 115, err = duel ? (rnd() - .5) * .14 * (1 - .3 * skill) : 0;
+        b.fireCool = hull.fire * (duel ? 2.6 - .7 * skill : 2.2 - .5 * skill);
         fire(sim, b, Math.atan2(t.z + t.vz * lead - b.z, t.x + t.vx * lead - b.x) + err);
       }
     } else {

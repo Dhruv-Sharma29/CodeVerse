@@ -163,6 +163,9 @@ While nobody else is in your universe, two rival bots join you after a few secon
 
 - They **race you for commits**: a commit a bot reaches first is gone.
 - They are **solid**: fly into one and you bounce off each other.
+- They **sharpen with the waves**: from wave 4 to wave 15 they lead their shots further, wobble less and
+  fire about 35% faster. Early bots land about one shot in ten on a weaving pilot; by wave 15, closer to
+  one in two.
 - They **hunt aliens** for points, and **pick fights** with you when you are closer than any alien,
   or for eight seconds after you shoot them. Their aim wobbles and they fire slower than you, so a
   moving pilot can dodge.
