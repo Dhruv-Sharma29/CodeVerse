@@ -60,7 +60,7 @@ export type PaletteId = "standard" | "colorblind";
  * sky blue, orange, yellow, reddish purple). Alien kinds also differ by shape, so colour is a second cue.
  */
 export const PALETTES = {
-  standard: { good: "#7dffb4", bad: "#ff6f7f", saucer: "#2fff8a", hunter: "#ff3355", swarmer: "#ffc23d", mothership: "#a13dff", ally: "#b6ff8a", alienShot: "#ff4fd8" },
-  colorblind: { good: "#56b4e9", bad: "#e69f00", saucer: "#56b4e9", hunter: "#d55e00", swarmer: "#f0e442", mothership: "#cc79a7", ally: "#f0e442", alienShot: "#e69f00" },
+  standard: { good: "#7dffb4", bad: "#ff6f7f", saucer: "#2fff8a", hunter: "#ff3355", swarmer: "#ffc23d", mothership: "#a13dff", bug: "#3dffd0", ally: "#b6ff8a", alienShot: "#ff4fd8" },
+  colorblind: { good: "#56b4e9", bad: "#e69f00", saucer: "#56b4e9", hunter: "#d55e00", swarmer: "#f0e442", mothership: "#cc79a7", bug: "#009e73", ally: "#f0e442", alienShot: "#e69f00" },
 };
 export type Palette = typeof PALETTES.standard;

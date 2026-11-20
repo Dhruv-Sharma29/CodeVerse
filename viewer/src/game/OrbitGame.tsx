@@ -79,7 +79,8 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const [rooms, setRooms] = useState<{ room: string; count: number }[]>([]);
   const [status, setStatus] = useState<NetStatus>("connecting");
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [banner, setBanner] = useState<{ id: number; n: number; boss: boolean } | null>(null);
+  const [banner, setBanner] = useState<{ id: number; n: number; boss: boolean; bug: boolean } | null>(null);
+  const bugSeen = useRef(false);
   const [log, setLog] = useState<{ planet: Planet; commit: GitCommit }[]>([]);
   const [hud, setHud] = useState<Hud | null>(null);
   const [muted, setMuted] = useState(() => store.get("muted", false));
@@ -157,7 +158,9 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       else if (e.type === "perks") { tone(660, .09, "triangle", .04); setTimeout(() => tone(880, .12, "triangle", .04), 90); }
       else if (e.type === "wave") {
         sfx.wave();
-        const id = performance.now(); setBanner({ id, n: e.n, boss: e.boss });
+        const bug = sim.aliens.some(a => a.kind === "bug");
+        const id = performance.now(); setBanner({ id, n: e.n, boss: e.boss, bug });
+        if (bug && !bugSeen.current) { bugSeen.current = true; setTimeout(() => toast("A bug is healing the aliens. Shoot the teal one first: it runs, it doesn't shoot, and it's worth 250"), 2700); }
         setTimeout(() => setBanner(b => b?.id === id ? null : b), 2600);
       }
       else if (e.type === "grab") sfx.grab();
@@ -760,7 +763,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       <i style={{ transform: `rotate(${hud.gate.a}rad)` }}>➤</i><span>HYPERJUMP · {Math.round(hud.gate.d)}</span>
     </div>}
     {banner && <div key={banner.id} className={`orbit-banner ${banner.boss ? "boss" : ""}`} aria-hidden="true">
-      <span>{banner.boss ? "Boss wave" : "Incoming"}</span><strong>WAVE {banner.n}</strong><i /><span>{banner.boss ? "A mothership is coming" : "Alien ships inbound"}</span>
+      <span>{banner.boss ? "Boss wave" : "Incoming"}</span><strong>WAVE {banner.n}</strong><i /><span>{banner.boss ? "A mothership is coming" : "Alien ships inbound"}{banner.bug ? " · with a bug" : ""}</span>
     </div>}
     {hud?.dead && <div className="orbit-dead">{killerName ? <>Shot down by {killerName}<small>Watching them until you respawn…</small></> : "Ship destroyed. Rebuilding near the sun…"}</div>}
 

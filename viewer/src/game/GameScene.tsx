@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { Sun, World } from "../scene/World";
 import { seedFor } from "../github/planetStyle";
-import { PORTAL_R, SHIELD_HP, SUN_R, novaRadius, type HullId, type Input, type Planet, type Sim } from "./sim";
+import { PORTAL_R, SHIELD_HP, SUN_R, bugTarget, novaRadius, type HullId, type Input, type Planet, type Sim } from "./sim";
 import { HOLD, STORM } from "./events";
 import { QUALITY, type Palette } from "./settings";
 
@@ -30,6 +30,7 @@ export interface Peer { id: number; name: string; color: string; hull: HullId; b
 
 const TAU = Math.PI * 2;
 const tmp = new THREE.Object3D(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3(), chase = new THREE.Vector3(), aim = new THREE.Vector3();
+const beamA = new THREE.Vector3(), beamB = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 let glowTexture: THREE.Texture | null = null;
 function glow() {
   if (glowTexture) return glowTexture;
@@ -536,7 +537,7 @@ function Pings({ sim }: { sim: Sim }) {
 }
 
 /** Alien hulls, built once. Each kind reads by shape as well as colour: lens saucer, arrowhead hunter, spiked mine. */
-let alienGeo: { saucer: THREE.BufferGeometry; hunter: THREE.BufferGeometry; swarmer: THREE.BufferGeometry } | null = null; // swarmer = spikes only; its core is a separate glowing mesh
+let alienGeo: { saucer: THREE.BufferGeometry; hunter: THREE.BufferGeometry; swarmer: THREE.BufferGeometry; bug: THREE.BufferGeometry; cross: THREE.BufferGeometry } | null = null; // swarmer = spikes only; its core is a separate glowing mesh
 function alienGeometry() {
   if (alienGeo) return alienGeo;
   const lens = [[0, -.55], [1.2, -.5], [2.3, -.18], [2.75, 0], [2.3, .2], [1.4, .42], [0, .46]].map(([x, y]) => new THREE.Vector2(x, y));
@@ -552,17 +553,21 @@ function alienGeometry() {
     return c.toNonIndexed();
   });
   const swarmer = mergeGeometries(spikes)!;
-  return alienGeo = { saucer: new THREE.LatheGeometry(lens, 32), hunter, swarmer };
+  // Bug: a dark octagonal puck under a glowing plus sign, the healer's mark.
+  const bug = new THREE.CylinderGeometry(1.45, 1.8, .55, 8);
+  const cross = mergeGeometries([new THREE.BoxGeometry(1.7, .26, .52), new THREE.BoxGeometry(.52, .26, 1.7)])!;
+  return alienGeo = { saucer: new THREE.LatheGeometry(lens, 32), hunter, swarmer, bug, cross };
 }
 const RIM_BULBS = 8;
 function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
   const hull = useRef<THREE.InstancedMesh>(null), dome = useRef<THREE.InstancedMesh>(null), bulbs = useRef<THREE.InstancedMesh>(null), shields = useRef<THREE.InstancedMesh>(null);
   const hunter = useRef<THREE.InstancedMesh>(null), core = useRef<THREE.InstancedMesh>(null), swarm = useRef<THREE.InstancedMesh>(null), swarmCore = useRef<THREE.InstancedMesh>(null);
+  const bugs = useRef<THREE.InstancedMesh>(null), cross = useRef<THREE.InstancedMesh>(null), beams = useRef<THREE.InstancedMesh>(null);
   const motherships = useRef<(THREE.Group | null)[]>([]);
   const geo = alienGeometry(), halo = useMemo(() => makeHalo(140, 9), []);
-  const tint = useMemo(() => ({ saucer: new THREE.Color(palette.saucer), hunter: new THREE.Color(palette.hunter), swarmer: new THREE.Color(palette.swarmer), mothership: new THREE.Color(palette.mothership) }), [palette]);
+  const tint = useMemo(() => ({ saucer: new THREE.Color(palette.saucer), hunter: new THREE.Color(palette.hunter), swarmer: new THREE.Color(palette.swarmer), mothership: new THREE.Color(palette.mothership), bug: new THREE.Color(palette.bug) }), [palette]);
   useFrame(() => {
-    let ns = 0, nb = 0, nh = 0, nw = 0, nm = 0, ng = 0, nsh = 0;
+    let ns = 0, nb = 0, nh = 0, nw = 0, nm = 0, ng = 0, nsh = 0, nbug = 0, nbeam = 0;
     for (const a of sim.aliens) {
       const bob = Math.sin(a.spin * .7) * .4 + 1.5, yaw = -Math.atan2(a.vz, a.vx);
       if (a.kind === "saucer") {
@@ -588,6 +593,18 @@ function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
         tmp.position.set(a.x, 1.4, a.z); tmp.rotation.set(a.spin, a.spin * 1.3, 0, "XYZ"); tmp.scale.setScalar(1); tmp.updateMatrix();
         swarm.current?.setMatrixAt(nw, tmp.matrix);
         tmp.scale.setScalar(.9 + Math.sin(a.t * 9) * .15); tmp.updateMatrix(); swarmCore.current?.setMatrixAt(nw++, tmp.matrix);
+      } else if (a.kind === "bug") {
+        tmp.position.set(a.x, bob, a.z); tmp.rotation.set(0, a.spin * .4, 0); tmp.scale.setScalar(1); tmp.updateMatrix();
+        bugs.current?.setMatrixAt(nbug, tmp.matrix);
+        tmp.position.y = bob + .45; tmp.scale.setScalar(1 + Math.sin(a.t * 4) * .12); tmp.updateMatrix(); cross.current?.setMatrixAt(nbug++, tmp.matrix);
+        // Healing beam to the alien it mends (the same rule the host heals by, so every pilot sees it).
+        const m = bugTarget(sim, a);
+        if (m && nbeam < 8) {
+          const from = beamA.set(a.x, bob + .4, a.z), to = beamB.set(m.x, 1.5, m.z), len = from.distanceTo(to);
+          tmp.position.copy(from).lerp(to, .5); tmp.quaternion.setFromUnitVectors(UP, beamB.sub(from).normalize());
+          tmp.scale.set(1 + Math.sin(a.t * 12) * .35, len, 1 + Math.sin(a.t * 12) * .35); tmp.updateMatrix();
+          beams.current?.setMatrixAt(nbeam++, tmp.matrix); tmp.quaternion.identity();
+        }
       } else {
         const g = motherships.current[nm++]; if (!g) continue;
         g.visible = true; g.position.set(a.x, 2.5 + Math.sin(a.spin) * .5, a.z); g.rotation.y = a.spin;
@@ -596,7 +613,7 @@ function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
       }
       if (ng < 140) setHalo(halo, ng++, a.x, .6, a.z, tint[a.kind], a.kind === "swarmer" ? .45 : .6);
     }
-    for (const [m, n] of [[hull, ns], [dome, ns], [bulbs, nb], [shields, nsh], [hunter, nh], [core, nh], [swarm, nw], [swarmCore, nw]] as const) if (m.current) { m.current.count = n; m.current.instanceMatrix.needsUpdate = true; }
+    for (const [m, n] of [[hull, ns], [dome, ns], [bulbs, nb], [shields, nsh], [hunter, nh], [core, nh], [swarm, nw], [swarmCore, nw], [bugs, nbug], [cross, nbug], [beams, nbeam]] as const) if (m.current) { m.current.count = n; m.current.instanceMatrix.needsUpdate = true; }
     commitHalo(halo, ng);
     for (let i = nm; i < motherships.current.length; i++) { const g = motherships.current[i]; if (g) g.visible = false; }
   });
@@ -610,6 +627,9 @@ function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
     <instancedMesh ref={core} args={[undefined, undefined, 40]} frustumCulled={false}><octahedronGeometry args={[.6, 0]} /><meshBasicMaterial color={palette.hunter} toneMapped={false} /></instancedMesh>
     <instancedMesh ref={swarm} args={[geo.swarmer, undefined, 60]} frustumCulled={false}><meshStandardMaterial color="#3d4152" metalness={.4} roughness={.35} flatShading /></instancedMesh>
     <instancedMesh ref={swarmCore} args={[undefined, undefined, 60]} frustumCulled={false}><icosahedronGeometry args={[.62, 1]} /><meshBasicMaterial color={palette.swarmer} toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={bugs} args={[geo.bug, undefined, 8]} frustumCulled={false}><meshStandardMaterial color="#2c3440" emissive={palette.bug} emissiveIntensity={.12} metalness={.4} roughness={.35} flatShading /></instancedMesh>
+    <instancedMesh ref={cross} args={[geo.cross, undefined, 8]} frustumCulled={false}><meshBasicMaterial color={palette.bug} toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={beams} args={[undefined, undefined, 8]} frustumCulled={false}><cylinderGeometry args={[.13, .13, 1, 6, 1, true]} /><meshBasicMaterial color={palette.bug} {...additive} opacity={.55} /></instancedMesh>
     {[0, 1].map(i => <group key={i} ref={el => { motherships.current[i] = el; }} visible={false}>
       <mesh><cylinderGeometry args={[5.4, 6.6, 1.3, 40]} /><meshStandardMaterial color="#5d5a78" metalness={.4} roughness={.35} /></mesh>
       <mesh position={[0, -.9, 0]}><cylinderGeometry args={[3.4, 2.2, .8, 32]} /><meshStandardMaterial color="#3a3650" metalness={.4} roughness={.4} /></mesh>

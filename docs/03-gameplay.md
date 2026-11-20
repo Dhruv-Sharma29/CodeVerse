@@ -46,6 +46,10 @@ only for the pilot running the aliens; everyone else can still grab planets.
 | **Hunter** | From wave 2 | Rams you for 15 damage | 1 | 60 |
 | **Swarmer** | Packs of six from wave 3 | Weaves toward you; pops on contact for 8 damage | 1 | 40 |
 | **Mothership** | Every fifth wave | Orbits at range, fires rings of 16 shots (faster below half health), launches swarmers | 40 + 3 × wave | 1,500 |
+| **Bug** | Every third wave, only in universes whose repos have 100+ open issues between them (two from wave 9 with 2,000+) | Never shoots. Keeps 30 units from pilots and every 1.2 s heals the most damaged alien within 28 units by 1 hit (3 for a mothership), with a teal beam you can see | 4 | 250 |
+
+Bugs come from real data: the trending hub's list has no issue counts, so it has no bugs (or issue rocks);
+a user's universe does.
 
 Planets are solid: aliens steer around them and cannot pass through. Saucers and the mothership are
 solid to your ship too: you bounce off them, and ramming one at speed scrapes a little hull (4, or 8

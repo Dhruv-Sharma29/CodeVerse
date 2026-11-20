@@ -48,7 +48,7 @@ export interface Planet {
   /** Real-data extras: language physics, open-issue asteroids, a star-shield pickup, activity glow. */
   trait: Trait; rocks: { a: number; r: number; alive: boolean }[]; star: { a: number; r: number; cool: number } | null; fresh: boolean;
 }
-export type AlienKind = "saucer" | "hunter" | "swarmer" | "mothership";
+export type AlienKind = "saucer" | "hunter" | "swarmer" | "mothership" | "bug";
 export interface Alien { id: number; kind: AlienKind; x: number; z: number; vx: number; vz: number; hp: number; max: number; cool: number; held: boolean; flung: number; spin: number; orbitDir: number; t: number; hitCool: number; shield?: number }
 /** Per-kind tuning: hit radius, score, charge reward, explosion colour/size. */
 export const ALIENS: Record<AlienKind, { hp: number; r: number; pts: number; charge: number; color: string; boom: number }> = {
@@ -56,7 +56,24 @@ export const ALIENS: Record<AlienKind, { hp: number; r: number; pts: number; cha
   hunter: { hp: 1, r: 2, pts: 60, charge: 6, color: "#ff6f7f", boom: 7 },
   swarmer: { hp: 1, r: 1.4, pts: 40, charge: 3, color: "#ffd36e", boom: 5 },
   mothership: { hp: 40, r: 6.5, pts: 1500, charge: 60, color: "#d36bff", boom: 30 },
+  bug: { hp: 4, r: 2, pts: 250, charge: 12, color: "#3dffd0", boom: 9 },
 };
+/**
+ * Bugs: in a universe whose repos have at least `minIssues` open issues between them, every third wave
+ * brings a bug (two from wave 9 with `manyIssues`). It never shoots: it keeps away from pilots and every
+ * `every` seconds heals the most damaged alien within `range`, `heal` hit points (`bossHeal` for a mothership).
+ */
+export const BUG = { minIssues: 100, manyIssues: 2000, range: 28, every: 1.2, heal: 1, bossHeal: 3, shy: 30 };
+const openIssues = (sim: Sim) => sim.planets.reduce((n, p) => n + (p.repo.open_issues_count ?? 0), 0);
+/** The alien a bug is healing: the most damaged one in range (by share of hull lost), or null. */
+export function bugTarget(sim: Sim, bug: Alien): Alien | null {
+  let best: Alien | null = null, lost = 0;
+  for (const a of sim.aliens) {
+    if (a === bug || a.kind === "bug" || a.hp <= 0 || a.hp >= a.max || dist(a, bug) > BUG.range) continue;
+    const l = 1 - a.hp / a.max; if (l > lost) { lost = l; best = a; }
+  }
+  return best;
+}
 
 export type HullId = "dart" | "wasp" | "titan";
 export const HULLS: Record<HullId, { name: string; blurb: string; hp: number; acc: number; max: number; boost: number; fire: number; guns: 2 | 3; dmg: number; spread: number; trail: string }> = {
@@ -310,6 +327,11 @@ function spawnWave(sim: Sim, ev: SimEvent[]) {
     const solo = sim.wave >= 3 ? 1 + Math.floor((sim.wave - 3) / 3) : 0;
     const packs = more > 1 ? Math.min(Math.round(solo * more), Math.floor((MAX_WAVE - n) / 6)) : solo; // shared waves must fit a snapshot
     for (let p = 0; p < packs; p++) { const [x, z] = around(85); for (let i = 0; i < 6; i++) addAlien(sim, "swarmer", x + (Math.random() - .5) * 8, z + (Math.random() - .5) * 8, alienHp("swarmer", sim.wave)); }
+  }
+  const issues = openIssues(sim);
+  if (sim.wave % 3 === 0 && issues >= BUG.minIssues) {
+    const n = sim.wave >= 9 && issues >= BUG.manyIssues ? 2 : 1;
+    for (let i = 0; i < n; i++) addAlien(sim, "bug", ...around(95), alienHp("bug", sim.wave));
   }
   ev.push({ type: "wave", n: sim.wave, boss });
 }
@@ -619,6 +641,26 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
       a.vx += (nx - nz * weave) * 70 * dt; a.vz += (nz + nx * weave) * 70 * dt;
       const sp = Math.hypot(a.vx, a.vz), cap = 40 * pace(sim); if (sp > cap) { a.vx *= cap / sp; a.vz *= cap / sp; }
       if (alive && dist(a, s) < 2.2) { hurt(sim, 8, ev); killAlien(sim, a, ev, false); continue; }
+    } else if (a.kind === "bug") {
+      // Bug: no guns. Hang back by the alien it heals (or the pack), run from pilots, mend the most damaged.
+      const mend = bugTarget(sim, a);
+      let gx = a.x, gz = a.z;
+      if (mend) { gx = mend.x; gz = mend.z; }
+      else { const pack = sim.aliens.filter(b => b !== a && b.hp > 0 && b.kind !== "bug"); if (pack.length) { gx = pack.reduce((n, b) => n + b.x, 0) / pack.length; gz = pack.reduce((n, b) => n + b.z, 0) / pack.length; } }
+      const gd = Math.hypot(gx - a.x, gz - a.z) || 1, pull = Math.max(-1, Math.min(1, (gd - 12) / 10));
+      a.vx += (gx - a.x) / gd * pull * 30 * dt; a.vz += (gz - a.z) / gd * pull * 30 * dt;
+      if (d < BUG.shy) { a.vx -= nx * 70 * dt; a.vz -= nz * 70 * dt; } // too close to a pilot: back off
+      const drag = Math.exp(-1.2 * dt); a.vx *= drag; a.vz *= drag;
+      const sp = Math.hypot(a.vx, a.vz), cap = 26 * pace(sim); if (sp > cap) { a.vx *= cap / sp; a.vz *= cap / sp; }
+      a.cool -= dt;
+      if (a.cool <= 0) {
+        a.cool = BUG.every;
+        if (mend) {
+          mend.hp = Math.min(mend.max, mend.hp + (mend.kind === "mothership" ? BUG.bossHeal : BUG.heal));
+          floatText(sim, mend.x, mend.z, `+${mend.kind === "mothership" ? BUG.bossHeal : BUG.heal}`, ALIENS.bug.color);
+          explode(sim, mend.x, mend.z, ALIENS.bug.color, 8, 3);
+        }
+      }
     } else {
       // Mothership: slow orbit at range, rings of fire, launches swarmers.
       const radial = Math.max(-1, Math.min(1, (d - 46) / 20));
@@ -738,7 +780,7 @@ export function remoteGrab(sim: Sim, m: { planet: number; x: number; z: number; 
 }
 
 /* ---- shared aliens: one pilot (the host) runs them for the whole universe ---- */
-const KINDS: AlienKind[] = ["saucer", "hunter", "swarmer", "mothership"];
+const KINDS: AlienKind[] = ["saucer", "hunter", "swarmer", "mothership", "bug"];
 /** A host's snapshot, flat for size: a = [id, kind, x, z, vx, vz, hp, max, shield] per alien, b = [x, z, vx, vz, life] per new alien shot, d = [id, kind, by, charge] per death. */
 export interface AlienSnap { w: number; a: number[]; b: number[]; d: number[] }
 export const isGuest = (sim: Sim) => sim.hostId != null && sim.hostId !== sim.myId;

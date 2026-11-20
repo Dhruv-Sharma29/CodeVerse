@@ -66,7 +66,7 @@ All messages are JSON objects with a `t` field.
 | `grab` | `planet`, `x`, `z`, `vx`, `vz`, `held` | Planet throw, relayed as `grab` |
 | `nova` | `x`, `z` | Relayed as `nova` |
 | `boom` | `x`, `z` | Relayed as `boom` |
-| `aliens` | `w` (wave), `a`, `b`, `d` (flat number lists, see below) | From the host only; relayed as `aliens`. `a`: `[id, kind, x, z, vx, vz, hp, max, shield]` per alien (at most 60); `b`: `[x, z, vx, vz, life]` per new alien shot (at most 48); `d`: `[id, kind, by, charge]` per death (at most 60). Kinds: 0 saucer, 1 hunter, 2 swarmer, 3 mothership |
+| `aliens` | `w` (wave), `a`, `b`, `d` (flat number lists, see below) | From the host only; relayed as `aliens`. `a`: `[id, kind, x, z, vx, vz, hp, max, shield]` per alien (at most 60); `b`: `[x, z, vx, vz, life]` per new alien shot (at most 48); `d`: `[id, kind, by, charge]` per death (at most 60). Kinds: 0 saucer, 1 hunter, 2 swarmer, 3 mothership, 4 bug (each client draws a bug's healing beam from the same rule the host heals by) |
 | `ahit` | `h`: `[alienId, damage]` pairs, at most 40 (damage −1: it rammed you) | Sent to the host alone, as `ahit` with the sender's `id` |
 | `rooms` | — | Replies with `rooms`; allowed before joining (the lobby uses it) |
 
