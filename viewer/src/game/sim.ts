@@ -799,7 +799,10 @@ function alienFire(sim: Sim, x: number, z: number, vx: number, vz: number, life:
 export function setHost(sim: Sim, id: number | null) {
   const was = isGuest(sim);
   sim.hostId = id;
-  if (isGuest(sim) && !was) { sim.aliens = []; sim.bullets = sim.bullets.filter(b => b.from !== "alien"); sim.predicted.clear(); }
+  if (isGuest(sim) && !was) {
+    sim.aliens = []; sim.bullets = sim.bullets.filter(b => b.from !== "alien"); sim.predicted.clear();
+    sim.offeredWave = Math.max(sim.offeredWave, sim.wave); // dropping your aliens is not clearing the wave: no free upgrade
+  }
   if (!isGuest(sim) && was) { sim.nextAlien = Math.max(sim.nextAlien, ...sim.aliens.map(a => a.id + 1)); sim.snap = null; sim.outHits = []; }
 }
 
@@ -811,6 +814,13 @@ export function takeSnap(sim: Sim): AlienSnap {
   const snap = { w: sim.wave, a, b: sim.outShots.slice(0, 48 * 5).map(r1), d: sim.outDead };
   sim.outShots = []; sim.outDead = [];
   return snap;
+}
+
+/** Guest: queue a snapshot. Several can arrive between two frames (a slow frame, a background tab): keep the
+ * newest aliens and wave, but every death (kill credit) and every new alien shot. */
+export function queueSnap(sim: Sim, m: AlienSnap) {
+  const p = sim.snap;
+  sim.snap = p ? { w: Math.max(p.w, m.w), a: m.a, b: [...p.b, ...m.b], d: [...p.d, ...m.d] } : m;
 }
 
 /** Host: hits another pilot reported, as [alienId, damage] pairs (damage -1: it rammed them, popped without credit). */

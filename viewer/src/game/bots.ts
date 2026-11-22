@@ -133,7 +133,7 @@ export function damageBot(sim: Sim, b: Bot, dmg: number, ev: SimEvent[]) {
   b.hp -= dmg; b.grudge = 8;
   floatText(sim, b.x, b.z, `−${dmg}`, "#ff8a9a"); ev.push({ type: "pvpHit", id: b.id });
   if (b.hp <= 0) {
-    b.hp = 0; b.dead = 5; sim.score += BOT_KILL; sim.pvpKills++;
+    b.hp = 0; b.dead = 5; sim.score += BOT_KILL; // not a dogfight win: those are against real pilots
     explode(sim, b.x, b.z, b.color, 70, 13); ev.push({ type: "botDown", name: b.name });
   }
 }

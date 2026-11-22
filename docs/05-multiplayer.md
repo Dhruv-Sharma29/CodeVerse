@@ -31,7 +31,9 @@ The gate and the comet need no messages: every client computes them from the roo
 ## Shared aliens
 
 The relay names one pilot per room the **host**: the first pilot in, then the longest-staying one when
-the host leaves. The host's client runs the aliens for everyone:
+the host leaves. A hidden browser tab can't step the game, so the host role also moves to the
+longest-staying pilot whose tab is visible when the host's tab is hidden, and a pilot whose tab is visible
+takes it over from a hidden host (if every tab is hidden, the host keeps it). The host's client runs the aliens for everyone:
 
 - Waves spawn on the host, and aliens chase whichever live pilot is nearest. Each extra pilot in the
   room adds half a wave of aliens and a quarter more mothership hull (at most three times the solo wave,
@@ -43,7 +45,10 @@ the host leaves. The host's client runs the aliens for everyone:
   the shooter's screen; the host decides the kill and the snapshot credits the pilot who landed it, so a
   kill is never counted twice. Supernovas need no report: every client already sees them.
 - Each pilot still owns their ship: alien shots and rams are checked against your own ship by your client.
-- When the host leaves, the next host carries on with the aliens it was already drawing.
+- When the host leaves or hides, the next host carries on with the aliens it was already drawing.
+- Snapshots that pile up between two frames (a slow phone, a background tab) are merged, so no kill
+  credit or alien shot is lost. Becoming a guest mid-wave drops your own aliens without counting the wave
+  as cleared.
 
 A friend who joins you on wave 5 is on wave 5 at once. On a relay without hosts (an older deploy),
 each pilot runs their own aliens and the wave number alone is shared: your next wave jumps to the
@@ -68,6 +73,7 @@ All messages are JSON objects with a `t` field.
 | `boom` | `x`, `z` | Relayed as `boom` |
 | `aliens` | `w` (wave), `a`, `b`, `d` (flat number lists, see below) | From the host only; relayed as `aliens`. `a`: `[id, kind, x, z, vx, vz, hp, max, shield]` per alien (at most 60); `b`: `[x, z, vx, vz, life]` per new alien shot (at most 48); `d`: `[id, kind, by, charge]` per death (at most 60). Kinds: 0 saucer, 1 hunter, 2 swarmer, 3 mothership, 4 bug (each client draws a bug's healing beam from the same rule the host heals by) |
 | `ahit` | `h`: `[alienId, damage]` pairs, at most 40 (damage −1: it rammed you) | Sent to the host alone, as `ahit` with the sender's `id` |
+| `away` | `on` (the tab is hidden) | Not relayed. A hidden host hands the aliens to a visible pilot; a visible pilot takes them from a hidden host |
 | `rooms` | — | Replies with `rooms`; allowed before joining (the lobby uses it) |
 
 ### Server → client

@@ -16,7 +16,8 @@ export function readmeExcerpt(markdown: string, max = 420): string {
     .filter(p => { const lines = p.split("\n").filter(l => l.trim()); return lines.length > 0 && lines.filter(l => /^\s*([-*+]|\d+[.)])\s/.test(l)).length * 2 < lines.length; })
     .map(p => p.split("\n").filter(l => !/^\s*(#{1,6}\s|[-=]{3,}\s*$|\|)/.test(l)).join(" "))
     // Emphasis first: stripping a leading "**" before pairing it would strand the closing one.
-    .map(p => p.replace(/[*_~]{1,3}([^*_~]+)[*_~]{1,3}/g, "$1").replace(/\*\*|__|~~/g, "").replace(/^[\s>*\-+]+/, "").replace(/\s+/g, " ").trim())
+    // Underscores count as emphasis only at word edges (as on GitHub), so snake_case_names survive.
+    .map(p => p.replace(/[*~]{1,3}([^*~]+)[*~]{1,3}/g, "$1").replace(/(^|[^\w])_{1,3}([^_]+?)_{1,3}(?!\w)/g, "$1$2").replace(/\*\*|~~/g, "").replace(/^[\s>*\-+]+/, "").replace(/\s+/g, " ").trim())
     .filter(p => p.length > 30 && /[a-z]/i.test(p));
   let out = "";
   // One solid opening paragraph is enough; keep adding only while the excerpt is still very short.

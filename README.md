@@ -22,7 +22,7 @@ and a comet that links to the creator. The website is on Vercel; the multiplayer
 kept warm during waking hours in India. The original explorer is still at
 [`/explorer/`](https://codeverse-orbit.vercel.app/explorer/).
 
-**131 tests in `viewer/`, no network calls.** New here? **[`docs/01-getting-started.md`](docs/01-getting-started.md)**.
+**134 tests in `viewer/`, no network calls.** New here? **[`docs/01-getting-started.md`](docs/01-getting-started.md)**.
 Full design record in [`docs/`](docs/README.md); everything the build got wrong on the way is in
 [`docs/10-implementation-notes.md`](docs/10-implementation-notes.md); everything *not* done, and
 whether that was a constraint or a choice, is in [`REMAINING.md`](REMAINING.md).
@@ -30,7 +30,7 @@ whether that was a constraint or a choice, is in [`REMAINING.md`](REMAINING.md).
 ```console
 $ cd viewer && npm install --legacy-peer-deps
 $ npm run dev                                   # game at :5173, explorer at :5173/explorer/, relay included
-$ npm test                                      # 131 tests, no network
+$ npm test                                      # 134 tests, no network
 $ npm run build && npm start                    # production server with the relay on :4173
 $ npm run relay                                 # the relay on its own (what Render runs)
 $ npm run check:relay -- https://codeverse-relay.onrender.com   # test a deployed relay end to end

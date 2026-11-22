@@ -38,3 +38,9 @@ test('a paragraph wrapped in bold keeps no stray markers', () => {
   assert.equal(readmeExcerpt('**A design skill for Claude Code, Codex, Cursor and OpenCode that refuses to look AI-generated.**'),
     'A design skill for Claude Code, Codex, Cursor and OpenCode that refuses to look AI-generated.');
 });
+
+test('underscores inside words are not emphasis: snake_case names survive, _real_ italics still go', () => {
+  const out = readmeExcerpt('Set my_config_file and MAX_RETRY_COUNT before you run it, then _restart_ the worker process.');
+  assert.match(out, /my_config_file and MAX_RETRY_COUNT/);
+  assert.match(out, /then restart the worker/);
+});

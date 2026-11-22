@@ -34,7 +34,10 @@ const list = (v, stride, max) => Array.isArray(v) ? v.slice(0, Math.min(v.length
 
 export function createRelay({ board = createBoard() } = {}) {
   const rooms = new Map(); // room -> Set<client>
-  const hosts = new Map(); // room -> the client running its aliens (the earliest pilot still there)
+  const hosts = new Map(); // room -> the client running its aliens (the earliest pilot still there whose tab is visible)
+  /** Next host for a room: the earliest pilot whose tab is visible, else the earliest at all (a hidden tab can't step the aliens). */
+  const pickHost = (set, except) => { let first = null; for (const p of set) { if (p === except) continue; if (!p.away) return p; first ??= p; } return first; };
+  const setRoomHost = (room, next) => { if (!next || hosts.get(room) === next) return; hosts.set(room, next); cast(room, { t: 'host', id: next.id }); };
   const byPilot = new Map(); // pilot id (one per browser) -> its current connection
   let nextId = 1;
   const send = (c, msg) => { if (c.ws.readyState === 1) c.ws.send(JSON.stringify(msg)); };
@@ -85,7 +88,7 @@ export function createRelay({ board = createBoard() } = {}) {
     set?.delete(c);
     if (set && !set.size) { rooms.delete(c.room); hosts.delete(c.room); }
     cast(c.room, { t: 'left', id: c.id });
-    if (set?.size && hosts.get(c.room) === c) { const next = set.values().next().value; hosts.set(c.room, next); cast(c.room, { t: 'host', id: next.id }); }
+    if (set?.size && hosts.get(c.room) === c) setRoomHost(c.room, pickHost(set));
     c.room = null;
   }
 
@@ -143,6 +146,13 @@ export function createRelay({ board = createBoard() } = {}) {
       // Only the host's aliens count: [id, kind, x, z, vx, vz, hp, max, shield] per alien, new shots, deaths.
       if (hosts.get(c.room) !== c) return;
       cast(c.room, { t: 'aliens', w: num(m.w, 1e4) | 0, a: list(m.a, 9, 60), b: list(m.b, 5, 48), d: list(m.d, 4, 60) }, c);
+    } else if (m.t === 'away') {
+      // The pilot's tab was hidden or shown. A hidden host can't step the aliens, so the role moves to a visible pilot;
+      // a visible pilot takes it over from a hidden host.
+      c.away = !!m.on;
+      const host = hosts.get(c.room), set = rooms.get(c.room);
+      if (c.away && host === c) { const next = pickHost(set, c); if (next && !next.away) setRoomHost(c.room, next); } // everyone hidden: keep it
+      else if (!c.away && host?.away) setRoomHost(c.room, c);
     } else if (m.t === 'ahit') {
       // A guest's hits on the shared aliens go to the host alone, which decides kills and credit.
       const host = hosts.get(c.room);
@@ -156,7 +166,7 @@ export function createRelay({ board = createBoard() } = {}) {
   }
 
   function connect(ws) {
-    const c = { id: nextId++, ws, room: null, name: 'Pilot', color: '#74e2ff', state: null, windowStart: 0, count: 0, alive: true,
+    const c = { id: nextId++, ws, room: null, name: 'Pilot', color: '#74e2ff', state: null, windowStart: 0, count: 0, alive: true, away: false,
       last: null, runBase: 0, stintBase: null, bucket: CHECK.burst, lastAt: 0, cheat: false };
     counters.connections++;
     ws.on('message', data => handle(c, String(data)));

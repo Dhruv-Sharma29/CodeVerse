@@ -57,7 +57,7 @@ test('a bot near you picks a fight, and shooting it down scores and it comes bac
   }
   assert.ok(ev.some(e => e.type === 'botDown'));
   assert.equal(sim.score, BOT_KILL);
-  assert.equal(sim.pvpKills, 1);
+  assert.equal(sim.pvpKills, 0);                                      // bots are not dogfight wins
   for (let t = 0; t < 5.2; t += 1 / 60) stepBots(sim, 1 / 60, still);
   assert.equal(b.hp, 100);                                            // back in the race
 });

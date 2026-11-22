@@ -8,7 +8,7 @@ import { BOUNTY, DAILY_REWARD, STORM, bountyHolder, dailyChallenge } from "./eve
 import { GameScene, ShipPreview, type Control, type Peer } from "./GameScene";
 import { BOT_KILL, clearBots, spawnBots, stepBots } from "./bots";
 import { boardUrl, connectNet, type Leader, type NetMessage, type NetStatus } from "./net";
-import { EMOTES, HULLS, PERKS, PING, PVP, SPAWN, addPing, applyHits, choosePerk, hosting, isGuest, setHost, takeSnap, type AlienSnap, maxHp, type PerkId, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
+import { EMOTES, HULLS, PERKS, PING, PVP, SPAWN, addPing, applyHits, choosePerk, queueSnap, hosting, isGuest, setHost, takeSnap, type AlienSnap, maxHp, type PerkId, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
 import { loadUniverse, ownerOf } from "./universe";
 import { invitePath, inviteTarget } from "./invite";
 import { screenTilt, tiltToMove, type Tilt } from "./tilt";
@@ -253,6 +253,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       if (m.t === "welcome") {
         sim.remotes.clear(); myId.current = Number(m.id); sim.myId = myId.current;
         setHost(sim, m.host == null ? null : Number(m.host)); // null on an older relay: everyone keeps their own aliens
+        if (document.hidden) net.current?.send({ t: "away", on: true }); // (re)joined from a hidden tab
         const list = (m.peers as (Peer & { state?: { x: number; z: number; a: number; s?: number; k?: number; w?: number } | null })[]);
         sim.waveFloor = Math.max(sim.waveFloor, ...list.map(p => Number(p.state?.w) || 0));
         for (const p of list) sim.remotes.set(p.id, { ...p, hull: isHull(p.hull) ? p.hull : "dart", x: p.state?.x ?? SPAWN.x, z: p.state?.z ?? SPAWN.z, a: p.state?.a ?? 0, vx: 0, vz: 0, hp: 100, tx: p.state?.x ?? SPAWN.x, tz: p.state?.z ?? SPAWN.z, seen: sim.t, score: p.state?.s ?? 0, kills: p.state?.k ?? 0 });
@@ -271,7 +272,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         Object.assign(r, { tx: m.x, tz: m.z, vx: m.vx, vz: m.vz, a: m.a, hp: m.hp, seen: sim.t, score: Number(m.s) || 0, kills: Number(m.k) || 0 });
         sim.waveFloor = Math.max(sim.waveFloor, Number(m.w) || 0); // everyone here plays the highest wave
       } else if (m.t === "host") setHost(sim, id);
-      else if (m.t === "aliens") { if (isGuest(sim)) sim.snap = m as unknown as AlienSnap; }
+      else if (m.t === "aliens") { if (isGuest(sim)) queueSnap(sim, m as unknown as AlienSnap); }
       else if (m.t === "ahit") applyHits(sim, id, Array.isArray(m.h) ? m.h.map(Number) : []);
       else if (m.t === "shot") {
         const a = Number(m.a);
@@ -311,6 +312,12 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     }, 100);
     return () => { clearInterval(tick); n.close(); net.current = null; };
   }, [toast]);
+  // A hidden tab can't step the aliens: tell the relay, so the host role moves to a pilot who is watching.
+  useEffect(() => {
+    const tell = () => net.current?.send({ t: "away", on: document.hidden });
+    document.addEventListener("visibilitychange", tell);
+    return () => document.removeEventListener("visibilitychange", tell);
+  }, []);
   // Lobby "live now" feed.
   useEffect(() => {
     if (phase !== "lobby" || status !== "online") return;

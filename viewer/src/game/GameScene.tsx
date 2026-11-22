@@ -559,6 +559,8 @@ function alienGeometry() {
   return alienGeo = { saucer: new THREE.LatheGeometry(lens, 32), hunter, swarmer, bug, cross };
 }
 const RIM_BULBS = 8;
+/** Instances per alien kind: above the 56-alien cap on a shared wave (MAX_WAVE), so a crowded wave never outgrows a buffer. */
+const ALIEN_CAP = 64;
 function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
   const hull = useRef<THREE.InstancedMesh>(null), dome = useRef<THREE.InstancedMesh>(null), bulbs = useRef<THREE.InstancedMesh>(null), shields = useRef<THREE.InstancedMesh>(null);
   const hunter = useRef<THREE.InstancedMesh>(null), core = useRef<THREE.InstancedMesh>(null), swarm = useRef<THREE.InstancedMesh>(null), swarmCore = useRef<THREE.InstancedMesh>(null);
@@ -579,7 +581,7 @@ function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
           tmp.position.y = bob; tmp.rotation.set(0, a.spin, 0); tmp.scale.setScalar(.75 + .25 * a.shield / SHIELD_HP); tmp.updateMatrix(); shields.current?.setMatrixAt(nsh++, tmp.matrix);
         }
         // Rim lights chase around the hull.
-        for (let k = 0; k < RIM_BULBS && nb < 40 * RIM_BULBS; k++) {
+        for (let k = 0; k < RIM_BULBS && nb < ALIEN_CAP * RIM_BULBS; k++) {
           const ang = k / RIM_BULBS * TAU + a.spin * .3;
           tmp.position.set(a.x + Math.cos(ang) * 2.75, bob, a.z - Math.sin(ang) * 2.75); tmp.rotation.set(0, 0, 0);
           tmp.scale.setScalar(.55 + .55 * Math.max(0, Math.cos(k / RIM_BULBS * TAU - a.spin * 2.5))); tmp.updateMatrix();
@@ -619,12 +621,12 @@ function Aliens({ sim, palette }: { sim: Sim; palette: Palette }) {
   });
   return <>
     <primitive object={halo} />
-    <instancedMesh ref={hull} args={[geo.saucer, undefined, 40]} frustumCulled={false}><meshStandardMaterial color="#b9c2da" metalness={.35} roughness={.35} /></instancedMesh>
-    <instancedMesh ref={dome} args={[undefined, undefined, 40]} frustumCulled={false}><sphereGeometry args={[1.15, 20, 10, 0, TAU, 0, Math.PI / 2]} /><meshStandardMaterial color={palette.saucer} emissive={palette.saucer} emissiveIntensity={1.3} roughness={.1} transparent opacity={.9} toneMapped={false} /></instancedMesh>
-    <instancedMesh ref={shields} args={[undefined, undefined, 40]} frustumCulled={false}><icosahedronGeometry args={[3.9, 2]} /><meshBasicMaterial color="#9fe8ff" {...additive} opacity={.22} wireframe /></instancedMesh>
-    <instancedMesh ref={bulbs} args={[undefined, undefined, 40 * RIM_BULBS]} frustumCulled={false}><sphereGeometry args={[.22, 8, 6]} /><meshBasicMaterial color={palette.alienShot} toneMapped={false} /></instancedMesh>
-    <instancedMesh ref={hunter} args={[geo.hunter, undefined, 40]} frustumCulled={false}><meshStandardMaterial color="#4a4f63" emissive={palette.hunter} emissiveIntensity={.18} metalness={.35} roughness={.35} flatShading /></instancedMesh>
-    <instancedMesh ref={core} args={[undefined, undefined, 40]} frustumCulled={false}><octahedronGeometry args={[.6, 0]} /><meshBasicMaterial color={palette.hunter} toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={hull} args={[geo.saucer, undefined, ALIEN_CAP]} frustumCulled={false}><meshStandardMaterial color="#b9c2da" metalness={.35} roughness={.35} /></instancedMesh>
+    <instancedMesh ref={dome} args={[undefined, undefined, ALIEN_CAP]} frustumCulled={false}><sphereGeometry args={[1.15, 20, 10, 0, TAU, 0, Math.PI / 2]} /><meshStandardMaterial color={palette.saucer} emissive={palette.saucer} emissiveIntensity={1.3} roughness={.1} transparent opacity={.9} toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={shields} args={[undefined, undefined, ALIEN_CAP]} frustumCulled={false}><icosahedronGeometry args={[3.9, 2]} /><meshBasicMaterial color="#9fe8ff" {...additive} opacity={.22} wireframe /></instancedMesh>
+    <instancedMesh ref={bulbs} args={[undefined, undefined, ALIEN_CAP * RIM_BULBS]} frustumCulled={false}><sphereGeometry args={[.22, 8, 6]} /><meshBasicMaterial color={palette.alienShot} toneMapped={false} /></instancedMesh>
+    <instancedMesh ref={hunter} args={[geo.hunter, undefined, ALIEN_CAP]} frustumCulled={false}><meshStandardMaterial color="#4a4f63" emissive={palette.hunter} emissiveIntensity={.18} metalness={.35} roughness={.35} flatShading /></instancedMesh>
+    <instancedMesh ref={core} args={[undefined, undefined, ALIEN_CAP]} frustumCulled={false}><octahedronGeometry args={[.6, 0]} /><meshBasicMaterial color={palette.hunter} toneMapped={false} /></instancedMesh>
     <instancedMesh ref={swarm} args={[geo.swarmer, undefined, 60]} frustumCulled={false}><meshStandardMaterial color="#3d4152" metalness={.4} roughness={.35} flatShading /></instancedMesh>
     <instancedMesh ref={swarmCore} args={[undefined, undefined, 60]} frustumCulled={false}><icosahedronGeometry args={[.62, 1]} /><meshBasicMaterial color={palette.swarmer} toneMapped={false} /></instancedMesh>
     <instancedMesh ref={bugs} args={[geo.bug, undefined, 8]} frustumCulled={false}><meshStandardMaterial color="#2c3440" emissive={palette.bug} emissiveIntensity={.12} metalness={.4} roughness={.35} flatShading /></instancedMesh>

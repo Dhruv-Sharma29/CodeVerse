@@ -145,3 +145,25 @@ test('the first pilot in hosts the aliens; only the host may send them; hits go 
   assert.equal((await c.next('host')).id, wb.id);
   b.ws.close(); c.ws.close(); await new Promise(r => server.close(r));
 });
+
+test('a host whose tab is hidden hands the aliens to a visible pilot, and a visible pilot takes over from a hidden host', async () => {
+  const server = createServer(); attachMultiplayer(server);
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const url = `ws://127.0.0.1:${server.address().port}${PLAY_PATH}`;
+  const a = client(url), b = client(url);
+  await Promise.all([a.open, b.open]);
+  a.send({ t: 'join', room: 'trending', name: 'Ada' }); const wa = await a.next('welcome');
+  b.send({ t: 'join', room: 'trending', name: 'Lin' }); const wb = await b.next('welcome'); await a.next('joined');
+  assert.equal(wb.host, wa.id);
+  a.send({ t: 'away', on: true });                                        // the host switched tabs
+  assert.equal((await b.next('host')).id, wb.id);
+  assert.equal((await a.next('host')).id, wb.id);
+  a.send({ t: 'away', on: false });                                       // back: the role stays with Lin
+  b.send({ t: 'away', on: true });                                        // now Lin hides: Ada takes it back
+  assert.equal((await a.next('host')).id, wa.id);
+  assert.equal((await b.next('host')).id, wa.id);
+  a.send({ t: 'away', on: true });                                        // everyone hidden: the host keeps it
+  b.send({ t: 'ping', x: 1, z: 1 }); await a.next('ping');                // (a round trip, so a stray host message would have arrived)
+  assert.ok(!(await Promise.race([b.next('host').then(() => true), new Promise(r => setTimeout(() => r(false), 100))])));
+  a.ws.close(); b.ws.close(); await new Promise(r => server.close(r));
+});

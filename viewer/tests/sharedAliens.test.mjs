@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyHits, createSim, emptyInput, hosting, isGuest, setHost, step, takeSnap } from '../src/game/sim.ts';
+import { applyHits, createSim, emptyInput, hosting, isGuest, queueSnap, setHost, step, takeSnap } from '../src/game/sim.ts';
 
 const repo = (id, name) => ({ id, name, full_name: `o/${name}`, description: null, language: 'Go', stargazers_count: 10, forks_count: 1, pushed_at: '', default_branch: '', fork: false, archived: false });
 const universe = { room: 'trending', title: 't', subtitle: '', owner: null, repos: [repo(1, 'a')] };
@@ -84,4 +84,23 @@ test('waves grow with the pilots sharing them: half a wave more per extra pilot,
   assert.ok(wave(23, 30).length <= 56, 'a crowded late wave still fits one snapshot');
   const boss = others => wave(others, 10).find(a => a.kind === 'mothership').max;
   assert.equal(boss(0), 70); assert.equal(boss(1), 88); assert.equal(boss(2), 105);
+});
+
+test('snapshots that pile up between frames keep every kill credit and shot; turning guest mid-wave is no free upgrade', () => {
+  const guest = createSim(universe); guest.myId = 2; guest.planets.length = 0; setHost(guest, 1);
+  const alien = id => [id, 2, 50, 0, 0, 0, 1, 1, 0];
+  queueSnap(guest, { w: 3, a: [...alien(1), ...alien(2)], b: [100, 0, 1, 1, 2], d: [] });
+  queueSnap(guest, { w: 3, a: alien(2), b: [100, 20, 1, 1, 2], d: [1, 2, 2, 1] });          // alien 1 died to my shot
+  queueSnap(guest, { w: 3, a: [], b: [], d: [2, 2, 7, 1] });                              // alien 2 died to someone else
+  step(guest, emptyInput(), 1 / 60, []);
+  assert.equal(guest.score, 40);
+  assert.equal(guest.bullets.filter(b => b.from === 'alien').length, 2);
+
+  const solo = createSim(universe); solo.planets.length = 0; solo.myId = 3;
+  Object.assign(solo, { waveTimer: 0 }); step(solo, emptyInput(), 1 / 60, []);
+  assert.ok(solo.aliens.length && solo.offeredWave < solo.wave);
+  setHost(solo, 1);                                                                       // someone else hosts now
+  const ev = []; step(solo, emptyInput(), 1 / 60, ev);
+  assert.ok(!ev.some(e => e.type === 'cleared' || e.type === 'perks'));
+  assert.equal(solo.offer, null);
 });
