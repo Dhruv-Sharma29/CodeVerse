@@ -18,6 +18,8 @@ export interface Control {
   jumping?: boolean;
   /** Docked at this planet: the ship is parked on its surface, shielded, weapons off. */
   docked?: Planet | null;
+  /** The end-of-run card is open: the ship holds still behind a shield. */
+  resting?: boolean;
   /** Docking approach: 0 at the moment of docking, 1 once parked; and where the ship started from. */
   dockT?: number;
   dockFrom?: { x: number; z: number; a: number };

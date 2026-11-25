@@ -1,6 +1,6 @@
 # 07 — Testing
 
-**134 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
+**135 tests in `viewer/`, 5 in `analyzer/`, no network calls.** Every suite runs in plain Node
 (22.6+, native TypeScript stripping) or `pytest`. CI runs all of them, plus type-checking, lint and
 the production build, on every push and pull request.
 
@@ -26,6 +26,7 @@ $ cd ../analyzer && uv run pytest tests -q
 | `bugs.test.mjs` | 4 | Sound cues (a shield breaking, a wave cleared once, heals on the host and real heals only on a guest), bug aliens: every third wave only where repos have enough open issues (two in very buggy universes, even on boss waves), healing the most damaged alien in range, never shooting, backing off from pilots, and travelling in the shared snapshot |
 | `sharedAliens.test.mjs` | 5 | Shared aliens: snapshots piling up between frames keep every kill credit and shot, turning guest mid-wave gives no free upgrade, waves and boss hull growing with the pilots sharing them, the guest sees the host's wave and never spawns its own, a guest's kill is decided by the host and credited to the guest alone, aliens chase the nearest pilot, and a new host keeps the aliens it mirrored |
 | `difficulty.test.mjs` | 5 | Difficulty: catching up to the room's highest wave, tougher aliens and shielded saucers after wave 5, shields soaking bullets but not novas, repairs only between waves, and a perk level lost on death |
+| `run.test.mjs` | 1 | The run record behind the end-of-run card: what downed you most, and the best wave reached |
 | `perks.test.mjs` | 3 | Perks: a cleared wave offers three different perks once, unclaimed upgrades stack up and are offered oldest first, only offered perks can be taken, hull plating raises and refills the hull, maxed perks are never offered, and rapid fire shortens the gun cooldown |
 | `settings.test.mjs` | 3 | Settings: rebinding swaps a taken key and refuses reserved keys, saved bindings fall back safely, and Auto quality picks Low only on small touch devices |
 | `net.test.mjs` | 2 | The client connection: a sleeping hosted relay reports "waking" without flicker and then goes online; a refused local server reports "offline" |

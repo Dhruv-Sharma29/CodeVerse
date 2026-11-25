@@ -150,6 +150,11 @@ shared.
   and the launch button names it. The address bar follows you through hyperjumps, so copying it
   shares the universe you are in. A bad or rate-limited link falls back to the trending hub and says
   why.
+- **End of run.** **Leave** opens a summary card first: score (with "New best" when it beats your best in
+  that universe, kept in this browser), best wave, aliens downed, commits, dogfight wins, times downed,
+  what downed you most and time flown, plus the invite link to that universe with **Copy link** and, where
+  the browser offers it, **Share**. The ship holds still behind a shield while the card is open; **Keep
+  flying** (or Esc) closes it, **Leave** leaves.
 - **Pings.** Press **P** (or **PING** on touch) to mark the spot under your mouse, or ahead of your ship
   on keyboard or touch. Everyone in the universe sees a beam, a pulsing ring and a label worked out
   from what is there: Danger near aliens, a planet's name, Hyperjump gate, Comet, or Here.

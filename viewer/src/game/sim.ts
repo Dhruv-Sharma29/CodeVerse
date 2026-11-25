@@ -202,6 +202,8 @@ export function createSim(universe: Universe) {
     hostId: null as number | null,
     /** Host: alien shots and deaths since the last snapshot. Guest: hits to report, aliens seen dying ahead of the host, the latest snapshot. */
     outShots: [] as number[], outDead: [] as number[], outHits: [] as number[], predicted: new Map<number, number>(), snap: null as AlienSnap | null,
+    /** Run record for the end-of-run card (carried through hyperjumps): times downed by each cause, highest wave. */
+    downs: {} as Partial<Record<Cause, number>>, bestWave: 0,
     score: 0, charge: 0, wave: 0, waveTimer: 4, kills: 0, deaths: 0, commits: 0, shake: 0, portalCool: 2.5, nextAlien: 1,
     near: null as Planet | null,
   };
@@ -251,12 +253,14 @@ export function floatText(sim: Sim, x: number, z: number, text: string, color = 
   sim.floats.push({ x: x + (Math.random() - .5) * 1.5, z, text, color, t: 0 });
 }
 
-function hurt(sim: Sim, amount: number, ev: SimEvent[], by?: number) {
+/** What took hull off you, for the end-of-run card ("most often downed by"). */
+export type Cause = "alien fire" | "hunters" | "swarmers" | "collisions" | "the sun" | "meteors" | "other pilots" | "bots";
+function hurt(sim: Sim, amount: number, ev: SimEvent[], cause: Cause, by?: number) {
   const s = sim.ship;
   if (s.inv > 0 || s.dead > 0) return;
   s.hp -= amount; s.inv = .12; s.lastHit = sim.t; sim.shake = Math.min(1, sim.shake + .45); ev.push({ type: "hurt" });
   if (s.hp <= 0) {
-    s.hp = 0; s.dead = 2.6; sim.deaths++; sim.grab = null; sim.shake = 1; sim.killedBy = by ?? null;
+    s.hp = 0; s.dead = 2.6; sim.deaths++; sim.downs[cause] = (sim.downs[cause] ?? 0) + 1; sim.grab = null; sim.shake = 1; sim.killedBy = by ?? null;
     explode(sim, s.x, s.z, "#74e2ff", 90, 16);
     // Dying costs one level of a random perk you have.
     const owned = (Object.keys(sim.perks) as PerkId[]).filter(k => sim.perks[k] > 0), lost = owned[Math.floor(Math.random() * owned.length)];
@@ -311,7 +315,7 @@ function addAlien(sim: Sim, kind: AlienKind, x: number, z: number, hp = ALIENS[k
 }
 
 function spawnWave(sim: Sim, ev: SimEvent[]) {
-  sim.wave = Math.max(sim.wave + 1, sim.waveFloor);
+  sim.wave = Math.max(sim.wave + 1, sim.waveFloor); sim.bestWave = Math.max(sim.bestWave, sim.wave);
   const around = (d: number) => { const a = Math.random() * TAU, r = d + Math.random() * 25; return [sim.ship.x + Math.cos(a) * r, sim.ship.z + Math.sin(a) * r] as const; };
   const boss = sim.wave % 5 === 0, more = crowd(sim);
   if (boss) {
@@ -453,7 +457,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
 
 
     const d0 = Math.hypot(s.x, s.z);
-    if (d0 < SUN_R + 1.6) { s.x *= (SUN_R + 1.6) / d0; s.z *= (SUN_R + 1.6) / d0; s.vx = s.x / d0 * 30; s.vz = s.z / d0 * 30; hurt(sim, 12, ev); }
+    if (d0 < SUN_R + 1.6) { s.x *= (SUN_R + 1.6) / d0; s.z *= (SUN_R + 1.6) / d0; s.vx = s.x / d0 * 30; s.vz = s.z / d0 * 30; hurt(sim, 12, ev, "the sun"); }
     if (d0 > sim.edge) { s.vx -= s.x / d0 * 90 * dt; s.vz -= s.z / d0 * 90 * dt; }
     for (const p of sim.planets) {
       if (p.mode === "held" || p.mode === "flung") continue;
@@ -527,7 +531,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     } else sim.holding = null;
     // Meteors: a hit costs hull and destroys the meteor (for this pilot).
     for (const m of sim.meteors) if (dist(s, m) < STORM.r + 1.4) {
-      sim.meteorsGone.add(m.id); explode(sim, m.x, m.z, "#ff9a3c", 30, 9); hurt(sim, STORM.damage, ev);
+      sim.meteorsGone.add(m.id); explode(sim, m.x, m.z, "#ff9a3c", 30, 9); hurt(sim, STORM.damage, ev, "meteors");
     }
   }
   if (!alive) sim.holding = null;
@@ -593,7 +597,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     if (vn < 0) {
       s.vx -= 1.5 * vn * ux * mine; s.vz -= 1.5 * vn * uz * mine;
       a.vx += 1.5 * vn * ux * (1 - mine); a.vz += 1.5 * vn * uz * (1 - mine);
-      if (vn < -15) hurt(sim, a.kind === "mothership" ? 8 : 4, ev); // ramming at speed scrapes the hull
+      if (vn < -15) hurt(sim, a.kind === "mothership" ? 8 : 4, ev, "collisions"); // ramming at speed scrapes the hull
     }
   };
   for (const a of sim.aliens) {
@@ -603,7 +607,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
       // The host moves them; between its snapshots they glide on. Contact with your own ship is yours to detect.
       a.x += a.vx * dt; a.z += a.vz * dt;
       const pop = a.kind === "hunter" ? 2.8 : a.kind === "swarmer" ? 2.2 : 0;
-      if (alive && pop && dist(a, s) < pop) { hurt(sim, a.kind === "hunter" ? 15 : 8, ev); sim.outHits.push(a.id, -1); killAlien(sim, a, ev, false); continue; }
+      if (alive && pop && dist(a, s) < pop) { hurt(sim, a.kind === "hunter" ? 15 : 8, ev, a.kind === "hunter" ? "hunters" : "swarmers"); sim.outHits.push(a.id, -1); killAlien(sim, a, ev, false); continue; }
       bump(a, ALIENS[a.kind].r);
       continue;
     }
@@ -637,13 +641,13 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     } else if (a.kind === "hunter") {
       a.vx += nx * 52 * dt; a.vz += nz * 52 * dt;
       const sp = Math.hypot(a.vx, a.vz), cap = 34 * pace(sim); if (sp > cap) { a.vx *= cap / sp; a.vz *= cap / sp; }
-      if (alive && dist(a, s) < 2.8) { hurt(sim, 15, ev); killAlien(sim, a, ev, false); continue; }
+      if (alive && dist(a, s) < 2.8) { hurt(sim, 15, ev, "hunters"); killAlien(sim, a, ev, false); continue; }
     } else if (a.kind === "swarmer") {
       // Weaving dive: hard to hit head-on, pops on contact.
       const weave = Math.sin(a.t * 5 + a.spin) * .9;
       a.vx += (nx - nz * weave) * 70 * dt; a.vz += (nz + nx * weave) * 70 * dt;
       const sp = Math.hypot(a.vx, a.vz), cap = 40 * pace(sim); if (sp > cap) { a.vx *= cap / sp; a.vz *= cap / sp; }
-      if (alive && dist(a, s) < 2.2) { hurt(sim, 8, ev); killAlien(sim, a, ev, false); continue; }
+      if (alive && dist(a, s) < 2.2) { hurt(sim, 8, ev, "swarmers"); killAlien(sim, a, ev, false); continue; }
     } else if (a.kind === "bug") {
       // Bug: no guns. Hang back by the alien it heals (or the pack), run from pilots, mend the most damaged.
       const mend = bugTarget(sim, a);
@@ -702,12 +706,12 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     for (const p of sim.planets) if (p.mode !== "held" && dist(b, p) < p.R) { b.life = 0; explode(sim, b.x, b.z, p.glow, 4, 2); break; }
     if (b.life <= 0) continue;
     if (b.from === "alien") {
-      if (alive && dist(b, s) < 1.8) { b.life = 0; hurt(sim, 6, ev); }
+      if (alive && dist(b, s) < 1.8) { b.life = 0; hurt(sim, 6, ev, "alien fire"); }
       continue;
     }
     // Dogfights: the pilot who gets hit detects it and applies the damage (each client owns its ship).
     if (b.from === "ally" && alive && (pvpWith(sim, b.owner) || liveBot(sim, b.owner)) && dist(b, s) < 1.8) {
-      b.life = 0; explode(sim, b.x, b.z, "#ff6f7f", 6, 3); hurt(sim, PVP.bullet * (b.dmg ?? 1), ev, b.owner); continue;
+      b.life = 0; explode(sim, b.x, b.z, "#ff6f7f", 6, 3); hurt(sim, PVP.bullet * (b.dmg ?? 1), ev, (b.owner ?? 0) < 0 ? "bots" : "other pilots", b.owner); continue;
     }
     if (b.from === "me") {
       let closed = false;
@@ -751,7 +755,7 @@ export function step(sim: Sim, input: Input, dt: number, ev: SimEvent[]) {
     n.t += dt;
     const radius = novaRadius(n.t);
     for (const a of sim.aliens) if (!n.hit.has(a) && a.hp > 0 && dist(n, a) < radius) { n.hit.add(a); damageAlien(sim, a, 99, ev, n.mine && "score", n.owner != null ? { id: n.owner, charge: false } : undefined); }
-    if (!n.mine && alive && pvpWith(sim, n.owner) && !n.hit.has(s) && dist(n, s) < radius) { n.hit.add(s); hurt(sim, PVP.nova, ev, n.owner); }
+    if (!n.mine && alive && pvpWith(sim, n.owner) && !n.hit.has(s) && dist(n, s) < radius) { n.hit.add(s); hurt(sim, PVP.nova, ev, "other pilots", n.owner); }
     if (n.mine) for (const bot of sim.bots) if (bot.hp > 0 && !n.hit.has(bot) && dist(n, bot) < radius) { n.hit.add(bot); damageBot(sim, bot, PVP.nova, ev); }
     for (const p of sim.planets) if (!n.hit.has(p) && dist(n, p) < radius) {
       n.hit.add(p);
@@ -837,7 +841,7 @@ export function applyHits(sim: Sim, from: number, h: number[]) {
 /** Guest: take the host's snapshot. Deaths explode here and credit you when they were yours. */
 function applySnap(sim: Sim, ev: SimEvent[]) {
   const m = sim.snap!; sim.snap = null;
-  if (m.w > sim.wave) { sim.wave = m.w; ev.push({ type: "wave", n: m.w, boss: m.w % 5 === 0 }); }
+  if (m.w > sim.wave) { sim.wave = m.w; sim.bestWave = Math.max(sim.bestWave, m.w); ev.push({ type: "wave", n: m.w, boss: m.w % 5 === 0 }); }
   for (let i = 0; i + 3 < m.d.length; i += 4) {
     const kind = KINDS[m.d[i + 1]]; if (!kind) continue;
     const a = sim.aliens.find(x => x.id === m.d[i]);
@@ -861,3 +865,10 @@ function applySnap(sim: Sim, ev: SimEvent[]) {
   for (const [id, t] of sim.predicted) if (!seen.has(id) || sim.t - t > 1) sim.predicted.delete(id); // wrong guesses reappear after a second
   for (let i = 0; i + 4 < m.b.length; i += 5) sim.bullets.push({ x: m.b[i], z: m.b[i + 1], vx: m.b[i + 2], vz: m.b[i + 3], life: m.b[i + 4], from: "alien" });
 }
+
+/** The cause that downed you most this run (on a tie, the one that happened first), or null if never downed. */
+export const topCause = (sim: Sim): Cause | null => {
+  let best: Cause | null = null;
+  for (const [c, n] of Object.entries(sim.downs) as [Cause, number][]) if (!best || n > (sim.downs[best] ?? 0)) best = c;
+  return best;
+};

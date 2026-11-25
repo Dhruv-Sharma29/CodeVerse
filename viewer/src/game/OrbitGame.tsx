@@ -8,7 +8,7 @@ import { BOUNTY, DAILY_REWARD, STORM, bountyHolder, dailyChallenge } from "./eve
 import { GameScene, ShipPreview, type Control, type Peer } from "./GameScene";
 import { BOT_KILL, clearBots, spawnBots, stepBots } from "./bots";
 import { boardUrl, connectNet, type Leader, type NetMessage, type NetStatus } from "./net";
-import { EMOTES, HULLS, PERKS, PING, PVP, SPAWN, addPing, applyHits, choosePerk, queueSnap, hosting, isGuest, setHost, takeSnap, type AlienSnap, maxHp, type PerkId, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
+import { EMOTES, HULLS, PERKS, PING, PVP, SPAWN, addPing, applyHits, choosePerk, queueSnap, topCause, type Cause, hosting, isGuest, setHost, takeSnap, type AlienSnap, maxHp, type PerkId, createSim, isHull, type HullId, emptyInput, explode, leavePortal, remoteGrab, step, type Planet, type Sim, type SimEvent, type Universe } from "./sim";
 import { loadUniverse, ownerOf } from "./universe";
 import { invitePath, inviteTarget } from "./invite";
 import { screenTilt, tiltToMove, type Tilt } from "./tilt";
@@ -213,7 +213,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   const makeControl = useCallback((u: Universe, carry?: Sim): Control => {
     const sim = createSim(u);
     sim.ship.hull = hull; sim.ship.hp = HULLS[hull].hp;
-    if (carry) Object.assign(sim, { score: carry.score, kills: carry.kills, charge: carry.charge, commits: carry.commits, deaths: carry.deaths, perks: { ...carry.perks }, offer: carry.offer, owed: [...carry.owed] });
+    if (carry) Object.assign(sim, { score: carry.score, kills: carry.kills, charge: carry.charge, commits: carry.commits, deaths: carry.deaths, perks: { ...carry.perks }, offer: carry.offer, owed: [...carry.owed], downs: { ...carry.downs }, bestWave: carry.bestWave });
     const events: SimEvent[] = [];
     const c: Control = {
       sim, input: emptyInput(), zoom: ctl.current?.zoom ?? 1, warp: 0, color, reduceMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -221,7 +221,8 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
       onStep: dt => {
         if (c.attract) { c.sim.waveTimer = 5; c.input.fire = c.input.grab = false; } // lobby: no aliens, no shooting
         if (c.jumping) { c.input.nova = false; return; } // frozen while riding the hyperjump tunnel
-        if (c.docked) { c.input.fire = c.input.grab = c.input.boost = c.input.nova = false; c.input.move = { x: 0, z: 0 }; } // docked: no bullets, no nova
+        if (c.docked || c.resting) { c.input.fire = c.input.grab = c.input.boost = c.input.nova = false; c.input.move = { x: 0, z: 0 }; } // docked or reading the run card: no bullets, no nova
+        if (c.resting) c.sim.ship.inv = Math.max(c.sim.ship.inv, .4);
         events.length = 0;
         step(c.sim, c.input, dt, events);
         stepBots(c.sim, dt);
@@ -550,8 +551,22 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
   // iPhone Safari has no full-screen API for pages; a home-screen install opens full screen instead.
   const iosBrowser = /iPhone|iPod/.test(navigator.userAgent) && !(navigator as { standalone?: boolean }).standalone;
 
+  /* ---- end of run: a summary card with an invite link, before leaving ---- */
+  const runStart = useRef(0);
+  const [run, setRun] = useState<RunSummary | null>(null);
+  function openRunCard() {
+    const c = ctl.current, u = universe; if (!c || !u) { onExit(); return; }
+    const s = c.sim, key = `best:${u.room}`, best = store.get(key, 0), newBest = s.score > best && s.score > 0;
+    if (newBest) store.set(key, s.score);
+    c.resting = true; undock(); setSheet(false); setSettings(false);
+    setRun({ room: u.room, where: u.title, score: s.score, best: Math.max(best, s.score), newBest, wave: s.bestWave, kills: s.kills, commits: s.commits,
+      wins: s.pvpKills, downs: s.deaths, cause: topCause(s), seconds: Math.round((performance.now() - runStart.current) / 1000) });
+  }
+  function keepFlying() { const c = ctl.current; if (c) c.resting = false; setRun(null); }
+
   /* ---- universes ---- */
   async function launch() {
+    runStart.current = performance.now();
     ensureAudio();
     const callsign = name.replace(/[^\w .-]/g, "").trim().slice(0, 18) || "Pilot";
     setName(callsign); store.set("name", callsign); store.set("color", color); store.set("hull", hull);
@@ -713,7 +728,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
         {/* Keyboards open the pilots board with Tab; touch has no Tab key. */}
         {touch && <button className="orbit-ghost" onClick={() => setBoard(v => !v)} aria-pressed={board}>Pilots</button>}
         <button className="orbit-ghost" onClick={() => setSettings(v => !v)} aria-pressed={settings}>Settings</button>
-        <button className="orbit-ghost" onClick={onExit}>Leave</button>
+        <button className="orbit-ghost" onClick={openRunCard}>Leave</button>
       </div>
     </header>
 
@@ -803,6 +818,7 @@ export default function OrbitGame({ onExit }: { onExit: () => void }) {
     {banner && <div key={banner.id} className={`orbit-banner ${banner.boss ? "boss" : ""}`} aria-hidden="true">
       <span>{banner.boss ? "Boss wave" : "Incoming"}</span><strong>WAVE {banner.n}</strong><i /><span>{banner.boss ? "A mothership is coming" : "Alien ships inbound"}{banner.bug ? " · with a bug" : ""}</span>
     </div>}
+    {run && <RunCard run={run} onKeep={keepFlying} onLeave={onExit} toast={toast} />}
     {hud?.dead && <div className="orbit-dead">{killerName ? <>Shot down by {killerName}<small>Watching them until you respawn…</small></> : "Ship destroyed. Rebuilding near the sun…"}</div>}
 
     {jumpOpen && <div className="orbit-modal" role="dialog" aria-modal="true" aria-labelledby="jump-title">
@@ -943,4 +959,54 @@ function drawRadar(cv: HTMLCanvasElement | null, sim: Sim, pal: Palette) {
   for (const r of sim.remotes.values()) dot(r.x, r.z, r.color, 3);
   for (const b of sim.bots) dot(b.x, b.z, b.color, 2);
   g.save(); g.translate(R, R); g.rotate(s.a); g.fillStyle = "#ffffff"; g.beginPath(); g.moveTo(6, 0); g.lineTo(-4, -4); g.lineTo(-4, 4); g.fill(); g.restore();
+}
+
+interface RunSummary { room: string; where: string; score: number; best: number; newBest: boolean; wave: number; kills: number; commits: number; wins: number; downs: number; cause: Cause | null; seconds: number }
+const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+
+/** End of run: what you did, and a link to bring a friend into the same universe. */
+function RunCard({ run, onKeep, onLeave, toast }: { run: RunSummary; onKeep: () => void; onLeave: () => void; toast: (t: string, k?: Toast["kind"]) => void }) {
+  const url = `${location.origin}${invitePath(run.room)}`;
+  const text = `I reached wave ${run.wave} and scored ${run.score.toLocaleString()} in ${run.where} on CodeVerse Orbit. Fly with me:`;
+  const [copied, setCopied] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onKeep(); } };
+    window.addEventListener("keydown", esc, true);
+    return () => window.removeEventListener("keydown", esc, true);
+  }, [onKeep]);
+  async function copy() {
+    const done = () => { setCopied(true); setTimeout(() => setCopied(false), 2000); };
+    try { await navigator.clipboard.writeText(url); done(); }
+    catch {
+      // No clipboard access (an embedded browser, an http page): select the link and try the older copy command.
+      field.current?.select();
+      if (document.execCommand?.("copy")) done(); else toast("Select the link and copy it", "bad");
+    }
+  }
+  const share = typeof navigator.share === "function"
+    ? () => navigator.share({ title: "CodeVerse Orbit", text, url }).catch(() => { /* closed the share sheet */ }) : null;
+  const stats: [string, string][] = [
+    ["Best wave", String(run.wave || "–")], ["Aliens down", run.kills.toLocaleString()], ["Commits", String(run.commits)],
+    ["Dogfight wins", String(run.wins)], ["Times downed", String(run.downs)], ["Flown", clock(run.seconds)],
+  ];
+  return <div className="orbit-modal orbit-run" role="dialog" aria-modal="true" aria-labelledby="orbit-run-title">
+    <div className="orbit-modal-card">
+      <span className="orbit-eyebrow">RUN COMPLETE · {run.where.toUpperCase()}</span>
+      <h2 id="orbit-run-title" className="orbit-run-score">{run.score.toLocaleString()}{run.newBest && <em>New best</em>}</h2>
+      {!run.newBest && run.best > 0 && <p className="orbit-run-best">Your best here: {run.best.toLocaleString()}</p>}
+      <dl className="orbit-run-stats">{stats.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+      <p className="orbit-run-cause">{run.cause ? <>Most often downed by <b>{run.cause}</b></> : run.seconds > 30 ? "Never shot down. Clean run." : "Short flight. Come back for more."}</p>
+      <label className="orbit-label-text" htmlFor="orbit-run-link">Invite a friend to this universe</label>
+      <div className="orbit-jump-row">
+        <input id="orbit-run-link" ref={field} readOnly value={url} onFocus={e => e.currentTarget.select()} />
+        <button type="button" className="orbit-primary small" onClick={copy}>{copied ? "Copied" : "Copy link"}</button>
+      </div>
+      <div className="orbit-card-actions">
+        {share && <button type="button" className="orbit-ghost" onClick={share}>Share…</button>}
+        <button type="button" className="orbit-ghost" onClick={onKeep} autoFocus>Keep flying</button>
+        <button type="button" className="orbit-ghost orbit-run-leave" onClick={onLeave}>Leave</button>
+      </div>
+    </div>
+  </div>;
 }

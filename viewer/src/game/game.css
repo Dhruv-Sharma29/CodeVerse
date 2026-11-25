@@ -383,3 +383,19 @@ p.orbit-dock-readme { padding: 8px 10px; border-left: 2px solid rgba(159,232,255
   .orbit-toast { animation: orbit-toast-out .01s 3.4s forwards; }
   .orbit-bar i, .orbit-bar i.lag { transition: none; }
 }
+/* end-of-run card */
+.orbit-run .orbit-modal-card { animation: orbit-run-in .45s cubic-bezier(.2,.8,.2,1) both; background: rgba(12, 15, 34, .94); }
+@keyframes orbit-run-in { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+.orbit-run-score { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; font-family: var(--o-mono) !important; font-size: clamp(38px, 9vw, 52px) !important; font-variant-numeric: tabular-nums; line-height: 1; }
+.orbit-run-score em { font: normal 600 11px var(--o-mono); letter-spacing: .14em; text-transform: uppercase; color: #0b0820; background: var(--o-amber); border-radius: 999px; padding: 4px 10px; box-shadow: 0 0 18px rgba(255,181,71,.55); animation: orbit-drop .4s .3s both; }
+.orbit-run-best { margin: -4px 0 0; color: var(--o-muted); font-size: 12px; }
+.orbit-run-stats { margin: 4px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.orbit-run-stats div { padding: 9px 10px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid var(--o-line); min-width: 0; }
+.orbit-run-stats dt { font-family: var(--o-mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--o-muted); }
+.orbit-run-stats dd { margin: 3px 0 0; font-family: var(--o-mono); font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.orbit-run-cause { margin: 0; color: var(--o-muted); }
+.orbit-run-cause b { color: var(--o-bad); font-weight: 600; }
+.orbit-run .orbit-card-actions { justify-content: flex-end; }
+.orbit-run-leave { color: var(--o-muted) !important; }
+@media (max-width: 520px) { .orbit-run-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .orbit-run .orbit-card-actions > * { flex: 1 1 auto; justify-content: center; } }
+@media (prefers-reduced-motion: reduce) { .orbit-run .orbit-modal-card, .orbit-run-score em { animation: none; } }
